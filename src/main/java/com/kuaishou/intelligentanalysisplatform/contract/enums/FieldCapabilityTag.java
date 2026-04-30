@@ -1,0 +1,20 @@
+package com.kuaishou.intelligentanalysisplatform.contract.enums;
+
+public enum FieldCapabilityTag {
+    SELECTABLE,
+    FILTERABLE,
+    GROUPABLE,
+    SORTABLE,
+    AGGREGATABLE,
+    TIME_GRAIN_SUPPORTED,
+    X_AXIS_CANDIDATE,
+    Y_AXIS_CANDIDATE,
+    SERIES_CANDIDATE,
+    LABEL_CANDIDATE,
+    COLOR_CANDIDATE,
+    TOOLTIP_CANDIDATE,
+    TABLE_COLUMN_CANDIDATE,
+    REQUIRED_FOR_CHART,
+    NULLABLE,
+    DERIVABLE
+}

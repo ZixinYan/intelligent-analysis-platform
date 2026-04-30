@@ -1,0 +1,14 @@
+package com.kuaishou.intelligentanalysisplatform.domain.query.model;
+
+public enum GuardViolationCode {
+    SQL_FORBIDDEN_STATEMENT,
+    SQL_MULTI_STATEMENT_REJECTED,
+    SQL_NOT_READONLY,
+    SQL_LOCK_CLAUSE_FORBIDDEN,
+    SQL_PARSE_FAILED,
+    QUERY_LIMIT_EXCEEDED,
+    QUERY_RESULT_TOO_LARGE,
+    QUERY_COLUMN_COUNT_EXCEEDED,
+    QUERY_RATE_LIMITED,
+    QUERY_CONCURRENCY_EXCEEDED
+}
