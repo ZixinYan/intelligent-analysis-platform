@@ -24,7 +24,7 @@ public class AesGcmCredentialEncryptor implements CredentialEncryptor {
     private final byte[] secret;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public AesGcmCredentialEncryptor(@Value("${datasource.credential.secret:0123456789abcdef0123456789abcdef}") String secret) {
+    public AesGcmCredentialEncryptor(@Value("${datasource.credential.secret}") String secret) {
         byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
         if (bytes.length != 32) {
             throw new IllegalArgumentException("datasource credential secret must be 32 bytes");

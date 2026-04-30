@@ -1,0 +1,51 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: intelligent-analysis-platform
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/intelligent_analysis_platform}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+  sql:
+    init:
+      mode: always
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
+
+connector:
+  pool:
+    max-pool-size: 5
+    connection-timeout-ms: 3000
+    idle-timeout-ms: 600000
+  query:
+    default-timeout-ms: 10000
+    default-page-size: 200
+    default-cache-ttl-seconds: 60
+
+analysis:
+  execution:
+    async:
+      core-pool-size: 4
+      max-pool-size: 8
+      queue-capacity: 100
+  governance:
+    slow-query-threshold-ms: 5000
+    tenant-qps-limit: 20
+    datasource-concurrency-limit: 10
+
+datasource:
+  credential:
+    secret: ${DATASOURCE_CREDENTIAL_SECRET}
+
+logging:
+  level:
+    com.kuaishou.intelligentanalysisplatform: DEBUG
