@@ -44,7 +44,7 @@ analysis:
 
 datasource:
   credential:
-    secret: ${DATASOURCE_CREDENTIAL_SECRET}
+    secret: ${DATASOURCE_CREDENTIAL_SECRET:dev-only-secret-key-32bytes!!!!!}
 
 logging:
   level:
