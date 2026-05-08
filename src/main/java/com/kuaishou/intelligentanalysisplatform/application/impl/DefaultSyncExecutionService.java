@@ -23,9 +23,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class DefaultSyncExecutionService implements SyncExecutionService {
     private final NodeExecuteDispatcher nodeExecuteDispatcher;
+    private final WorkflowDagExecutor workflowDagExecutor;
 
-    public DefaultSyncExecutionService(NodeExecuteDispatcher nodeExecuteDispatcher) {
+    public DefaultSyncExecutionService(NodeExecuteDispatcher nodeExecuteDispatcher,
+                                       WorkflowDagExecutor workflowDagExecutor) {
         this.nodeExecuteDispatcher = nodeExecuteDispatcher;
+        this.workflowDagExecutor = workflowDagExecutor;
     }
 
     @Override
@@ -41,6 +44,13 @@ public class DefaultSyncExecutionService implements SyncExecutionService {
             throw new BaseBusinessException(ErrorCode.INVALID_ARGUMENT, "workflow nodes are required");
         }
         String runId = UUID.randomUUID().toString();
+
+        // Use DAG parallel executor when edges are explicitly provided
+        if (request.getEdges() != null && !request.getEdges().isEmpty()) {
+            return workflowDagExecutor.execute(request, runId);
+        }
+
+        // Legacy sequential execution (no edges provided)
         Map<String, StandardResultDTO> upstreamResults = new LinkedHashMap<>();
         List<NodeResultDTO> nodeResults = new ArrayList<>();
         ExecutionStatus workflowStatus = ExecutionStatus.SUCCEEDED;

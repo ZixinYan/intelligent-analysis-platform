@@ -65,6 +65,7 @@ public class AsyncQueryExecutor {
         this.queryMetricsService = queryMetricsService;
         this.objectMapper = objectMapper;
         this.slowQueryThresholdMs = slowQueryThresholdMs;
+        // 查询线程池
         this.taskExecutor = new ThreadPoolTaskExecutor();
         this.taskExecutor.setThreadNamePrefix("analysis-query-");
         this.taskExecutor.setCorePoolSize(corePoolSize);

@@ -35,6 +35,7 @@ export type FieldComponentType =
   | 'SWITCH'
   | 'NUMBER_INPUT'
   | 'SQL_EDITOR'
+  | 'CODE_EDITOR'
   | 'FIELD_PICKER'
   | 'FIELD_MULTI_SELECTOR'
 export type ExecutionStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'CANCELLED'

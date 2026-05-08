@@ -45,6 +45,8 @@ public class StubNodeMetadataApplicationService implements NodeMetadataApplicati
                 buildFilterDefinition(),
                 buildSortDefinition(),
                 buildFormulaDefinition(),
+                buildPythonScriptDefinition(),
+                buildJavaCodeDefinition(),
                 buildChartOutputDefinition(),
                 buildTableOutputDefinition());
     }
@@ -226,7 +228,7 @@ public class StubNodeMetadataApplicationService implements NodeMetadataApplicati
                 .nodeVersion("1.0")
                 .displayName("SQL Query")
                 .category(NodeCategory.QUERY)
-                .description("统一取数节点")
+                .description("取数节点")
                 .tags(List.of("sql", "query", "table"))
                 .defaults(Map.of(
                         "timeoutMs", 10000,
@@ -667,6 +669,162 @@ public class StubNodeMetadataApplicationService implements NodeMetadataApplicati
                 .inputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("数据集").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .outputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("派生结果").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .capabilities(List.of(NodeCapabilityDTO.builder().code("COMPUTE_FORMULA").name("公式计算").build()))
+                .build();
+    }
+
+    private NodeMetaDTO buildPythonScriptDefinition() {
+        return NodeMetaDTO.builder()
+                .protocolVersion("1.0")
+                .metadataVersion("2026-05-08")
+                .nodeType(NodeType.PYTHON_SCRIPT.getCode())
+                .nodeVersion("1.0")
+                .displayName("Python Script")
+                .category(NodeCategory.COMPUTE)
+                .description("自定义 Python 3 脚本处理数据")
+                .tags(List.of("python", "script", "compute", "custom"))
+                .defaults(Map.of("timeoutSeconds", 30))
+                .configSchema(NodeConfigSchemaDTO.builder()
+                        .schemaType("panel")
+                        .schemaVersion("1.0")
+                        .panelId("analysis.python-script")
+                        .layout(Map.of("type", "section-list"))
+                        .sections(List.of(
+                                PanelSectionDTO.builder()
+                                        .key("script")
+                                        .title("脚本")
+                                        .order(1)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("script")
+                                                        .label("Python 代码")
+                                                        .componentType(FieldComponentType.CODE_EDITOR)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("# rows: List[dict] — 上游数据\n# 将结果赋值给 output_rows\noutput_rows = rows")
+                                                        .props(Map.of("language", "python", "minLines", 10))
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("Python 脚本不能为空").build()))
+                                                        .build()))
+                                        .build(),
+                                PanelSectionDTO.builder()
+                                        .key("options")
+                                        .title("执行设置")
+                                        .order(2)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("timeoutSeconds")
+                                                        .label("超时(秒)")
+                                                        .componentType(FieldComponentType.NUMBER_INPUT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.INTEGER)
+                                                        .defaultValue(30)
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("min").min(1).message("最小超时 1 秒").build(),
+                                                                ValidationRuleDTO.builder().type("max").max(300).message("最大超时 300 秒").build()))
+                                                        .build()))
+                                        .build()))
+                        .rules(List.of())
+                        .build())
+                .inputPorts(List.of(NodePortMetaDTO.builder()
+                        .name("dataset")
+                        .label("输入数据集")
+                        .valueType(ValueType.DATASET)
+                        .required(true)
+                        .multiple(false)
+                        .build()))
+                .outputPorts(List.of(NodePortMetaDTO.builder()
+                        .name("dataset")
+                        .label("处理结果")
+                        .valueType(ValueType.DATASET)
+                        .required(true)
+                        .multiple(false)
+                        .build()))
+                .capabilities(List.of(
+                        NodeCapabilityDTO.builder().code("COMPUTE_CUSTOM").name("自定义计算").build()))
+                .build();
+    }
+
+    private NodeMetaDTO buildJavaCodeDefinition() {
+        return NodeMetaDTO.builder()
+                .protocolVersion("1.0")
+                .metadataVersion("2026-05-08")
+                .nodeType(NodeType.JAVA_CODE.getCode())
+                .nodeVersion("1.0")
+                .displayName("Java Code")
+                .category(NodeCategory.COMPUTE)
+                .description("自定义 Java 代码处理数据")
+                .tags(List.of("java", "code", "compute", "custom"))
+                .defaults(Map.of("timeoutSeconds", 30))
+                .configSchema(NodeConfigSchemaDTO.builder()
+                        .schemaType("panel")
+                        .schemaVersion("1.0")
+                        .panelId("analysis.java-code")
+                        .layout(Map.of("type", "section-list"))
+                        .sections(List.of(
+                                PanelSectionDTO.builder()
+                                        .key("code")
+                                        .title("代码")
+                                        .order(1)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("code")
+                                                        .label("Java 代码")
+                                                        .componentType(FieldComponentType.CODE_EDITOR)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("// rows: List<Map<String, Object>> — 上游数据\n// 方法签名: List<Map<String, Object>> process(List<Map<String, Object>> rows)\nreturn rows;")
+                                                        .props(Map.of("language", "java", "minLines", 10))
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("Java 代码不能为空").build()))
+                                                        .build()))
+                                        .build(),
+                                PanelSectionDTO.builder()
+                                        .key("options")
+                                        .title("执行设置")
+                                        .order(2)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("timeoutSeconds")
+                                                        .label("超时(秒)")
+                                                        .componentType(FieldComponentType.NUMBER_INPUT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.INTEGER)
+                                                        .defaultValue(30)
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("min").min(1).message("最小超时 1 秒").build(),
+                                                                ValidationRuleDTO.builder().type("max").max(300).message("最大超时 300 秒").build()))
+                                                        .build()))
+                                        .build()))
+                        .rules(List.of())
+                        .build())
+                .inputPorts(List.of(NodePortMetaDTO.builder()
+                        .name("dataset")
+                        .label("输入数据集")
+                        .valueType(ValueType.DATASET)
+                        .required(true)
+                        .multiple(false)
+                        .build()))
+                .outputPorts(List.of(NodePortMetaDTO.builder()
+                        .name("dataset")
+                        .label("处理结果")
+                        .valueType(ValueType.DATASET)
+                        .required(true)
+                        .multiple(false)
+                        .build()))
+                .capabilities(List.of(
+                        NodeCapabilityDTO.builder().code("COMPUTE_CUSTOM").name("自定义计算").build()))
                 .build();
     }
 

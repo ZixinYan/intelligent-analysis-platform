@@ -1,5 +1,8 @@
 package com.kuaishou.intelligentanalysisplatform.domain.query.model;
 
+/**
+ * SQL执行报错类，这里后期可以优化下枚举结构，加个desc
+ */
 public enum GuardViolationCode {
     SQL_FORBIDDEN_STATEMENT,
     SQL_MULTI_STATEMENT_REJECTED,

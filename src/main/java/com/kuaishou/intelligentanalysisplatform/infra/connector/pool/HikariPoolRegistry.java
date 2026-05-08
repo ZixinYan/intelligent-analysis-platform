@@ -68,6 +68,11 @@ public class HikariPoolRegistry {
         return credentialEncryptor.decrypt(encryptedPassword);
     }
 
+    /**
+     * 用于创建数据库链接
+     * @param datasource
+     * @return
+     */
     private String buildJdbcUrl(AnalysisDatasource datasource) {
         String database = datasource.getDatabase() == null ? "" : "/" + datasource.getDatabase();
         String queryString = buildQueryString(datasource.getJdbcOptions());

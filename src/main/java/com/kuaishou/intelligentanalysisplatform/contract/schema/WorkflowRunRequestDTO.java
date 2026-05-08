@@ -12,6 +12,7 @@ public class WorkflowRunRequestDTO {
     private String workflowId;
     private Map<String, Object> inputs;
     private List<WorkflowNodeDTO> nodes;
+    private List<WorkflowEdgeDTO> edges;
     private Boolean async;
     private RequestContextDTO context;
 }

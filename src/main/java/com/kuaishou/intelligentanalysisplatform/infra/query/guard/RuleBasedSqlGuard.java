@@ -19,6 +19,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class RuleBasedSqlGuard implements SqlGuard {
 
+    /**
+     * 执行SQL或者查询命令的黑名单，这里应该只读
+     * 建议配置层面使用只读的用户，这里算是个兜底吧
+     */
     private static final Set<String> FORBIDDEN_KEYWORDS = Set.of(
             "insert", "update", "delete", "merge", "replace",
             "create", "alter", "drop", "truncate", "rename", "comment",

@@ -10,6 +10,8 @@ public enum NodeType {
     FILTER("filter", NodeCategory.COMPUTE),
     SORT("sort", NodeCategory.COMPUTE),
     FORMULA("formula", NodeCategory.COMPUTE),
+    PYTHON_SCRIPT("python_script", NodeCategory.COMPUTE),
+    JAVA_CODE("java_code", NodeCategory.COMPUTE),
     CHART_OUTPUT("chart_output", NodeCategory.OUTPUT),
     TABLE_OUTPUT("table_output", NodeCategory.OUTPUT),
     EXPORT_OUTPUT("export_output", NodeCategory.OUTPUT),

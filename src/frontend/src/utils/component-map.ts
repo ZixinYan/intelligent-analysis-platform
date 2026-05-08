@@ -4,6 +4,7 @@ import NumberField from '@/components/form/fields/NumberField.vue'
 import SelectField from '@/components/form/fields/SelectField.vue'
 import SwitchField from '@/components/form/fields/SwitchField.vue'
 import SqlEditorField from '@/components/form/fields/SqlEditorField.vue'
+import CodeEditorField from '@/components/form/fields/CodeEditorField.vue'
 import FieldPickerField from '@/components/form/fields/FieldPickerField.vue'
 import VariableBindingField from '@/components/form/fields/VariableBindingField.vue'
 import type { FieldComponentType } from '@/types/contract'
@@ -16,6 +17,7 @@ const componentMap: Record<FieldComponentType, Component> = {
   SWITCH: SwitchField,
   NUMBER_INPUT: NumberField,
   SQL_EDITOR: SqlEditorField,
+  CODE_EDITOR: CodeEditorField,
   FIELD_PICKER: FieldPickerField,
   FIELD_MULTI_SELECTOR: FieldPickerField,
 }
