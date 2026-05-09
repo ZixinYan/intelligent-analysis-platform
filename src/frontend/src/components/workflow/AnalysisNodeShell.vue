@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import type { WorkflowNodeData } from '@/types/workflow'
 import { resolveNodeIcon } from '@/utils/node-preview'
@@ -37,59 +37,59 @@ const usageHints = computed<UsageHint[]>(() => {
   const nodeType = props.data.meta?.nodeType ?? ''
   const hintMap: Record<string, UsageHint[]> = {
     sql_query: [
-      { label: 'SQL 取数', icon: '📝' },
-      { label: '变量参数化', icon: '⚡' },
-      { label: '多数据源', icon: '🔗' },
+      { label: '连接数据源，执行 SQL 查询', icon: '📝' },
+      { label: '支持 {{变量}} 参数化插值', icon: '⚡' },
+      { label: '可切换多个数据源', icon: '🔗' },
     ],
     aggregate: [
-      { label: '分组聚合', icon: '∑' },
-      { label: 'SUM / AVG / COUNT', icon: '📊' },
-      { label: '输出汇总', icon: '📤' },
+      { label: '按维度分组聚合数据', icon: '∑' },
+      { label: '支持 SUM / AVG / COUNT / MAX / MIN', icon: '📊' },
+      { label: '结果作为下游汇总输入', icon: '📤' },
     ],
     time_series_compute: [
-      { label: '同比 / 环比', icon: '📈' },
-      { label: '滚动均值', icon: '〰' },
-      { label: '天 / 周 / 月粒度', icon: '📅' },
+      { label: '计算同比、环比增长率', icon: '📈' },
+      { label: '滚动均值、累计求和', icon: '〰' },
+      { label: '按天 / 周 / 月粒度对齐', icon: '📅' },
     ],
     pivot: [
-      { label: '行列转换', icon: '⊞' },
-      { label: '矩阵交叉分析', icon: '🔢' },
-      { label: '维度展开为列', icon: '🔄' },
+      { label: '行列转换，生成交叉表', icon: '⊞' },
+      { label: '矩阵形式展示多维数据', icon: '🔢' },
+      { label: '将维度值展开为独立列', icon: '🔄' },
     ],
     filter: [
-      { label: '条件筛选', icon: '🔽' },
-      { label: '多条件组合', icon: '⊕' },
-      { label: '空值处理', icon: '∅' },
+      { label: '按条件筛选数据行', icon: '🔽' },
+      { label: '支持 AND / OR 多条件组合', icon: '⊕' },
+      { label: '处理空值、异常值', icon: '∅' },
     ],
     sort: [
-      { label: '多字段排序', icon: '↕' },
-      { label: '升序 / 降序', icon: '🔀' },
-      { label: '排序优先级', icon: '🎯' },
+      { label: '对结果集多字段排序', icon: '↕' },
+      { label: '支持升序 / 降序混合', icon: '🔀' },
+      { label: '设定排序优先级', icon: '🎯' },
     ],
     formula: [
-      { label: '表达式计算', icon: 'ƒ' },
-      { label: '新增计算列', icon: '➕' },
-      { label: '数学 / 字符串', icon: '🔣' },
+      { label: '写表达式生成新计算列', icon: 'ƒ' },
+      { label: '引用已有列参与运算', icon: '➕' },
+      { label: '支持数学、字符串、日期函数', icon: '🔣' },
     ],
     python_script: [
-      { label: 'Python 3', icon: '🐍' },
-      { label: '自定义变换', icon: '⚙️' },
-      { label: 'rows: List[dict]', icon: '📋' },
+      { label: '用 Python 3 自定义数据变换', icon: '🐍' },
+      { label: '入参 rows: List[dict]，返回同格式', icon: '📋' },
+      { label: '可引入标准库进行复杂处理', icon: '⚙️' },
     ],
     java_code: [
-      { label: 'Java 执行', icon: '☕' },
-      { label: '高性能处理', icon: '⚡' },
-      { label: 'transform(rows)', icon: '🔧' },
+      { label: '用 Java 编写高性能处理逻辑', icon: '☕' },
+      { label: '实现 transform(List<Map>) 方法', icon: '🔧' },
+      { label: '适合计算密集型场景', icon: '⚡' },
     ],
     chart_output: [
-      { label: '图表渲染', icon: '📊' },
-      { label: '折线 / 柱状 / 饼图', icon: '📈' },
-      { label: 'X/Y 轴映射', icon: '🔗' },
+      { label: '将数据渲染为可视化图表', icon: '📊' },
+      { label: '支持折线、柱状、饼图等', icon: '📈' },
+      { label: '配置 X / Y 轴字段映射', icon: '🔗' },
     ],
     table_output: [
-      { label: '分页表格', icon: '📋' },
-      { label: '自定义显示列', icon: '⚙️' },
-      { label: '数据下载', icon: '⬇️' },
+      { label: '以分页表格展示数据', icon: '📋' },
+      { label: '自定义显示列与列宽', icon: '⚙️' },
+      { label: '支持数据导出下载', icon: '⬇️' },
     ],
   }
   return hintMap[nodeType] ?? []
@@ -99,82 +99,220 @@ const inputPorts  = computed(() => props.data.meta?.inputPorts  ?? [])
 const outputPorts = computed(() => props.data.meta?.outputPorts ?? [])
 
 const visibleTags = computed(() => (props.data.meta?.tags ?? []).slice(0, 3))
+
+const showTooltip = ref(false)
 </script>
 
 <template>
-  <div class="ans" :style="{ '--cat': categoryColor }">
-    <!-- 顶部渐变高亮线 -->
-    <div class="ans__top-line" />
-    <!-- 左侧分类色条 -->
-    <div class="ans__accent" />
-
-    <Handle id="input"  type="target" :position="Position.Left"  class="ans__handle ans__handle--in" />
-    <Handle id="output" type="source" :position="Position.Right" class="ans__handle ans__handle--out" />
-
-    <!-- 头部：图标 + 名称 + 状态 -->
-    <div class="ans__header">
-      <div class="ans__icon">{{ resolveNodeIcon(data.meta) }}</div>
-      <div class="ans__title-group">
-        <div class="ans__title">{{ data.title }}</div>
-        <div class="ans__meta-row">
-          <span class="ans__category-badge">{{ categoryLabel }}</span>
-          <span class="ans__subtype">{{ data.meta?.displayName ?? data.nodeType }}</span>
+  <!-- 外层 wrapper：overflow:visible，允许 tooltip 溢出 -->
+  <div class="ans-outer">
+    <!-- Tooltip：位于节点右侧，不受 .ans overflow:hidden 约束 -->
+    <Transition name="tooltip-fade">
+      <div
+        v-if="showTooltip && usageHints.length"
+        class="ans__tooltip"
+        :style="{ '--cat': categoryColor }"
+      >
+        <div class="ans__tooltip-header">
+          <span class="ans__tooltip-icon">{{ resolveNodeIcon(data.meta) }}</span>
+          <div>
+            <div class="ans__tooltip-name">{{ data.meta?.displayName ?? data.nodeType }}</div>
+            <div class="ans__tooltip-category">{{ categoryLabel }}节点</div>
+          </div>
+        </div>
+        <div v-if="data.meta?.description" class="ans__tooltip-desc">
+          {{ data.meta.description }}
+        </div>
+        <div class="ans__tooltip-divider" />
+        <div class="ans__tooltip-hints">
+          <div v-for="hint in usageHints" :key="hint.label" class="ans__tooltip-hint">
+            <span class="ans__tooltip-hint-icon">{{ hint.icon }}</span>
+            <span class="ans__tooltip-hint-label">{{ hint.label }}</span>
+          </div>
         </div>
       </div>
-      <div class="ans__status" :class="{ 'ans__status--pulse': statusConfig.dot }" :style="{ '--sc': statusConfig.color }">
-        <span v-if="statusConfig.dot" class="ans__status-dot" />
-        {{ statusConfig.label }}
-      </div>
-    </div>
+    </Transition>
 
-    <!-- 分割线 -->
-    <div class="ans__divider" />
+    <!-- 节点主体 -->
+    <div class="ans" :style="{ '--cat': categoryColor }">
+      <div class="ans__top-line" />
+      <div class="ans__accent" />
 
-    <!-- 用法说明 -->
-    <div v-if="usageHints.length" class="ans__usage">
-      <div class="ans__section-label">用法</div>
-      <div class="ans__hints">
-        <span v-for="hint in usageHints" :key="hint.label" class="ans__hint">
-          <span class="ans__hint-icon">{{ hint.icon }}</span>{{ hint.label }}
-        </span>
-      </div>
-    </div>
+      <Handle id="input"  type="target" :position="Position.Left"  class="ans__handle ans__handle--in" />
+      <Handle id="output" type="source" :position="Position.Right" class="ans__handle ans__handle--out" />
 
-    <!-- 当前配置预览 -->
-    <div v-if="data.preview?.length" class="ans__preview">
-      <div class="ans__section-label">当前配置</div>
-      <div class="ans__preview-body">
-        <div v-for="line in data.preview" :key="line" class="ans__preview-line">
-          <span class="ans__preview-bullet">›</span>{{ line }}
+      <!-- 头部 -->
+      <div class="ans__header">
+        <div class="ans__icon">{{ resolveNodeIcon(data.meta) }}</div>
+        <div class="ans__title-group">
+          <div class="ans__title">{{ data.title }}</div>
+          <div class="ans__meta-row">
+            <span class="ans__category-badge">{{ categoryLabel }}</span>
+            <span class="ans__subtype">{{ data.meta?.displayName ?? data.nodeType }}</span>
+          </div>
+        </div>
+        <div class="ans__header-right">
+          <div class="ans__status" :class="{ 'ans__status--pulse': statusConfig.dot }" :style="{ '--sc': statusConfig.color }">
+            <span v-if="statusConfig.dot" class="ans__status-dot" />
+            {{ statusConfig.label }}
+          </div>
+          <!-- 用法提示触发按钮 -->
+          <button
+            v-if="usageHints.length"
+            class="ans__info-btn"
+            @mouseenter="showTooltip = true"
+            @mouseleave="showTooltip = false"
+          >?</button>
         </div>
       </div>
-    </div>
 
-    <!-- 数据流：输入端口 → 输出端口 -->
-    <div v-if="inputPorts.length || outputPorts.length" class="ans__flow">
-      <div v-if="inputPorts[0]" class="ans__flow-port ans__flow-port--in">
-        <span class="ans__flow-badge ans__flow-badge--in">IN</span>
-        <span class="ans__flow-name">{{ inputPorts[0].label }}</span>
-        <span class="ans__flow-type">{{ inputPorts[0].valueType }}</span>
-      </div>
-      <span v-if="inputPorts[0] && outputPorts[0]" class="ans__flow-arrow">→</span>
-      <div v-if="outputPorts[0]" class="ans__flow-port ans__flow-port--out">
-        <span class="ans__flow-badge ans__flow-badge--out">OUT</span>
-        <span class="ans__flow-name">{{ outputPorts[0].label }}</span>
-        <span class="ans__flow-type">{{ outputPorts[0].valueType }}</span>
-      </div>
-    </div>
+      <div class="ans__divider" />
 
-    <!-- 底部：标签 -->
-    <div v-if="visibleTags.length" class="ans__footer">
-      <div class="ans__tags">
-        <span v-for="tag in visibleTags" :key="tag" class="ans__tag">{{ tag }}</span>
+      <!-- 当前配置预览 -->
+      <div v-if="data.preview?.length" class="ans__preview">
+        <div class="ans__section-label">当前配置</div>
+        <div class="ans__preview-body">
+          <div v-for="line in data.preview" :key="line" class="ans__preview-line">
+            <span class="ans__preview-bullet">›</span>{{ line }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 数据流：输入端口 → 输出端口 -->
+      <div v-if="inputPorts.length || outputPorts.length" class="ans__flow">
+        <div v-if="inputPorts[0]" class="ans__flow-port ans__flow-port--in">
+          <span class="ans__flow-badge ans__flow-badge--in">IN</span>
+          <span class="ans__flow-name">{{ inputPorts[0].label }}</span>
+          <span class="ans__flow-type">{{ inputPorts[0].valueType }}</span>
+        </div>
+        <span v-if="inputPorts[0] && outputPorts[0]" class="ans__flow-arrow">→</span>
+        <div v-if="outputPorts[0]" class="ans__flow-port ans__flow-port--out">
+          <span class="ans__flow-badge ans__flow-badge--out">OUT</span>
+          <span class="ans__flow-name">{{ outputPorts[0].label }}</span>
+          <span class="ans__flow-type">{{ outputPorts[0].valueType }}</span>
+        </div>
+      </div>
+
+      <!-- 底部标签 -->
+      <div v-if="visibleTags.length" class="ans__footer">
+        <div class="ans__tags">
+          <span v-for="tag in visibleTags" :key="tag" class="ans__tag">{{ tag }}</span>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* ── 外层容器（允许 tooltip 溢出） ─────────── */
+.ans-outer {
+  position: relative;
+  display: inline-block;
+}
+
+/* ── Tooltip ──────────────────────────────── */
+.ans__tooltip {
+  position: absolute;
+  left: calc(100% + 14px);
+  top: 0;
+  width: 240px;
+  background: linear-gradient(160deg, #131c2e 0%, #0d1420 100%);
+  border: 1px solid color-mix(in srgb, var(--cat) 30%, #1e293b);
+  border-radius: 12px;
+  padding: 14px 15px;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.4),
+    0 12px 40px rgba(0,0,0,0.55),
+    0 0 28px -10px var(--cat);
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.ans__tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ans__tooltip-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--cat) 15%, #1e293b);
+  border: 1px solid color-mix(in srgb, var(--cat) 28%, transparent);
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+.ans__tooltip-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: 0.01em;
+}
+
+.ans__tooltip-category {
+  font-size: 11px;
+  color: var(--cat);
+  margin-top: 2px;
+  opacity: 0.8;
+}
+
+.ans__tooltip-desc {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.ans__tooltip-divider {
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cat) 30%, transparent), transparent 70%);
+  margin-bottom: 10px;
+}
+
+.ans__tooltip-hints {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ans__tooltip-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.ans__tooltip-hint-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+  margin-top: 1px;
+}
+
+.ans__tooltip-hint-label {
+  flex: 1;
+}
+
+/* Tooltip 进入/离开动画 */
+.tooltip-fade-enter-active,
+.tooltip-fade-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.tooltip-fade-enter-from,
+.tooltip-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-4px);
+}
+
+/* ── 节点主体 ─────────────────────────────── */
 .ans {
   position: relative;
   min-width: 280px;
@@ -230,7 +368,7 @@ const visibleTags = computed(() => (props.data.meta?.tags ?? []).slice(0, 3))
   grid-template-columns: 44px 1fr auto;
   align-items: center;
   gap: 10px;
-  padding: 14px 14px 12px 18px;
+  padding: 14px 12px 12px 18px;
 }
 
 .ans__icon {
@@ -288,6 +426,15 @@ const visibleTags = computed(() => (props.data.meta?.tags ?? []).slice(0, 3))
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
+/* ── 右侧：状态 + 信息按钮 ────────────────── */
+.ans__header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
 /* ── 状态徽章 ─────────────────────────────── */
 .ans__status {
   display: flex;
@@ -301,7 +448,6 @@ const visibleTags = computed(() => (props.data.meta?.tags ?? []).slice(0, 3))
   color: var(--sc);
   background: color-mix(in srgb, var(--sc) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--sc) 28%, transparent);
-  flex-shrink: 0;
 }
 
 .ans__status-dot {
@@ -316,6 +462,31 @@ const visibleTags = computed(() => (props.data.meta?.tags ?? []).slice(0, 3))
 @keyframes pulse {
   0%, 100% { opacity: 1;   transform: scale(1); }
   50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+/* ── 用法提示触发按钮 ─────────────────────── */
+.ans__info-btn {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: default;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  line-height: 1;
+  padding: 0;
+  font-family: inherit;
+}
+
+.ans__info-btn:hover {
+  border-color: color-mix(in srgb, var(--cat) 50%, transparent);
+  color: var(--cat);
+  background: color-mix(in srgb, var(--cat) 10%, transparent);
 }
 
 /* ── 分割线 ───────────────────────────────── */
@@ -333,41 +504,6 @@ const visibleTags = computed(() => (props.data.meta?.tags ?? []).slice(0, 3))
   letter-spacing: 0.08em;
   text-transform: uppercase;
   margin-bottom: 6px;
-}
-
-/* ── 用法 ─────────────────────────────────── */
-.ans__usage {
-  padding: 10px 14px 0 18px;
-}
-
-.ans__hints {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.ans__hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: #94a3b8;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 6px;
-  padding: 3px 8px;
-  white-space: nowrap;
-  transition: border-color 0.12s, color 0.12s;
-}
-
-.ans__hint:hover {
-  border-color: color-mix(in srgb, var(--cat) 40%, transparent);
-  color: #cbd5e1;
-}
-
-.ans__hint-icon {
-  font-size: 12px;
-  flex-shrink: 0;
 }
 
 /* ── 配置预览 ─────────────────────────────── */
