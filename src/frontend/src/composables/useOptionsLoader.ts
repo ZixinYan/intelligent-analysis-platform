@@ -2,6 +2,8 @@ import { computed, ref, toValue, watch } from 'vue'
 import client from '@/api/client'
 import type { OptionDTO, PanelFieldDTO, SchemaInferResultDTO } from '@/types/contract'
 
+export type OptionsLoadError = { message: string } | null
+
 function resolveStaticOptions(field: PanelFieldDTO) {
   return field.options ?? []
 }
@@ -13,6 +15,10 @@ function mapRemoteOptions(source: unknown, field: PanelFieldDTO) {
       ? (source as { records: unknown[] }).records
       : []
   return records.map((item) => {
+    // Handle plain string/number arrays (e.g. table names from /datasources/{id}/tables)
+    if (typeof item === 'string' || typeof item === 'number') {
+      return { label: String(item), value: String(item) }
+    }
     const record = item as Record<string, unknown>
     return {
       label: String(record[field.optionsSource?.labelField ?? 'label'] ?? record.label ?? record.name ?? record.id ?? ''),
@@ -51,6 +57,7 @@ export function useOptionsLoader(
 ) {
   const options = ref<OptionDTO[]>([])
   const loading = ref(false)
+  const error = ref<string>()
   let requestId = 0
 
   async function loadRemoteOptions(currentField: PanelFieldDTO) {
@@ -66,12 +73,19 @@ export function useOptionsLoader(
     }
     const currentRequestId = ++requestId
     loading.value = true
+    error.value = undefined
     try {
       const { data } = await client.get(resolvedUri)
       if (currentRequestId !== requestId) {
         return
       }
       options.value = mapRemoteOptions(data.data, currentField)
+    }
+    catch (err) {
+      if (currentRequestId === requestId) {
+        error.value = err instanceof Error ? err.message : '加载选项失败'
+        options.value = []
+      }
     }
     finally {
       if (currentRequestId === requestId) {
@@ -85,11 +99,13 @@ export function useOptionsLoader(
     if (!sourceType || sourceType === 'static') {
       options.value = resolveStaticOptions(currentField)
       loading.value = false
+      error.value = undefined
       return
     }
     if (sourceType === 'schema-fields') {
       options.value = resolveSchemaFieldOptions(currentField, currentSchema)
       loading.value = false
+      error.value = undefined
       return
     }
     await loadRemoteOptions(currentField)
@@ -98,6 +114,7 @@ export function useOptionsLoader(
   return {
     options: computed(() => options.value),
     loading: computed(() => loading.value),
+    error: computed(() => error.value),
     reload: async () => {
       const currentField = toValue(field)
       if (currentField.optionsSource?.type === 'remote') {

@@ -89,17 +89,23 @@ function updateField(field: PanelFieldDTO, value: unknown) {
 <style scoped>
 .form-renderer {
   display: grid;
-  gap: 16px;
+  gap: 12px;
 }
 .form-renderer__section {
-  padding: 16px;
+  padding: 14px;
   border: 1px solid #1e293b;
-  border-radius: 16px;
-  background: #0f172a;
+  border-radius: 14px;
+  background: #0a0f1e;
   display: grid;
   gap: 14px;
 }
 .form-renderer__header {
-  font-weight: 700;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #475569;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #1e293b;
 }
 </style>
