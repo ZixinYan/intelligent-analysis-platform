@@ -12,4 +12,6 @@ public interface Connector {
     java.util.List<FieldSchemaDTO> inferSchema(AnalysisDatasource datasource, QueryCommand command);
 
     java.util.List<String> listTables(AnalysisDatasource datasource);
+
+    HealthCheckResult healthCheck(AnalysisDatasource datasource);
 }

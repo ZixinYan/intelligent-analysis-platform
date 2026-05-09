@@ -29,7 +29,8 @@ class DefaultSyncExecutionServiceTest {
     @Test
     void shouldRunNode() {
         NodeExecuteDispatcher dispatcher = mock(NodeExecuteDispatcher.class);
-        DefaultSyncExecutionService service = new DefaultSyncExecutionService(dispatcher);
+        WorkflowDagExecutor workflowDagExecutor = mock(WorkflowDagExecutor.class);
+        DefaultSyncExecutionService service = new DefaultSyncExecutionService(dispatcher, workflowDagExecutor);
         NodeDebugRequestDTO request = NodeDebugRequestDTO.builder()
                 .workflowId("wf1")
                 .nodeId("node1")
@@ -46,7 +47,8 @@ class DefaultSyncExecutionServiceTest {
     @Test
     void shouldRunWorkflowSequentially() {
         NodeExecuteDispatcher dispatcher = mock(NodeExecuteDispatcher.class);
-        DefaultSyncExecutionService service = new DefaultSyncExecutionService(dispatcher);
+        WorkflowDagExecutor workflowDagExecutor = mock(WorkflowDagExecutor.class);
+        DefaultSyncExecutionService service = new DefaultSyncExecutionService(dispatcher, workflowDagExecutor);
         WorkflowNodeDTO node1 = WorkflowNodeDTO.builder().nodeId("node1").nodeType("sql_query").build();
         WorkflowNodeDTO node2 = WorkflowNodeDTO.builder().nodeId("node2").nodeType("sql_query").build();
         when(dispatcher.dispatch(any(), any()))
@@ -59,7 +61,8 @@ class DefaultSyncExecutionServiceTest {
     @Test
     void shouldPassUpstreamResultsToNextNode() {
         NodeExecuteDispatcher dispatcher = mock(NodeExecuteDispatcher.class);
-        DefaultSyncExecutionService service = new DefaultSyncExecutionService(dispatcher);
+        WorkflowDagExecutor workflowDagExecutor = mock(WorkflowDagExecutor.class);
+        DefaultSyncExecutionService service = new DefaultSyncExecutionService(dispatcher, workflowDagExecutor);
         WorkflowNodeDTO node1 = WorkflowNodeDTO.builder().nodeId("node1").nodeType("sql_query").build();
         WorkflowNodeDTO node2 = WorkflowNodeDTO.builder().nodeId("node2").nodeType("table_output").build();
         StandardResultDTO firstResult = StandardResultDTO.builder()
@@ -99,7 +102,8 @@ class DefaultSyncExecutionServiceTest {
     @Test
     void shouldStopWorkflowWhenNodeFailedAndKeepCompletedResults() {
         NodeExecuteDispatcher dispatcher = mock(NodeExecuteDispatcher.class);
-        DefaultSyncExecutionService service = new DefaultSyncExecutionService(dispatcher);
+        WorkflowDagExecutor workflowDagExecutor = mock(WorkflowDagExecutor.class);
+        DefaultSyncExecutionService service = new DefaultSyncExecutionService(dispatcher, workflowDagExecutor);
         WorkflowNodeDTO node1 = WorkflowNodeDTO.builder().nodeId("node1").nodeType("sql_query").build();
         WorkflowNodeDTO node2 = WorkflowNodeDTO.builder().nodeId("node2").nodeType("filter").build();
         WorkflowNodeDTO node3 = WorkflowNodeDTO.builder().nodeId("node3").nodeType("table_output").build();

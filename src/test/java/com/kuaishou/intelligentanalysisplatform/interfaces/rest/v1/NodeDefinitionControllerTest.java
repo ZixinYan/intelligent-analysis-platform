@@ -2,8 +2,8 @@ package com.kuaishou.intelligentanalysisplatform.interfaces.rest.v1;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeCapabilityRegistry;
+import com.kuaishou.intelligentanalysisplatform.application.impl.DefaultNodeMetadataApplicationService;
 import com.kuaishou.intelligentanalysisplatform.common.response.GlobalExceptionHandler;
-import com.kuaishou.intelligentanalysisplatform.infra.stub.StubNodeMetadataApplicationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -19,7 +19,9 @@ class NodeDefinitionControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new NodeDefinitionController(new StubNodeMetadataApplicationService(), new ComputeCapabilityRegistry(new ObjectMapper())))
+        mockMvc = MockMvcBuilders.standaloneSetup(new NodeDefinitionController(
+                        new DefaultNodeMetadataApplicationService(),
+                        new ComputeCapabilityRegistry(new ObjectMapper())))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -39,7 +41,8 @@ class NodeDefinitionControllerTest {
                 .andExpect(jsonPath("$.data.protocolVersion").value("1.0"))
                 .andExpect(jsonPath("$.data.configSchema.panelId").value("analysis.sql-query"))
                 .andExpect(jsonPath("$.data.configSchema.sections[0].fields[0].field").value("datasourceId"))
-                .andExpect(jsonPath("$.data.configSchema.sections[0].fields[1].field").value("sqlTemplate"))
+                .andExpect(jsonPath("$.data.configSchema.sections[0].fields[1].field").value("tableId"))
+                .andExpect(jsonPath("$.data.configSchema.sections[0].fields[2].field").value("sqlTemplate"))
                 .andExpect(jsonPath("$.data.configSchema.sections[1].fields[0].field").value("timeoutMs"));
     }
 

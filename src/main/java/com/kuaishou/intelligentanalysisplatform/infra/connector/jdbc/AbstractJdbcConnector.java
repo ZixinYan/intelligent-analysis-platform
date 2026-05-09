@@ -21,6 +21,7 @@ import com.kuaishou.intelligentanalysisplatform.contract.enums.ValueType;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.FieldSchemaDTO;
 import com.kuaishou.intelligentanalysisplatform.domain.datasource.AnalysisDatasource;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.Connector;
+import com.kuaishou.intelligentanalysisplatform.domain.query.connector.HealthCheckResult;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.PaginationMode;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.QueryCommand;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.QueryResult;
@@ -91,6 +92,21 @@ public abstract class AbstractJdbcConnector implements Connector {
             return tables;
         } catch (java.sql.SQLException e) {
             throw new IllegalStateException("list tables failed", e);
+        }
+    }
+
+    @Override
+    public HealthCheckResult healthCheck(AnalysisDatasource datasource) {
+        long start = System.currentTimeMillis();
+        DataSource dataSource = poolRegistry.getOrCreate(datasource);
+        try (Connection connection = dataSource.getConnection()) {
+            if (!connection.isValid(3)) {
+                return new HealthCheckResult(false, System.currentTimeMillis() - start, null, "connection invalid");
+            }
+            String serverVersion = connection.getMetaData().getDatabaseProductVersion();
+            return new HealthCheckResult(true, System.currentTimeMillis() - start, serverVersion, "connection ok");
+        } catch (SQLException e) {
+            return new HealthCheckResult(false, System.currentTimeMillis() - start, null, e.getMessage());
         }
     }
 

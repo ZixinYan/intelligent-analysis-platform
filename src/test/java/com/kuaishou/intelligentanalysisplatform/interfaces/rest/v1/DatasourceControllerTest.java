@@ -1,10 +1,16 @@
 package com.kuaishou.intelligentanalysisplatform.interfaces.rest.v1;
 
+import com.kuaishou.intelligentanalysisplatform.application.DatasourceApplicationService;
+import com.kuaishou.intelligentanalysisplatform.common.error.BaseBusinessException;
+import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
 import com.kuaishou.intelligentanalysisplatform.common.response.GlobalExceptionHandler;
-import com.kuaishou.intelligentanalysisplatform.infra.repository.InMemoryDatasourceRepository;
-import com.kuaishou.intelligentanalysisplatform.infra.security.AesGcmCredentialEncryptor;
-import com.kuaishou.intelligentanalysisplatform.infra.security.StubPermissionChecker;
-import com.kuaishou.intelligentanalysisplatform.infra.stub.StubDatasourceApplicationService;
+import com.kuaishou.intelligentanalysisplatform.common.response.PageResult;
+import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceStatus;
+import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceType;
+import com.kuaishou.intelligentanalysisplatform.contract.enums.ExecutionStatus;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceQueryRequestDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceTestConnectionResultDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -12,6 +18,14 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -26,11 +40,45 @@ class DatasourceControllerTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        StubDatasourceApplicationService service = new StubDatasourceApplicationService(
-                new InMemoryDatasourceRepository(),
-                new AesGcmCredentialEncryptor("0123456789abcdef0123456789abcdef"),
-                new StubPermissionChecker()
-        );
+        DatasourceApplicationService service = mock(DatasourceApplicationService.class);
+        DatasourceDTO created = datasource("ds-1", "demo", "tenant-a");
+        DatasourceDTO updated = datasource("ds-1", "demo-updated", "tenant-a");
+        DatasourceDTO second = datasource("ds-2", "demo-2", "tenant-a");
+
+        when(service.create(any())).thenAnswer(invocation -> {
+            Object request = invocation.getArgument(0);
+            String name = (String) request.getClass().getMethod("getName").invoke(request);
+            return "demo-2".equals(name) ? second : created;
+        });
+        when(service.getById(eq("ds-1"), any())).thenReturn(created);
+        when(service.getById(eq("missing-id"), any())).thenThrow(new BaseBusinessException(
+                ErrorCode.DATASOURCE_NOT_FOUND,
+                "datasource not found"
+        ));
+        when(service.getById(eq("ds-1"), argThat(ctx -> ctx != null && "tenant-b".equals(ctx.getTenantId()))))
+                .thenThrow(new BaseBusinessException(ErrorCode.DATASOURCE_ACCESS_DENIED, "datasource access denied"));
+        when(service.update(eq("ds-1"), any())).thenReturn(updated);
+        when(service.list(any(DatasourceQueryRequestDTO.class))).thenAnswer(invocation -> {
+            DatasourceQueryRequestDTO request = invocation.getArgument(0);
+            if (request.getType() != null && !request.getType().isBlank()) {
+                throw new BaseBusinessException(ErrorCode.INVALID_ARGUMENT, "invalid datasource type");
+            }
+            return PageResult.<DatasourceDTO>builder()
+                    .items(List.of(created))
+                    .total(1)
+                    .page(1)
+                    .pageSize(20)
+                    .build();
+        });
+        doNothing().when(service).delete(eq("ds-1"), any());
+        when(service.testConnection(any())).thenReturn(DatasourceTestConnectionResultDTO.builder()
+                .success(Boolean.TRUE)
+                .latencyMs(12L)
+                .message("connection ok")
+                .serverVersion("mock")
+                .build());
+        when(service.listTables(eq("ds-1"), any())).thenReturn(List.of("orders", "users"));
+
         mockMvc = MockMvcBuilders.standaloneSetup(new DatasourceController(service))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -124,11 +172,39 @@ class DatasourceControllerTest {
     }
 
     @Test
+    void shouldListDatasourceTables() throws Exception {
+        mockMvc.perform(get("/api/v1/datasources/{id}/tables", datasourceId)
+                        .header("X-Tenant-Id", "tenant-a")
+                        .header("X-User-Id", "user-a"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0]").value("orders"))
+                .andExpect(jsonPath("$.data[1]").value("users"));
+    }
+
+    @Test
     void shouldTestConnection() throws Exception {
         mockMvc.perform(post("/api/v1/datasources/{id}/test-connection", datasourceId)
                         .header("X-Tenant-Id", "tenant-a")
                         .header("X-User-Id", "user-a"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.success").value(true));
+    }
+
+    private DatasourceDTO datasource(String id, String name, String tenantId) {
+        return DatasourceDTO.builder()
+                .id(id)
+                .tenantId(tenantId)
+                .name(name)
+                .type(DatasourceType.MYSQL)
+                .host("127.0.0.1")
+                .port(3306)
+                .database("analytics")
+                .username("reader")
+                .status(DatasourceStatus.ACTIVE)
+                .readonly(true)
+                .createdAt(1L)
+                .updatedAt(1L)
+                .createdBy("user-a")
+                .build();
     }
 }

@@ -1,9 +1,13 @@
 package com.kuaishou.intelligentanalysisplatform.infra.repository;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceType;
 import com.kuaishou.intelligentanalysisplatform.domain.datasource.AnalysisDatasource;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.JdbcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.jdbc.Sql;
 
 import java.util.Map;
 
@@ -11,14 +15,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@JdbcTest
+@Import({InMemoryDatasourceRepository.class, ObjectMapper.class})
+@Sql("classpath:schema.sql")
 class InMemoryDatasourceRepositoryTest {
 
+    @Autowired
     private InMemoryDatasourceRepository repository;
-
-    @BeforeEach
-    void setUp() {
-        repository = new InMemoryDatasourceRepository();
-    }
 
     @Test
     void shouldFilterByTenantAndPaginate() {

@@ -30,9 +30,7 @@ import com.kuaishou.intelligentanalysisplatform.contract.schema.PanelSectionDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.SchemaInferResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.ValidationRuleDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.VariableBindingSupportDTO;
-import org.springframework.stereotype.Service;
 
-@Service
 public class StubNodeMetadataApplicationService implements NodeMetadataApplicationService {
 
     @Override
