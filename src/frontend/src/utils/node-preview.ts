@@ -1,10 +1,24 @@
 import type { NodeMetaDTO } from '@/types/contract'
 
 const categoryIcons: Record<string, string> = {
-  QUERY: 'Q',
-  COMPUTE: 'C',
-  OUTPUT: 'O',
-  GOVERNANCE: 'G',
+  QUERY: '🔍',
+  COMPUTE: '⚙️',
+  OUTPUT: '📊',
+  GOVERNANCE: '🛡️',
+}
+
+const nodeTypeIcons: Record<string, string> = {
+  sql_query: '🔍',
+  aggregate: '∑',
+  time_series_compute: '📈',
+  pivot: '⊞',
+  filter: '🔽',
+  sort: '↕',
+  formula: 'ƒ',
+  python_script: '🐍',
+  java_code: '☕',
+  chart_output: '📊',
+  table_output: '📋',
 }
 
 export function createDefaultNodeConfig(meta?: NodeMetaDTO) {
@@ -15,7 +29,10 @@ export function resolveNodeIcon(meta?: NodeMetaDTO) {
   if (meta?.icon) {
     return meta.icon
   }
-  return categoryIcons[meta?.category ?? 'QUERY'] ?? 'N'
+  if (meta?.nodeType && nodeTypeIcons[meta.nodeType]) {
+    return nodeTypeIcons[meta.nodeType]
+  }
+  return categoryIcons[meta?.category ?? 'QUERY'] ?? '📦'
 }
 
 export function buildNodePreview(meta?: NodeMetaDTO, config: Record<string, unknown> = {}) {
