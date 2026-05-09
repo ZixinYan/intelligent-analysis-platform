@@ -1,3 +1,34 @@
+-- ============================================================
+-- Helper: conditionally create index (MySQL, JDBC-safe via separator: //)
+-- ============================================================
+CREATE PROCEDURE IF NOT EXISTS try_create_index(
+    IN idx_name VARCHAR(64),
+    IN tbl_name VARCHAR(64),
+    IN col_list VARCHAR(256),
+    IN unique_flag BOOLEAN
+)
+BEGIN
+    DECLARE idx_count INT DEFAULT 0;
+    SELECT COUNT(*) INTO idx_count
+        FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name = tbl_name
+          AND index_name = idx_name;
+    IF idx_count = 0 THEN
+        IF unique_flag THEN
+            SET @ddl = CONCAT('CREATE UNIQUE INDEX ', idx_name, ' ON ', tbl_name, ' (', col_list, ')');
+        ELSE
+            SET @ddl = CONCAT('CREATE INDEX ', idx_name, ' ON ', tbl_name, ' (', col_list, ')');
+        END IF;
+        PREPARE stmt FROM @ddl;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END //
+
+-- ============================================================
+-- Tables
+-- ============================================================
 CREATE TABLE IF NOT EXISTS query_execution (
     query_id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
@@ -15,9 +46,10 @@ CREATE TABLE IF NOT EXISTS query_execution (
     error_message VARCHAR(2000),
     operator_id VARCHAR(64),
     created_at BIGINT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_query_execution_tenant_status ON query_execution (tenant_id, status);
-CREATE INDEX IF NOT EXISTS idx_query_execution_tenant_ds ON query_execution (tenant_id, datasource_id);
+) //
+
+CALL try_create_index('idx_query_execution_tenant_status', 'query_execution', 'tenant_id, status', FALSE) //
+CALL try_create_index('idx_query_execution_tenant_ds', 'query_execution', 'tenant_id, datasource_id', FALSE) //
 
 CREATE TABLE IF NOT EXISTS async_task (
     task_id VARCHAR(64) PRIMARY KEY,
@@ -30,14 +62,15 @@ CREATE TABLE IF NOT EXISTS async_task (
     error_message VARCHAR(2000),
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_async_task_tenant_status ON async_task (tenant_id, status);
+) //
+
+CALL try_create_index('idx_async_task_tenant_status', 'async_task', 'tenant_id, status', FALSE) //
 
 CREATE TABLE IF NOT EXISTS task_result (
     task_id VARCHAR(64) PRIMARY KEY,
     result_json varchar(2048) NOT NULL,
     created_at BIGINT NOT NULL
-);
+) //
 
 CREATE TABLE IF NOT EXISTS workflow_definition (
     workflow_id VARCHAR(64) PRIMARY KEY,
@@ -47,9 +80,10 @@ CREATE TABLE IF NOT EXISTS workflow_definition (
     operator_id VARCHAR(64),
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_workflow_definition_tenant_updated ON workflow_definition (tenant_id, updated_at);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_workflow_definition_id_tenant ON workflow_definition (workflow_id, tenant_id);
+) //
+
+CALL try_create_index('idx_workflow_definition_tenant_updated', 'workflow_definition', 'tenant_id, updated_at', FALSE) //
+CALL try_create_index('uq_workflow_definition_id_tenant', 'workflow_definition', 'workflow_id, tenant_id', TRUE) //
 
 CREATE TABLE IF NOT EXISTS datasource_config (
     id VARCHAR(64) PRIMARY KEY,
@@ -67,6 +101,10 @@ CREATE TABLE IF NOT EXISTS datasource_config (
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
     created_by VARCHAR(64)
-);
-CREATE INDEX IF NOT EXISTS idx_ds_config_tenant ON datasource_config (tenant_id);
-CREATE INDEX IF NOT EXISTS idx_ds_config_tenant_name ON datasource_config (tenant_id, name);
+) //
+
+CALL try_create_index('idx_ds_config_tenant', 'datasource_config', 'tenant_id', FALSE) //
+CALL try_create_index('idx_ds_config_tenant_name', 'datasource_config', 'tenant_id, name', FALSE) //
+
+-- Clean up
+DROP PROCEDURE IF EXISTS try_create_index //

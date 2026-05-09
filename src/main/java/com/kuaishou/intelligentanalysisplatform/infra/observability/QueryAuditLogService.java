@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class QueryAuditLogService {
     private static final Logger LOGGER = LoggerFactory.getLogger(QueryAuditLogService.class);
+    private static final Logger TASK_EXECUTION = LoggerFactory.getLogger("TASK_EXECUTION");
 
     private final ObjectMapper objectMapper;
 
@@ -64,11 +65,14 @@ public class QueryAuditLogService {
     private void log(boolean warn, Map<String, Object> payload) {
         try {
             String message = objectMapper.writeValueAsString(payload);
+            // Log to default logger AND task execution logger for ES visibility
             if (warn) {
                 LOGGER.warn(message);
+                TASK_EXECUTION.warn(message);
                 return;
             }
             LOGGER.info(message);
+            TASK_EXECUTION.info(message);
         } catch (JsonProcessingException exception) {
             LOGGER.warn("{\"event\":\"audit_log_serialize_failed\",\"message\":\"{}\"}", exception.getMessage());
         }

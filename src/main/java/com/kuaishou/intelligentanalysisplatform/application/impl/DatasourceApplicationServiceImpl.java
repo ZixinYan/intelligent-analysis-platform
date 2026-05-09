@@ -126,9 +126,8 @@ public class DatasourceApplicationServiceImpl implements DatasourceApplicationSe
     public DatasourceTestConnectionResultDTO testConnection(DatasourceTestConnectionRequestDTO request) {
         permissionChecker.requireTestConnection(request.getContext());
         AnalysisDatasource datasource = requireOwnedDatasource(request.getDatasourceId(), request.getContext());
-        AnalysisDatasource restoredDatasource = restorePassword(datasource);
-        Connector connector = connectorFactory.create(restoredDatasource);
-        HealthCheckResult healthCheckResult = connector.healthCheck(restoredDatasource);
+        Connector connector = connectorFactory.create(datasource);
+        HealthCheckResult healthCheckResult = connector.healthCheck(datasource);
         if (healthCheckResult.success()) {
             datasource.markReachable();
             datasourceRepository.save(datasource);
@@ -171,30 +170,10 @@ public class DatasourceApplicationServiceImpl implements DatasourceApplicationSe
         permissionChecker.requireRead(context);
         AnalysisDatasource datasource = requireOwnedDatasource(datasourceId, context);
         try {
-            return connectorFactory.create(restorePassword(datasource)).listTables(restorePassword(datasource));
+            return connectorFactory.create(datasource).listTables(datasource);
         } catch (RuntimeException e) {
             throw new BaseBusinessException(ErrorCode.DATASOURCE_CONNECTION_FAILED, "list datasource tables failed", e.getMessage(), null, false);
         }
-    }
-
-    private AnalysisDatasource restorePassword(AnalysisDatasource datasource) {
-        return AnalysisDatasource.builder()
-                .id(datasource.getId())
-                .tenantId(datasource.getTenantId())
-                .name(datasource.getName())
-                .type(datasource.getType())
-                .host(datasource.getHost())
-                .port(datasource.getPort())
-                .database(datasource.getDatabase())
-                .username(datasource.getUsername())
-                .encryptedPassword(credentialEncryptor.decrypt(datasource.getEncryptedPassword()))
-                .jdbcOptions(datasource.getJdbcOptions())
-                .status(datasource.getStatus())
-                .readonly(datasource.getReadonly())
-                .createdAt(datasource.getCreatedAt())
-                .updatedAt(datasource.getUpdatedAt())
-                .createdBy(datasource.getCreatedBy())
-                .build();
     }
 
     private AnalysisDatasource requireOwnedDatasource(String id, RequestContextDTO context) {

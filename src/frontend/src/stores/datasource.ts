@@ -37,7 +37,7 @@ export const useDatasourceStore = defineStore('datasource', () => {
     error.value = undefined
     try {
       const page = await listDatasources({ page: 1, pageSize: 100 })
-      datasources.value = page.records
+      datasources.value = page.items
       loaded.value = true
     }
     catch (err) {

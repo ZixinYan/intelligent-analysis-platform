@@ -4,6 +4,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kuaishou.intelligentanalysisplatform.common.error.BaseBusinessException;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorInfoDTO;
@@ -17,34 +19,52 @@ import com.kuaishou.intelligentanalysisplatform.contract.schema.WorkflowNodeDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.spi.NodeExecuteContextDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.spi.NodeExecutor;
 import com.kuaishou.intelligentanalysisplatform.contract.spi.ValidationResultDTO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 public class NodeExecuteDispatcher {
-    private final NodeExecutorRegistry nodeExecutorRegistry;
+    private static final Logger TASK_EXECUTION = LoggerFactory.getLogger("TASK_EXECUTION");
 
-    public NodeExecuteDispatcher(NodeExecutorRegistry nodeExecutorRegistry) {
+    private final NodeExecutorRegistry nodeExecutorRegistry;
+    private final ObjectMapper objectMapper;
+
+    public NodeExecuteDispatcher(NodeExecutorRegistry nodeExecutorRegistry, ObjectMapper objectMapper) {
         this.nodeExecutorRegistry = nodeExecutorRegistry;
+        this.objectMapper = objectMapper;
     }
 
     public NodeResultDTO dispatch(WorkflowNodeDTO node, NodeExecuteContextDTO context) {
         long start = System.currentTimeMillis();
+        String nodeId = node.getNodeId();
+        String nodeType = node.getNodeType();
+        logNodeExecution("node_dispatch_start", nodeId, nodeType, null, 0);
+
         try {
-            NodeExecutor<? extends BaseNodeConfigDTO> executor = nodeExecutorRegistry.get(node.getNodeType());
+            NodeExecutor<? extends BaseNodeConfigDTO> executor = nodeExecutorRegistry.get(nodeType);
             ValidationResultDTO validationResult = validate(executor, node.getConfig());
             if (validationResult != null && !validationResult.isValid()) {
-                return failed(node, context, start, new BaseBusinessException(ErrorCode.VALIDATION_FAILED, validationResult.getErrorMessage()));
+                long elapsed = System.currentTimeMillis() - start;
+                logNodeExecution("node_dispatch_validation_failed", nodeId, nodeType,
+                        ExecutionStatus.FAILED, elapsed);
+                return failed(node, context, start, new BaseBusinessException(ErrorCode.VALIDATION_FAILED,
+                        validationResult.getErrorMessage()));
             }
             NodeResultDTO result = execute(executor, context, node.getConfig());
-            result.setNodeId(node.getNodeId());
-            result.setNodeType(node.getNodeType());
+            result.setNodeId(nodeId);
+            result.setNodeType(nodeType);
+            long elapsed = System.currentTimeMillis() - start;
             if (result.getMeta() == null) {
-                result.setMeta(NodeRunMetaDTO.builder().elapsedMs(System.currentTimeMillis() - start).build());
+                result.setMeta(NodeRunMetaDTO.builder().elapsedMs(elapsed).build());
             } else if (result.getMeta().getElapsedMs() == null) {
-                result.getMeta().setElapsedMs(System.currentTimeMillis() - start);
+                result.getMeta().setElapsedMs(elapsed);
             }
+            logNodeExecution("node_dispatch_completed", nodeId, nodeType, result.getStatus(), elapsed);
             return result;
         } catch (Exception e) {
+            long elapsed = System.currentTimeMillis() - start;
+            logNodeExecution("node_dispatch_failed", nodeId, nodeType, ExecutionStatus.FAILED, elapsed);
             return failed(node, context, start, e);
         }
     }
@@ -86,6 +106,27 @@ public class NodeExecuteDispatcher {
                                   NodeExecuteContextDTO context,
                                   BaseNodeConfigDTO config) {
         return ((NodeExecutor<BaseNodeConfigDTO>) executor).execute(context, config);
+    }
+
+    private void logNodeExecution(String event, String nodeId, String nodeType,
+                                   ExecutionStatus status, long elapsedMs) {
+        Map<String, Object> logEntry = new LinkedHashMap<>();
+        logEntry.put("event", event);
+        logEntry.put("nodeId", nodeId);
+        logEntry.put("nodeType", nodeType);
+        logEntry.put("elapsedMs", elapsedMs);
+        if (status != null) {
+            logEntry.put("status", status.name());
+        }
+        try {
+            if (status == ExecutionStatus.FAILED) {
+                TASK_EXECUTION.warn(objectMapper.writeValueAsString(logEntry));
+            } else {
+                TASK_EXECUTION.info(objectMapper.writeValueAsString(logEntry));
+            }
+        } catch (JsonProcessingException e) {
+            TASK_EXECUTION.info("{\"event\":\"" + event + "\",\"nodeId\":\"" + nodeId + "\"}");
+        }
     }
 
     private NodeResultDTO failed(WorkflowNodeDTO node, NodeExecuteContextDTO context, long start, Exception e) {

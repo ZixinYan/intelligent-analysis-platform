@@ -20,7 +20,7 @@ describe('useDatasourceStore', () => {
 
   it('loads datasource list and maps options', async () => {
     api.listDatasources.mockResolvedValue({
-      records: [
+      items: [
         { id: 'ds-1', name: '订单库', type: 'MYSQL', host: '127.0.0.1', port: 3306, database: 'orders', username: 'reader' },
       ],
       total: 1,

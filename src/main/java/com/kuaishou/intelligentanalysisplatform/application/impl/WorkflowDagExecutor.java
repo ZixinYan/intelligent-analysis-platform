@@ -15,6 +15,8 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kuaishou.intelligentanalysisplatform.application.node.NodeExecuteDispatcher;
 import com.kuaishou.intelligentanalysisplatform.common.error.BaseBusinessException;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
@@ -27,6 +29,8 @@ import com.kuaishou.intelligentanalysisplatform.contract.schema.WorkflowNodeDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.WorkflowRunRequestDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.WorkflowRunResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.spi.NodeExecuteContextDTO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -39,11 +43,14 @@ import org.springframework.stereotype.Component;
 public class WorkflowDagExecutor {
 
     private static final int WORKFLOW_TIMEOUT_MINUTES = 10;
+    private static final Logger TASK_EXECUTION = LoggerFactory.getLogger("TASK_EXECUTION");
 
     private final NodeExecuteDispatcher nodeExecuteDispatcher;
+    private final ObjectMapper objectMapper;
 
-    public WorkflowDagExecutor(NodeExecuteDispatcher nodeExecuteDispatcher) {
+    public WorkflowDagExecutor(NodeExecuteDispatcher nodeExecuteDispatcher, ObjectMapper objectMapper) {
         this.nodeExecuteDispatcher = nodeExecuteDispatcher;
+        this.objectMapper = objectMapper;
     }
 
     public WorkflowRunResultDTO execute(WorkflowRunRequestDTO request, String runId) {
@@ -157,16 +164,42 @@ public class WorkflowDagExecutor {
                 .requestContext(request.getContext())
                 .build();
 
+        long nodeStart = System.currentTimeMillis();
         try {
             NodeResultDTO result = nodeExecuteDispatcher.dispatch(node, context);
             nodeResultsMap.put(node.getNodeId(), result);
             if (result.getResult() != null) {
-                // Write result BEFORE completing the future so downstream snapshots see it
                 completedResults.put(node.getNodeId(), result.getResult());
             }
             futures.get(node.getNodeId()).complete(result);
+
+            long nodeElapsed = System.currentTimeMillis() - nodeStart;
+            logNodeCompletion(node.getNodeId(), node.getNodeType(), result.getStatus(), nodeElapsed, null);
         } catch (Exception e) {
+            long nodeElapsed = System.currentTimeMillis() - nodeStart;
+            logNodeCompletion(node.getNodeId(), node.getNodeType(), ExecutionStatus.FAILED, nodeElapsed, e.getMessage());
             completeWithError(node, futures, nodeResultsMap, e.getMessage());
+        }
+    }
+
+    private void logNodeCompletion(String nodeId, String nodeType, ExecutionStatus status, long elapsedMs, String error) {
+        Map<String, Object> logEntry = new LinkedHashMap<>();
+        logEntry.put("event", "dag_node_completed");
+        logEntry.put("nodeId", nodeId);
+        logEntry.put("nodeType", nodeType);
+        logEntry.put("status", status != null ? status.name() : "UNKNOWN");
+        logEntry.put("elapsedMs", elapsedMs);
+        if (error != null) {
+            logEntry.put("error", error);
+        }
+        try {
+            if (status == ExecutionStatus.FAILED) {
+                TASK_EXECUTION.warn(objectMapper.writeValueAsString(logEntry));
+            } else {
+                TASK_EXECUTION.info(objectMapper.writeValueAsString(logEntry));
+            }
+        } catch (JsonProcessingException e) {
+            TASK_EXECUTION.info("{\"event\":\"dag_node_completed\",\"nodeId\":\"" + nodeId + "\",\"status\":\"" + status + "\"}");
         }
     }
 
