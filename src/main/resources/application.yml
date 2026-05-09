@@ -7,7 +7,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/intelligent_analysis_platform}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
+    password: ${DB_PASSWORD:123456}
   sql:
     init:
       mode: always
@@ -44,7 +44,7 @@ analysis:
 
 datasource:
   credential:
-    secret: ${DATASOURCE_CREDENTIAL_SECRET:dev-only-secret-key-32bytes!!!!!}
+    secret: 12345678123456781234567812345678
 
 logging:
   level:
