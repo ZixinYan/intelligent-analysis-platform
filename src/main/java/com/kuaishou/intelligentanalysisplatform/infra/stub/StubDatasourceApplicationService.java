@@ -1,6 +1,7 @@
 package com.kuaishou.intelligentanalysisplatform.infra.stub;
 
 import java.util.Locale;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 import com.kuaishou.intelligentanalysisplatform.application.DatasourceApplicationService;
@@ -20,6 +21,7 @@ import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceUpdate
 import com.kuaishou.intelligentanalysisplatform.contract.schema.RequestContextDTO;
 import com.kuaishou.intelligentanalysisplatform.domain.datasource.AnalysisDatasource;
 import com.kuaishou.intelligentanalysisplatform.domain.datasource.DatasourceRepository;
+import com.kuaishou.intelligentanalysisplatform.domain.query.connector.ConnectorFactory;
 import com.kuaishou.intelligentanalysisplatform.infra.security.CredentialEncryptor;
 import org.springframework.stereotype.Service;
 
@@ -28,13 +30,16 @@ public class StubDatasourceApplicationService implements DatasourceApplicationSe
     private final DatasourceRepository datasourceRepository;
     private final CredentialEncryptor credentialEncryptor;
     private final PermissionChecker permissionChecker;
+    private final ConnectorFactory connectorFactory;
 
     public StubDatasourceApplicationService(DatasourceRepository datasourceRepository,
                                             CredentialEncryptor credentialEncryptor,
-                                            PermissionChecker permissionChecker) {
+                                            PermissionChecker permissionChecker,
+                                            ConnectorFactory connectorFactory) {
         this.datasourceRepository = datasourceRepository;
         this.credentialEncryptor = credentialEncryptor;
         this.permissionChecker = permissionChecker;
+        this.connectorFactory = connectorFactory;
     }
 
     @Override
@@ -149,6 +154,13 @@ public class StubDatasourceApplicationService implements DatasourceApplicationSe
                 .jdbcOptions(datasource.getJdbcOptions())
                 .readonly(datasource.getReadonly())
                 .build();
+    }
+
+    @Override
+    public List<String> listTables(String datasourceId, RequestContextDTO context) {
+        permissionChecker.requireRead(context);
+        AnalysisDatasource datasource = requireOwnedDatasource(datasourceId, context);
+        return connectorFactory.create(datasource).listTables(datasource);
     }
 
     private AnalysisDatasource requireOwnedDatasource(String id, RequestContextDTO context) {

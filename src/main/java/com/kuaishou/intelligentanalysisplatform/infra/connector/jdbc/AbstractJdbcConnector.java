@@ -78,6 +78,23 @@ public abstract class AbstractJdbcConnector implements Connector {
     }
 
     @Override
+    public List<String> listTables(AnalysisDatasource datasource) {
+        DataSource dataSource = poolRegistry.getOrCreate(datasource);
+        try (Connection connection = dataSource.getConnection()) {
+            List<String> tables = new ArrayList<>();
+            try (java.sql.ResultSet rs = connection.getMetaData().getTables(
+                    datasource.getDatabase(), null, "%", new String[]{"TABLE", "VIEW"})) {
+                while (rs.next()) {
+                    tables.add(rs.getString("TABLE_NAME"));
+                }
+            }
+            return tables;
+        } catch (java.sql.SQLException e) {
+            throw new IllegalStateException("list tables failed", e);
+        }
+    }
+
+    @Override
     public List<FieldSchemaDTO> inferSchema(AnalysisDatasource datasource, QueryCommand command) {
         DataSource dataSource = poolRegistry.getOrCreate(datasource);
         try (Connection connection = dataSource.getConnection();

@@ -10,6 +10,8 @@ import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceTestCo
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceUpdateRequestDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.RequestContextDTO;
 
+import java.util.List;
+
 public interface DatasourceApplicationService {
     DatasourceDTO create(DatasourceCreateRequestDTO request);
 
@@ -24,4 +26,6 @@ public interface DatasourceApplicationService {
     DatasourceTestConnectionResultDTO testConnection(DatasourceTestConnectionRequestDTO request);
 
     DatasourceQueryAccessDTO getQueryAccess(String datasourceId, RequestContextDTO context);
+
+    List<String> listTables(String datasourceId, RequestContextDTO context);
 }

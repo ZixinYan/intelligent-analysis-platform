@@ -36,9 +36,18 @@ function resolveSchemaFieldOptions(field: PanelFieldDTO, schema?: SchemaInferRes
     }))
 }
 
+function resolveUri(uri: string, model?: Record<string, unknown>): string {
+  if (!model) return uri
+  return uri.replace(/\{(\w+)\}/g, (_, key) => {
+    const val = model[key]
+    return val != null ? String(val) : ''
+  })
+}
+
 export function useOptionsLoader(
   field: () => PanelFieldDTO,
   schema?: () => SchemaInferResultDTO | undefined,
+  model?: () => Record<string, unknown> | undefined,
 ) {
   const options = ref<OptionDTO[]>([])
   const loading = ref(false)
@@ -49,10 +58,16 @@ export function useOptionsLoader(
       options.value = []
       return
     }
+    const resolvedUri = resolveUri(currentField.optionsSource.uri, model?.())
+    if (resolvedUri.includes('{')) {
+      // 模板变量未填充完整，跳过
+      options.value = []
+      return
+    }
     const currentRequestId = ++requestId
     loading.value = true
     try {
-      const { data } = await client.get(currentField.optionsSource.uri)
+      const { data } = await client.get(resolvedUri)
       if (currentRequestId !== requestId) {
         return
       }
@@ -65,7 +80,7 @@ export function useOptionsLoader(
     }
   }
 
-  watch([() => field(), () => schema?.()], async ([currentField, currentSchema]) => {
+  watch([() => field(), () => schema?.(), () => model?.()], async ([currentField, currentSchema]) => {
     const sourceType = currentField.optionsSource?.type
     if (!sourceType || sourceType === 'static') {
       options.value = resolveStaticOptions(currentField)

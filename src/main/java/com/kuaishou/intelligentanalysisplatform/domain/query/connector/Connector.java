@@ -10,4 +10,6 @@ public interface Connector {
     QueryResult execute(AnalysisDatasource datasource, QueryCommand command);
 
     java.util.List<FieldSchemaDTO> inferSchema(AnalysisDatasource datasource, QueryCommand command);
+
+    java.util.List<String> listTables(AnalysisDatasource datasource);
 }

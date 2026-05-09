@@ -8,13 +8,14 @@ const props = defineProps<{
   modelValue: unknown
   disabled?: boolean
   schema?: SchemaInferResultDTO
+  model?: Record<string, unknown>
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: string | string[]]
 }>()
 
-const { options, loading } = useOptionsLoader(() => props.field, () => props.schema)
+const { options, loading } = useOptionsLoader(() => props.field, () => props.schema, () => props.model)
 const multiple = computed(() => props.field.componentType === 'MULTI_SELECT' || Boolean(props.field.multiple))
 const selectedValues = computed(() => Array.isArray(props.modelValue) ? props.modelValue.map(item => String(item)) : [])
 

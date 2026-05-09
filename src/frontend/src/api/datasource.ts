@@ -31,3 +31,7 @@ export function removeDatasource(id: string) {
 export function testDatasourceConnection(id: string) {
   return unwrapResponse<DatasourceTestConnectionResultDTO>(client.post(`/api/v1/datasources/${id}/test-connection`))
 }
+
+export function getDatasourceTables(id: string) {
+  return unwrapResponse<string[]>(client.get(`/api/v1/datasources/${id}/tables`))
+}

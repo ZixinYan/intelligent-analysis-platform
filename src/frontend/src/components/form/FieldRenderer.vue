@@ -30,6 +30,7 @@ const { visible, disabled } = useFieldState(props.field, () => props.model)
       :is="component"
       :field="field"
       :model-value="modelValue"
+      :model="model"
       :disabled="disabled"
       :candidates="candidates"
       :schema="model.__schema"
