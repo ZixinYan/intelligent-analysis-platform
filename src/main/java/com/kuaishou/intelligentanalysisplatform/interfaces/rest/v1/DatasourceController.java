@@ -96,7 +96,7 @@ public class DatasourceController {
         request.setContext(contextOf(tenantId, userId));
         PageResult<DatasourceDTO> page = datasourceApplicationService.list(request);
         List<OptionDTO> options = page.getItems().stream()
-                .map(ds -> OptionDTO.builder().label(ds.getName()).value(ds.getId()).build())
+                .map(ds -> OptionDTO.builder().label(ds.getDatabase()).value(ds.getId()).build())
                 .toList();
         return ApiResponse.success(options);
     }

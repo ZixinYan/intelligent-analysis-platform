@@ -1,5 +1,5 @@
 import { computed, ref, type MaybeRefOrGetter, toValue } from 'vue'
-import { getMappingCandidates } from '@/api/node-definition'
+import { getMappingCandidates, getMappingCandidatesWithFields } from '@/api/node-definition'
 import { useWorkflowStore } from '@/stores/workflow'
 import type { FieldCandidateSlotDTO, NodeConfigSchemaDTO } from '@/types/contract'
 import type { WorkflowNode } from '@/types/workflow'
@@ -27,7 +27,7 @@ export function useMappingCandidates(
       return
     }
     const upstream = workflow.getUpstreamNode(node.id)
-    if (!upstream?.data.schema) {
+    if (!upstream?.data.schema?.fields?.length) {
       candidateSlots.value = []
       return
     }
@@ -35,7 +35,19 @@ export function useMappingCandidates(
     const currentRequestId = ++requestId
     try {
       const renderer = String(node.data.config.chartType ?? node.data.nodeType ?? 'default')
-      const result = await getMappingCandidates(node.data.nodeType, renderer)
+
+      // Try POST with upstream fields first, fall back to GET
+      let result: FieldCandidateSlotDTO[]
+      try {
+        result = await getMappingCandidatesWithFields(node.data.nodeType, {
+          renderer,
+          upstreamFields: upstream.data.schema.fields,
+        })
+      }
+      catch {
+        // Fallback: GET without upstream fields
+        result = await getMappingCandidates(node.data.nodeType, renderer)
+      }
       if (currentRequestId === requestId) {
         candidateSlots.value = result
       }

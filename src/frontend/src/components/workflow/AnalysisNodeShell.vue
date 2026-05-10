@@ -133,13 +133,13 @@ const showTooltip = ref(false)
       </div>
     </Transition>
 
+    <Handle id="input"  type="target" :position="Position.Left"  class="ans__handle ans__handle--in" />
+    <Handle id="output" type="source" :position="Position.Right" class="ans__handle ans__handle--out" />
+
     <!-- 节点主体 -->
     <div class="ans" :style="{ '--cat': categoryColor }">
       <div class="ans__top-line" />
       <div class="ans__accent" />
-
-      <Handle id="input"  type="target" :position="Position.Left"  class="ans__handle ans__handle--in" />
-      <Handle id="output" type="source" :position="Position.Right" class="ans__handle ans__handle--out" />
 
       <!-- 头部 -->
       <div class="ans__header">
@@ -349,18 +349,67 @@ const showTooltip = ref(false)
 
 /* ── Vue-Flow handles ─────────────────────── */
 .ans__handle {
-  width: 10px !important;
-  height: 10px !important;
-  border: 2px solid var(--cat) !important;
-  background: #0d1420 !important;
+  width: 20px !important;
+  height: 20px !important;
+  border: 2.5px solid var(--cat) !important;
+  background: #f1f5f9 !important;
   border-radius: 50% !important;
-  transition: box-shadow 0.15s !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: crosshair !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.5), 0 0 12px -2px var(--cat) !important;
+  z-index: 10 !important;
 }
+
+/* + 号图标 */
+.ans__handle::after {
+  content: '+' !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--cat) !important;
+  line-height: 1 !important;
+  transition: inherit !important;
+}
+
 .ans__handle:hover {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat) 30%, transparent) !important;
+  width: 26px !important;
+  height: 26px !important;
+  border-width: 3px !important;
+  background: #fff !important;
+  box-shadow:
+    0 0 0 4px rgba(0, 0, 0, 0.5),
+    0 0 0 8px color-mix(in srgb, var(--cat) 25%, transparent),
+    0 0 20px -2px var(--cat) !important;
+  transform: translate(-3px, -3px) !important;
 }
-.ans__handle--in  { left: -6px !important; }
-.ans__handle--out { right: -6px !important; }
+
+.ans__handle:hover::after {
+  font-size: 18px !important;
+}
+
+/* 输入/输出位置微调 */
+.ans__handle--in {
+  left: -12px !important;
+  top: calc(50% - 10px) !important;
+}
+
+.ans__handle--out {
+  right: -12px !important;
+  top: calc(50% - 10px) !important;
+}
+
+/* hover 时位置补偿 */
+.ans__handle--in:hover {
+  left: -15px !important;
+  top: calc(50% - 13px) !important;
+}
+
+.ans__handle--out:hover {
+  right: -15px !important;
+  top: calc(50% - 13px) !important;
+}
 
 /* ── 头部 ─────────────────────────────────── */
 .ans__header {

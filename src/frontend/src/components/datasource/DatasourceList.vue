@@ -54,6 +54,7 @@ async function handleTest(id: string) {
   actionErrors[id] = undefined
   try {
     testResults[id] = await store.test(id)
+    await loadDatasources()
   }
   catch (err) {
     actionErrors[id] = err instanceof Error ? err.message : '测试连接失败'
@@ -191,7 +192,7 @@ onMounted(() => {
   color: #86efac;
   background: rgba(20, 83, 45, 0.25);
 }
-.status-chip--failed {
+.status-chip--unreachable {
   color: #fca5a5;
   background: rgba(127, 29, 29, 0.3);
 }

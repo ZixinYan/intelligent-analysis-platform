@@ -8,12 +8,16 @@ import com.kuaishou.intelligentanalysisplatform.common.error.BaseBusinessExcepti
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
 import com.kuaishou.intelligentanalysisplatform.common.response.ApiResponse;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.FieldCandidateSlotDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.FieldSchemaDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.MappingCandidateRequestDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeCapabilityDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeMetaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.SchemaInferResultDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -45,6 +49,15 @@ public class NodeDefinitionController {
             @PathVariable String nodeType,
             @RequestParam String renderer) {
         return ApiResponse.success(nodeMetadataApplicationService.getMappingCandidates(nodeType, renderer));
+    }
+
+    @PostMapping("/{nodeType}/mapping-candidates")
+    public ApiResponse<List<FieldCandidateSlotDTO>> getMappingCandidatesWithFields(
+            @PathVariable String nodeType,
+            @RequestBody MappingCandidateRequestDTO request) {
+        String renderer = request != null ? request.getRenderer() : null;
+        List<FieldSchemaDTO> upstreamFields = request != null ? request.getUpstreamFields() : null;
+        return ApiResponse.success(nodeMetadataApplicationService.getMappingCandidates(nodeType, renderer, upstreamFields));
     }
 
     @GetMapping("/compute-capabilities")

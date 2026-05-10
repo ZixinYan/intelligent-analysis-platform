@@ -206,6 +206,11 @@ export interface FieldMappingCandidateDTO {
   reason?: string
 }
 
+export interface MappingCandidateRequestDTO {
+  renderer?: string
+  upstreamFields?: FieldSchemaDTO[]
+}
+
 export interface FieldCandidateSlotDTO {
   slot: string
   required: boolean
@@ -433,7 +438,7 @@ export interface AsyncSubmitResponseDTO {
 }
 
 export type DatasourceType = 'MYSQL' | 'CLICKHOUSE' | 'POSTGRES'
-export type DatasourceStatus = 'ACTIVE' | 'INACTIVE' | 'FAILED'
+export type DatasourceStatus = 'ACTIVE' | 'INACTIVE' | 'UNREACHABLE'
 
 export interface DatasourceDTO {
   id: string

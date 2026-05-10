@@ -1,5 +1,5 @@
 import client, { unwrapResponse } from './client'
-import type { FieldCandidateSlotDTO, NodeCapabilityDTO, NodeMetaDTO, SchemaInferResultDTO } from '@/types/contract'
+import type { FieldCandidateSlotDTO, MappingCandidateRequestDTO, NodeCapabilityDTO, NodeMetaDTO, SchemaInferResultDTO } from '@/types/contract'
 
 export function listNodeDefinitions() {
   return unwrapResponse<NodeMetaDTO[]>(client.get('/api/v1/node-definitions'))
@@ -18,6 +18,12 @@ export function getMappingCandidates(nodeType: string, renderer: string) {
     client.get(`/api/v1/node-definitions/${nodeType}/mapping-candidates`, {
       params: { renderer },
     }),
+  )
+}
+
+export function getMappingCandidatesWithFields(nodeType: string, payload: MappingCandidateRequestDTO) {
+  return unwrapResponse<FieldCandidateSlotDTO[]>(
+    client.post(`/api/v1/node-definitions/${nodeType}/mapping-candidates`, payload),
   )
 }
 

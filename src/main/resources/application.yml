@@ -57,7 +57,7 @@ logging:
 # Elasticsearch / ELK log upload configuration
 elasticsearch:
   log:
-    enabled: true
+    enabled: false
     urls: ${ES_URLS:http://192.168.1.114:9200}
     index-prefix: ${ES_INDEX_PREFIX:intelligent-analysis-platform}
     batch-size: 200

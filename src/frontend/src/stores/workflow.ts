@@ -129,6 +129,28 @@ export const useWorkflowStore = defineStore('workflow', () => {
       animated: false,
     }
     edges.value = [...edges.value, edge]
+
+    // Auto-propagate schema from source to target
+    propagateSchemaFrom(connection.source)
+  }
+
+  /** Propagate source node's schema to all downstream nodes */
+  function propagateSchemaFrom(sourceNodeId: string) {
+    const sourceNode = nodes.value.find(n => n.id === sourceNodeId)
+    if (!sourceNode?.data.schema) {
+      return
+    }
+    // Find all edges where this node is the source
+    const outgoingEdges = edges.value.filter(e => e.source === sourceNodeId)
+    for (const edge of outgoingEdges) {
+      const targetNode = nodes.value.find(n => n.id === edge.target)
+      if (targetNode && !targetNode.data.schema) {
+        // Propagate the schema downstream
+        updateNodeSchema(edge.target, sourceNode.data.schema)
+        // Recursively propagate further
+        propagateSchemaFrom(edge.target)
+      }
+    }
   }
 
   function onNodeClick(payload: { node: WorkflowNode }) {
@@ -181,7 +203,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
           title: meta?.displayName ?? node.nodeType,
           meta,
           config,
-          status: 'idle',
+          status: 'idle' as AnalysisNodeStatus,
           preview: buildNodePreview(meta, config),
         },
       }
@@ -258,6 +280,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     onConnect,
     onNodeClick,
     getUpstreamNode,
+    propagateSchemaFrom,
     serialize,
     hydrate,
     save,

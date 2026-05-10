@@ -173,6 +173,163 @@ public class StubNodeMetadataApplicationService implements NodeMetadataApplicati
         throw new BaseBusinessException(ErrorCode.NODE_NOT_FOUND, "mapping candidates not found");
     }
 
+    @Override
+    public List<FieldCandidateSlotDTO> getMappingCandidates(String nodeType, String renderer, List<FieldSchemaDTO> upstreamFields) {
+        boolean hasUpstreamFields = upstreamFields != null && !upstreamFields.isEmpty();
+
+        if (NodeType.CHART_OUTPUT.getCode().equals(nodeType)) {
+            return getChartMappingCandidatesWithFields(renderer, hasUpstreamFields ? upstreamFields : null);
+        }
+        if (NodeType.TABLE_OUTPUT.getCode().equals(nodeType)) {
+            if (renderer != null && !renderer.isBlank() && !"table".equalsIgnoreCase(renderer)) {
+                throw new BaseBusinessException(ErrorCode.INVALID_ARGUMENT, "renderer is not supported for table_output");
+            }
+            if (hasUpstreamFields) {
+                return List.of(buildSlotFromFields("columns", true, upstreamFields,
+                        List.of("TABLE_COLUMN_CANDIDATE")));
+            }
+            return List.of(buildSlot("columns", true, List.of("ANY"),
+                    List.of("TABLE_COLUMN_CANDIDATE"),
+                    List.of(
+                            candidate("order_date", 0.99, "table default column"),
+                            candidate("product_name", 0.98, "table default column"),
+                            candidate("sales_amount", 0.97, "table default column"),
+                            candidate("order_count", 0.95, "table default column"))));
+        }
+        throw new BaseBusinessException(ErrorCode.NODE_NOT_FOUND, "mapping candidates not found");
+    }
+
+    private List<FieldCandidateSlotDTO> getChartMappingCandidatesWithFields(String renderer, List<FieldSchemaDTO> upstreamFields) {
+        if (renderer == null || renderer.isBlank()) {
+            throw new BaseBusinessException(ErrorCode.INVALID_ARGUMENT, "renderer is required for chart_output");
+        }
+        String normalizedRenderer = renderer.toLowerCase();
+        boolean hasUpstream = upstreamFields != null && !upstreamFields.isEmpty();
+
+        switch (normalizedRenderer) {
+            case "line":
+            case "bar":
+            case "area":
+                return List.of(
+                        buildSlotOrDynamic("xField", true, List.of("DATE", "DATETIME", "STRING"),
+                                List.of("X_AXIS_CANDIDATE"), upstreamFields,
+                                List.of(candidate("order_date", 0.98, "semanticType=time_dimension"))),
+                        buildSlotOrDynamic("yField", true, List.of("DECIMAL", "INTEGER", "LONG"),
+                                List.of("Y_AXIS_CANDIDATE", "AGGREGATABLE"), upstreamFields,
+                                List.of(candidate("sales_amount", 0.97, "semanticType=metric"),
+                                        candidate("order_count", 0.91, "semanticType=metric"))),
+                        buildSlotOrDynamic("seriesField", false, List.of("STRING"),
+                                List.of("SERIES_CANDIDATE"), upstreamFields,
+                                List.of(candidate("product_name", 0.90, "semanticType=dimension"))));
+            case "scatter":
+                return List.of(
+                        buildSlotOrDynamic("xField", true, List.of("DECIMAL", "INTEGER", "LONG"),
+                                List.of("X_AXIS_CANDIDATE", "AGGREGATABLE"), upstreamFields,
+                                List.of(candidate("order_count", 0.93, "numeric scatter axis"))),
+                        buildSlotOrDynamic("yField", true, List.of("DECIMAL", "INTEGER", "LONG"),
+                                List.of("Y_AXIS_CANDIDATE", "AGGREGATABLE"), upstreamFields,
+                                List.of(candidate("sales_amount", 0.97, "numeric scatter axis"))),
+                        buildSlotOrDynamic("seriesField", false, List.of("STRING"),
+                                List.of("SERIES_CANDIDATE"), upstreamFields,
+                                List.of(candidate("product_name", 0.88, "scatter grouping"))));
+            case "pie":
+                return List.of(
+                        buildSlotOrDynamic("categoryField", true, List.of("STRING", "DATE"),
+                                List.of("LABEL_CANDIDATE", "GROUPABLE"), upstreamFields,
+                                List.of(candidate("product_name", 0.96, "pie label field"))),
+                        buildSlotOrDynamic("valueField", true, List.of("DECIMAL", "INTEGER", "LONG"),
+                                List.of("Y_AXIS_CANDIDATE", "AGGREGATABLE"), upstreamFields,
+                                List.of(candidate("sales_amount", 0.98, "pie value field"))));
+            default:
+                throw new BaseBusinessException(ErrorCode.INVALID_ARGUMENT, "renderer is not supported for chart_output");
+        }
+    }
+
+    private FieldCandidateSlotDTO buildSlotOrDynamic(String slot, Boolean required, List<String> acceptedTypes,
+                                                      List<String> acceptedCapabilities,
+                                                      List<FieldSchemaDTO> upstreamFields,
+                                                      List<FieldMappingCandidateDTO> fallbackCandidates) {
+        if (upstreamFields != null && !upstreamFields.isEmpty()) {
+            return buildSlotFromFields(slot, required, upstreamFields, acceptedCapabilities);
+        }
+        return buildSlot(slot, required, acceptedTypes, acceptedCapabilities, fallbackCandidates);
+    }
+
+    private FieldCandidateSlotDTO buildSlotFromFields(String slot, Boolean required,
+                                                       List<FieldSchemaDTO> upstreamFields,
+                                                       List<String> acceptedCapabilities) {
+        List<FieldMappingCandidateDTO> candidates = upstreamFields.stream()
+                .filter(field -> matchesCapability(field, acceptedCapabilities))
+                .map(field -> candidate(field.getName(), scoreFromField(field, acceptedCapabilities),
+                        "semanticType=" + (field.getSemanticType() == null ? "unknown" : field.getSemanticType().name())))
+                .toList();
+        return FieldCandidateSlotDTO.builder()
+                .slot(slot)
+                .required(required)
+                .acceptedTypes(List.of("ANY"))
+                .acceptedCapabilities(acceptedCapabilities)
+                .candidates(candidates)
+                .build();
+    }
+
+    private boolean matchesCapability(FieldSchemaDTO field, List<String> acceptedCapabilities) {
+        if (acceptedCapabilities == null || acceptedCapabilities.isEmpty()) return true;
+        if (field.getCapabilities() != null && !field.getCapabilities().isEmpty()) {
+            for (String cap : acceptedCapabilities) {
+                if (field.getCapabilities().stream().anyMatch(c -> c.name().equalsIgnoreCase(cap))) return true;
+            }
+        }
+        for (String cap : acceptedCapabilities) {
+            if (inferCapability(field, cap)) return true;
+        }
+        return false;
+    }
+
+    private boolean inferCapability(FieldSchemaDTO field, String capability) {
+        ValueType valueType = field.getValueType();
+        FieldSemanticType semanticType = field.getSemanticType();
+        return switch (capability) {
+            case "X_AXIS_CANDIDATE" -> valueType == ValueType.DATE || valueType == ValueType.DATETIME || semanticType == FieldSemanticType.TIME_DIMENSION;
+            case "Y_AXIS_CANDIDATE", "AGGREGATABLE" -> valueType == ValueType.INTEGER || valueType == ValueType.LONG || valueType == ValueType.DECIMAL || semanticType == FieldSemanticType.METRIC;
+            case "SERIES_CANDIDATE", "LABEL_CANDIDATE", "GROUPABLE" -> valueType == ValueType.STRING || semanticType == FieldSemanticType.DIMENSION;
+            case "TABLE_COLUMN_CANDIDATE", "SELECTABLE" -> true;
+            default -> false;
+        };
+    }
+
+    private double scoreFromField(FieldSchemaDTO field, List<String> acceptedCapabilities) {
+        if (acceptedCapabilities == null || acceptedCapabilities.isEmpty()) return 0.5;
+        FieldSemanticType semanticType = field.getSemanticType();
+        ValueType valueType = field.getValueType();
+        double score = 0.5;
+        for (String cap : acceptedCapabilities) {
+            switch (cap) {
+                case "X_AXIS_CANDIDATE":
+                    if (semanticType == FieldSemanticType.TIME_DIMENSION) score = Math.max(score, 0.95);
+                    else if (valueType == ValueType.DATE || valueType == ValueType.DATETIME) score = Math.max(score, 0.85);
+                    else score = Math.max(score, 0.3);
+                    break;
+                case "Y_AXIS_CANDIDATE":
+                    if (semanticType == FieldSemanticType.METRIC) score = Math.max(score, 0.95);
+                    else if (valueType == ValueType.DECIMAL || valueType == ValueType.INTEGER || valueType == ValueType.LONG) score = Math.max(score, 0.85);
+                    else score = Math.max(score, 0.2);
+                    break;
+                case "SERIES_CANDIDATE":
+                    if (semanticType == FieldSemanticType.DIMENSION) score = Math.max(score, 0.90);
+                    else if (valueType == ValueType.STRING) score = Math.max(score, 0.80);
+                    else score = Math.max(score, 0.3);
+                    break;
+                case "TABLE_COLUMN_CANDIDATE":
+                    score = Math.max(score, 0.7);
+                    break;
+                default:
+                    score = Math.max(score, 0.5);
+                    break;
+            }
+        }
+        return score;
+    }
+
     private List<FieldCandidateSlotDTO> getChartMappingCandidates(String renderer) {
         if (renderer == null || renderer.isBlank()) {
             throw new BaseBusinessException(ErrorCode.INVALID_ARGUMENT, "renderer is required for chart_output");
@@ -880,7 +1037,7 @@ public class StubNodeMetadataApplicationService implements NodeMetadataApplicati
         return FieldMappingCandidateDTO.builder()
                 .fieldId(fieldId)
                 .score(score)
-                .reasons(List.of(reason))
+                .reason(reason)
                 .build();
     }
 }

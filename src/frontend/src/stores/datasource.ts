@@ -22,7 +22,7 @@ export const useDatasourceStore = defineStore('datasource', () => {
   const error = ref<string>()
 
   const options = computed<OptionDTO[]>(() => datasources.value.map(item => ({
-    label: item.name,
+    label: item.database,
     value: item.id,
   })))
 
