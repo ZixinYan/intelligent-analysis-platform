@@ -1,6 +1,7 @@
 package com.kuaishou.intelligentanalysisplatform.infra.connector.jdbc;
 
 import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceType;
+import com.kuaishou.intelligentanalysisplatform.domain.datasource.AnalysisDatasource;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.Connector;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.QueryCommand;
 import com.kuaishou.intelligentanalysisplatform.infra.connector.pool.HikariPoolRegistry;
@@ -16,6 +17,11 @@ public class ClickHouseJdbcConnector extends AbstractJdbcConnector implements Co
     @Override
     public DatasourceType type() {
         return DatasourceType.CLICKHOUSE;
+    }
+
+    @Override
+    protected String buildListTablesSql(AnalysisDatasource datasource) {
+        return "SELECT name FROM system.tables WHERE database = currentDatabase() ORDER BY name";
     }
 
     @Override

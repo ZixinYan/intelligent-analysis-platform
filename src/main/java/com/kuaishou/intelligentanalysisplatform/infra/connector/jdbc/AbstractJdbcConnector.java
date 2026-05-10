@@ -81,19 +81,24 @@ public abstract class AbstractJdbcConnector implements Connector {
     @Override
     public List<String> listTables(AnalysisDatasource datasource) {
         DataSource dataSource = poolRegistry.getOrCreate(datasource);
-        try (Connection connection = dataSource.getConnection()) {
+        try (Connection connection = dataSource.getConnection();
+             java.sql.Statement stmt = connection.createStatement();
+             java.sql.ResultSet rs = stmt.executeQuery(buildListTablesSql(datasource))) {
             List<String> tables = new ArrayList<>();
-            try (java.sql.ResultSet rs = connection.getMetaData().getTables(
-                    datasource.getDatabase(), null, "%", new String[]{"TABLE", "VIEW"})) {
-                while (rs.next()) {
-                    tables.add(rs.getString("TABLE_NAME"));
-                }
+            while (rs.next()) {
+                tables.add(rs.getString(1));
             }
             return tables;
         } catch (java.sql.SQLException e) {
-            throw new IllegalStateException("list tables failed", e);
+            throw new IllegalStateException("list tables failed: " + e.getMessage(), e);
         }
     }
+
+    /**
+     * Build the native SQL query for listing tables.
+     * Subclasses MUST override this to provide database-specific SQL.
+     */
+    protected abstract String buildListTablesSql(AnalysisDatasource datasource);
 
     @Override
     public HealthCheckResult healthCheck(AnalysisDatasource datasource) {

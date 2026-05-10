@@ -22,7 +22,7 @@ class NodeDefinitionControllerTest {
         mockMvc = MockMvcBuilders.standaloneSetup(new NodeDefinitionController(
                         new DefaultNodeMetadataApplicationService(),
                         new ComputeCapabilityRegistry(new ObjectMapper())))
-                .setControllerAdvice(new GlobalExceptionHandler())
+                .setControllerAdvice(new GlobalExceptionHandler(new ObjectMapper()))
                 .build();
     }
 

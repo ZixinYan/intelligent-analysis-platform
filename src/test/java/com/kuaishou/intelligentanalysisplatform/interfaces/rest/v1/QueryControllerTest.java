@@ -3,6 +3,7 @@ package com.kuaishou.intelligentanalysisplatform.interfaces.rest.v1;
 import com.kuaishou.intelligentanalysisplatform.application.AnalysisService;
 import com.kuaishou.intelligentanalysisplatform.common.error.BaseBusinessException;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kuaishou.intelligentanalysisplatform.common.response.GlobalExceptionHandler;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ExecutionStatus;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.AsyncSubmitResponseDTO;
@@ -56,7 +57,7 @@ class QueryControllerTest {
                 .thenThrow(new BaseBusinessException(ErrorCode.SQL_PARSE_FAILED, "sql parse failed"));
 
         mockMvc = MockMvcBuilders.standaloneSetup(new QueryController(analysisService))
-                .setControllerAdvice(new GlobalExceptionHandler())
+                .setControllerAdvice(new GlobalExceptionHandler(new ObjectMapper()))
                 .build();
     }
 

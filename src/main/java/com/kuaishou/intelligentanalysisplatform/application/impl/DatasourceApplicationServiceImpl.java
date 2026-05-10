@@ -172,7 +172,8 @@ public class DatasourceApplicationServiceImpl implements DatasourceApplicationSe
         try {
             return connectorFactory.create(datasource).listTables(datasource);
         } catch (RuntimeException e) {
-            throw new BaseBusinessException(ErrorCode.DATASOURCE_CONNECTION_FAILED, "list datasource tables failed", e.getMessage(), null, false);
+            String detail = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
+            throw new BaseBusinessException(ErrorCode.DATASOURCE_CONNECTION_FAILED, "list datasource tables failed", detail, null, false);
         }
     }
 

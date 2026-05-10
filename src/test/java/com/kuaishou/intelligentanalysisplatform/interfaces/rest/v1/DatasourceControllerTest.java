@@ -8,6 +8,7 @@ import com.kuaishou.intelligentanalysisplatform.common.response.PageResult;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceStatus;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceType;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ExecutionStatus;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceQueryRequestDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceTestConnectionResultDTO;
@@ -80,7 +81,7 @@ class DatasourceControllerTest {
         when(service.listTables(eq("ds-1"), any())).thenReturn(List.of("orders", "users"));
 
         mockMvc = MockMvcBuilders.standaloneSetup(new DatasourceController(service))
-                .setControllerAdvice(new GlobalExceptionHandler())
+                .setControllerAdvice(new GlobalExceptionHandler(new ObjectMapper()))
                 .build();
         MvcResult result = mockMvc.perform(post("/api/v1/datasources")
                         .header("X-Tenant-Id", "tenant-a")

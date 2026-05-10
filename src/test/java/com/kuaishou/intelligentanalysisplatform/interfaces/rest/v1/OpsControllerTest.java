@@ -1,5 +1,6 @@
 package com.kuaishou.intelligentanalysisplatform.interfaces.rest.v1;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kuaishou.intelligentanalysisplatform.common.response.GlobalExceptionHandler;
 import com.kuaishou.intelligentanalysisplatform.infra.observability.QueryMetricsService;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,7 +22,7 @@ class OpsControllerTest {
         queryMetricsService.updateAsyncQueueDepth(2);
         queryMetricsService.updateDatasourceConcurrency(1);
         mockMvc = MockMvcBuilders.standaloneSetup(new OpsController(queryMetricsService))
-                .setControllerAdvice(new GlobalExceptionHandler())
+                .setControllerAdvice(new GlobalExceptionHandler(new ObjectMapper()))
                 .build();
     }
 

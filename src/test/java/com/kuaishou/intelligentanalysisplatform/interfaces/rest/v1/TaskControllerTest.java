@@ -3,6 +3,7 @@ package com.kuaishou.intelligentanalysisplatform.interfaces.rest.v1;
 import com.kuaishou.intelligentanalysisplatform.application.TaskApplicationService;
 import com.kuaishou.intelligentanalysisplatform.common.error.BaseBusinessException;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kuaishou.intelligentanalysisplatform.common.response.GlobalExceptionHandler;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ExecutionStatus;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.AsyncTaskStatusDTO;
@@ -38,7 +39,7 @@ class TaskControllerTest {
         doNothing().when(taskApplicationService).cancelTask("task-demo");
 
         mockMvc = MockMvcBuilders.standaloneSetup(new TaskController(taskApplicationService))
-                .setControllerAdvice(new GlobalExceptionHandler())
+                .setControllerAdvice(new GlobalExceptionHandler(new ObjectMapper()))
                 .build();
     }
 
