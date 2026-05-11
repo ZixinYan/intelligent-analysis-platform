@@ -106,5 +106,55 @@ CREATE TABLE IF NOT EXISTS datasource_config (
 CALL try_create_index('idx_ds_config_tenant', 'datasource_config', 'tenant_id', FALSE) //
 CALL try_create_index('idx_ds_config_tenant_name', 'datasource_config', 'tenant_id, name', FALSE) //
 
+CREATE TABLE IF NOT EXISTS approval_request (
+    request_id      VARCHAR(64) PRIMARY KEY,
+    workflow_id     VARCHAR(64) NOT NULL,
+    node_id         VARCHAR(64) NOT NULL,
+    tenant_id       VARCHAR(64) NOT NULL,
+    reason          VARCHAR(2000),
+    approvers_json  VARCHAR(2048),
+    status          VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+    decided_by      VARCHAR(64),
+    decision_comment VARCHAR(1000),
+    created_at      BIGINT NOT NULL,
+    decided_at      BIGINT,
+    expires_at      BIGINT
+) //
+
+CALL try_create_index('idx_approval_tenant_status', 'approval_request', 'tenant_id, status', FALSE) //
+CALL try_create_index('idx_approval_workflow_node', 'approval_request', 'workflow_id, node_id', FALSE) //
+
+CREATE TABLE IF NOT EXISTS saved_dataset (
+    dataset_id          VARCHAR(64) PRIMARY KEY,
+    tenant_id           VARCHAR(64) NOT NULL,
+    name                VARCHAR(256) NOT NULL,
+    description         VARCHAR(1000),
+    created_by          VARCHAR(64),
+    schema_json         TEXT NOT NULL,
+    stat_json           TEXT,
+    rows_json           MEDIUMTEXT,
+    source_workflow_id  VARCHAR(64),
+    source_node_id      VARCHAR(64),
+    created_at          BIGINT NOT NULL,
+    updated_at          BIGINT NOT NULL
+) //
+
+CALL try_create_index('idx_saved_dataset_tenant_updated', 'saved_dataset', 'tenant_id, updated_at', FALSE) //
+
+CREATE TABLE IF NOT EXISTS export_file (
+    file_id         VARCHAR(64) PRIMARY KEY,
+    tenant_id       VARCHAR(64) NOT NULL,
+    file_name       VARCHAR(512) NOT NULL,
+    format          VARCHAR(16) NOT NULL,
+    storage_path    VARCHAR(1024) NOT NULL,
+    file_size_bytes BIGINT,
+    row_count       INT,
+    created_at      BIGINT NOT NULL,
+    expires_at      BIGINT
+) //
+
+CALL try_create_index('idx_export_file_tenant', 'export_file', 'tenant_id', FALSE) //
+CALL try_create_index('idx_export_file_expires', 'export_file', 'expires_at', FALSE) //
+
 -- Clean up
 DROP PROCEDURE IF EXISTS try_create_index //

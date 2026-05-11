@@ -54,7 +54,11 @@ logging:
   structured:
     json: true
 
-# Elasticsearch / ELK log upload configuration
+export:
+  storage:
+    local-path: ${EXPORT_LOCAL_PATH:/tmp/exports}
+    file-ttl-hours: 24
+
 elasticsearch:
   log:
     enabled: false

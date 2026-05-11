@@ -9,6 +9,8 @@ export interface WorkflowNodeData {
   preview?: string[]
   schema?: import('./contract').SchemaInferResultDTO
   selected?: boolean
+  debugResult?: import('./contract').NodeResultDTO
+  mockInputs?: Record<string, unknown>
 }
 
 export interface WorkflowNode {

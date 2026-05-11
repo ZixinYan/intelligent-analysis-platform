@@ -272,7 +272,27 @@ export interface QueryExecutionMetaDTO {
 export interface NodeRunMetaDTO {
   nodeId?: string
   nodeType?: string
+  elapsedMs?: number
+  cached?: boolean
+  taskId?: string
   summary?: Record<string, unknown>
+}
+
+export interface NodeResultDTO {
+  nodeId?: string
+  nodeType?: string
+  status: ExecutionStatus
+  result?: StandardResultDTO
+  error?: ErrorInfoDTO
+  meta?: NodeRunMetaDTO
+}
+
+export interface NodeDebugRequestDTO {
+  workflowId?: string
+  nodeId?: string
+  node: WorkflowNodeDTO
+  upstreamMockInputs?: Record<string, unknown>
+  context?: RequestContextDTO
 }
 
 export interface OutputMetaDTO {

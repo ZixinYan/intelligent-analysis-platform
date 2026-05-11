@@ -3,10 +3,18 @@ import { computed, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import type { WorkflowNodeData } from '@/types/workflow'
 import { resolveNodeIcon } from '@/utils/node-preview'
+import { useWorkflowStore } from '@/stores/workflow'
 
 const props = defineProps<{
+  id: string
   data: WorkflowNodeData
 }>()
+
+const workflow = useWorkflowStore()
+
+function handleRun() {
+  workflow.runNodeDebug(props.id)
+}
 
 const categoryColor = computed(() => ({
   QUERY:      '#3b82f6',
@@ -156,13 +164,21 @@ const showTooltip = ref(false)
             <span v-if="statusConfig.dot" class="ans__status-dot" />
             {{ statusConfig.label }}
           </div>
-          <!-- 用法提示触发按钮 -->
-          <button
-            v-if="usageHints.length"
-            class="ans__info-btn"
-            @mouseenter="showTooltip = true"
-            @mouseleave="showTooltip = false"
-          >?</button>
+          <div class="ans__header-actions">
+            <!-- 运行按钮 -->
+            <button
+              class="ans__run-btn"
+              title="运行此节点"
+              @click.stop="handleRun"
+            >▷</button>
+            <!-- 用法提示触发按钮 -->
+            <button
+              v-if="usageHints.length"
+              class="ans__info-btn"
+              @mouseenter="showTooltip = true"
+              @mouseleave="showTooltip = false"
+            >?</button>
+          </div>
         </div>
       </div>
 
@@ -482,6 +498,37 @@ const showTooltip = ref(false)
   align-items: flex-end;
   gap: 5px;
   flex-shrink: 0;
+}
+
+.ans__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── 运行按钮 ─────────────────────────────── */
+.ans__run-btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--cat) 35%, transparent);
+  background: color-mix(in srgb, var(--cat) 10%, transparent);
+  color: var(--cat);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+  line-height: 1;
+  font-family: inherit;
+}
+
+.ans__run-btn:hover {
+  background: var(--cat);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 0 8px -2px var(--cat);
 }
 
 /* ── 状态徽章 ─────────────────────────────── */

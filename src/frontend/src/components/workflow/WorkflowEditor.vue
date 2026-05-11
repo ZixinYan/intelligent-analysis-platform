@@ -21,6 +21,12 @@ const nodeTypes = computed<Record<string, Component>>(() => ({
   'analysis-node': AnalysisNodeShell,
 }))
 
+const defaultEdgeOptions = {
+  type: 'smoothstep',
+  animated: true,
+  style: { stroke: '#3b82f6', strokeWidth: 2 },
+}
+
 onMounted(() => {
   workflow.loadList().catch(() => undefined)
 })
@@ -63,6 +69,7 @@ function handleSelectWorkflow(event: Event) {
         :nodes="nodes"
         :edges="edges"
         :node-types="nodeTypes"
+        :default-edge-options="defaultEdgeOptions"
         fit-view-on-init
         @nodes-change="workflow.onNodesChange"
         @connect="workflow.onConnect"

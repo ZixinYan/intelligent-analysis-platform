@@ -2,7 +2,9 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { Connection, NodeChange, XYPosition } from '@vue-flow/core'
 import type {
+  NodeDebugRequestDTO,
   NodeMetaDTO,
+  NodeResultDTO,
   PageResult,
   WorkflowDefinitionDTO,
   WorkflowEdgeDTO,
@@ -12,6 +14,7 @@ import type {
 import type { AnalysisNodeStatus, WorkflowEdge, WorkflowNode } from '@/types/workflow'
 import { buildNodePreview, createDefaultNodeConfig } from '@/utils/node-preview'
 import { createWorkflow, getWorkflow, listWorkflows, updateWorkflow } from '@/api/workflow'
+import { runNodeDebug as runNodeDebugApi } from '@/api/node-debug'
 
 function createNodeId(nodeType: string) {
   return `${nodeType}-${Math.random().toString(36).slice(2, 8)}`
@@ -30,6 +33,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
   const saving = ref(false)
   const loading = ref(false)
   const workflowList = ref<WorkflowDefinitionDTO[]>([])
+
+  // Debug state
+  const debugActiveTab = ref<'config' | 'input' | 'output'>('config')
+  const debugLoadingNodeId = ref<string>()
 
   const selectedNode = computed(() => nodes.value.find(node => node.id === selectedNodeId.value))
 
@@ -155,6 +162,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   function onNodeClick(payload: { node: WorkflowNode }) {
     selectedNodeId.value = payload.node.id
+    debugActiveTab.value = 'config'
   }
 
   function getUpstreamNode(nodeId: string) {
@@ -261,6 +269,58 @@ export const useWorkflowStore = defineStore('workflow', () => {
     selectedNodeId.value = undefined
     workflowId.value = undefined
     workflowName.value = '未命名工作流'
+    debugActiveTab.value = 'config'
+    debugLoadingNodeId.value = undefined
+  }
+
+  function setDebugTab(tab: 'config' | 'input' | 'output') {
+    debugActiveTab.value = tab
+  }
+
+  function setNodeMockInputs(nodeId: string, mockInputs: Record<string, unknown>) {
+    nodes.value = nodes.value.map(node =>
+      node.id === nodeId ? { ...node, data: { ...node.data, mockInputs } } : node,
+    )
+  }
+
+  async function runNodeDebug(nodeId: string) {
+    const node = nodes.value.find(n => n.id === nodeId)
+    if (!node) return
+    debugActiveTab.value = 'output'
+    selectedNodeId.value = nodeId
+    debugLoadingNodeId.value = nodeId
+    updateNodeStatus(nodeId, 'running')
+    try {
+      const payload: NodeDebugRequestDTO = {
+        nodeId,
+        node: {
+          nodeId,
+          nodeType: node.data.nodeType,
+          config: node.data.config,
+        },
+        upstreamMockInputs: node.data.mockInputs ?? {},
+      }
+      const result: NodeResultDTO = await runNodeDebugApi(payload)
+      nodes.value = nodes.value.map(n =>
+        n.id === nodeId ? { ...n, data: { ...n.data, debugResult: result } } : n,
+      )
+      const nextStatus: AnalysisNodeStatus = result.status === 'SUCCESS' ? 'success'
+        : result.status === 'FAILED' ? 'error' : 'running'
+      updateNodeStatus(nodeId, nextStatus)
+    } catch (err) {
+      const errorResult: NodeResultDTO = {
+        nodeId,
+        nodeType: node.data.nodeType,
+        status: 'FAILED',
+        error: { message: err instanceof Error ? err.message : '节点执行失败' },
+      }
+      nodes.value = nodes.value.map(n =>
+        n.id === nodeId ? { ...n, data: { ...n.data, debugResult: errorResult } } : n,
+      )
+      updateNodeStatus(nodeId, 'error')
+    } finally {
+      debugLoadingNodeId.value = undefined
+    }
   }
 
   return {
@@ -272,6 +332,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     saving,
     loading,
     workflowList,
+    debugActiveTab,
+    debugLoadingNodeId,
     addNode,
     updateNodeConfig,
     updateNodeStatus,
@@ -287,5 +349,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     load,
     loadList,
     reset,
+    setDebugTab,
+    setNodeMockInputs,
+    runNodeDebug,
   }
 })
