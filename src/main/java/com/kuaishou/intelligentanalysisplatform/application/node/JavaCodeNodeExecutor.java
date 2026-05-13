@@ -3,7 +3,7 @@ package com.kuaishou.intelligentanalysisplatform.application.node;
 import java.io.Closeable;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
-import java.lang.management.MemoryUsage;
+import java.util.concurrent.atomic.AtomicLong;
 import java.lang.reflect.Method;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
@@ -262,21 +262,41 @@ public class JavaCodeNodeExecutor implements NodeExecutor<JavaCodeNodeConfigDTO>
                 return t;
             });
 
-            Future<List<Map<String, Object>>> future = executor.submit(
-                    () -> (List<Map<String, Object>>) finalMethod.invoke(finalInstance, inputRows)
-            );
+            // --- Security gate 3: per-thread allocation monitor (soft limit) ---
+            // Use AtomicLong to capture the user-code thread ID from inside the submitted task,
+            // so the monitor can track that specific thread's allocated bytes rather than the
+            // JVM-global heap (which causes false kills in concurrent workflows).
+            long maxAllocatedBytes = sandboxProperties.javaMaxHeapDeltaBytes();
+            AtomicLong userCodeThreadId = new AtomicLong(-1);
 
-            // --- Security gate 3: JVM heap-delta memory monitor (soft limit) ---
-            long maxHeapDelta = sandboxProperties.javaMaxHeapDeltaBytes();
-            MemoryUsage beforeUsage = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
-            long heapBefore = beforeUsage.getUsed();
+            Future<List<Map<String, Object>>> future = executor.submit(() -> {
+                userCodeThreadId.set(Thread.currentThread().getId());
+                return (List<Map<String, Object>>) finalMethod.invoke(finalInstance, inputRows);
+            });
+
             monitorFuture = monitorExecutor.submit(() -> {
+                java.lang.management.ThreadMXBean rawBean = ManagementFactory.getThreadMXBean();
+                com.sun.management.ThreadMXBean sunBean = null;
+                if (rawBean instanceof com.sun.management.ThreadMXBean tb
+                        && tb.isThreadAllocatedMemorySupported()
+                        && tb.isThreadAllocatedMemoryEnabled()) {
+                    sunBean = tb;
+                }
+
                 try {
+                    // Wait for user-code thread to start and record its ID
+                    for (int i = 0; i < 20 && userCodeThreadId.get() == -1 && !future.isDone(); i++) {
+                        Thread.sleep(10);
+                    }
+
                     while (!future.isDone()) {
-                        long heapNow = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed();
-                        if (heapNow - heapBefore > maxHeapDelta) {
-                            future.cancel(true);
-                            return;
+                        long tid = userCodeThreadId.get();
+                        if (sunBean != null && tid != -1) {
+                            long[] allocated = sunBean.getThreadAllocatedBytes(new long[]{tid});
+                            if (allocated.length > 0 && allocated[0] > maxAllocatedBytes) {
+                                future.cancel(true);
+                                return;
+                            }
                         }
                         Thread.sleep(500);
                     }

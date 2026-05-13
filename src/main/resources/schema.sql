@@ -89,7 +89,7 @@ CALL try_create_index('idx_async_task_tenant_status', 'async_task', 'tenant_id, 
 
 CREATE TABLE IF NOT EXISTS task_result (
     task_id VARCHAR(64) PRIMARY KEY,
-    result_json varchar(2048) NOT NULL,
+    result_json MEDIUMTEXT NOT NULL,
     created_at BIGINT NOT NULL
 ) //
 
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS workflow_definition (
     workflow_id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     workflow_name VARCHAR(256) NOT NULL,
-    definition_json VARCHAR(2048) NOT NULL,
+    definition_json MEDIUMTEXT NOT NULL,
     operator_id VARCHAR(64),
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL
@@ -220,6 +220,16 @@ CALL try_create_index('idx_run_log_workflow_started', 'workflow_run_log',
     'workflow_id, started_at', FALSE) //
 CALL try_create_index('idx_run_log_tenant_status', 'workflow_run_log',
     'tenant_id, status, started_at', FALSE) //
+
+-- ============================================================
+-- 迁移：存量环境列类型修复（幂等，不会丢失现有数据）
+-- ============================================================
+ALTER TABLE workflow_definition
+    MODIFY COLUMN definition_json MEDIUMTEXT NOT NULL //
+
+-- 修复 task_result.result_json 存储上限不足问题（VARCHAR(2048) → MEDIUMTEXT）
+ALTER TABLE task_result
+    MODIFY COLUMN result_json MEDIUMTEXT NOT NULL //
 
 -- Clean up
 DROP PROCEDURE IF EXISTS try_create_index //

@@ -1,6 +1,7 @@
 package com.kuaishou.intelligentanalysisplatform.application.node;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -76,6 +77,9 @@ public class NodeExecuteDispatcher {
                 .nodeId(request.getNodeId())
                 .upstreamResults(toUpstreamResults(request.getUpstreamMockInputs()))
                 .requestContext(request.getContext())
+                .allNodes(request.getAllNodes() != null
+                        ? request.getAllNodes()
+                        : List.of(request.getNode()))
                 .build();
     }
 

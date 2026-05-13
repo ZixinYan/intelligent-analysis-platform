@@ -18,6 +18,9 @@ import java.util.concurrent.TimeoutException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kuaishou.intelligentanalysisplatform.application.node.NodeExecuteDispatcher;
+import com.kuaishou.intelligentanalysisplatform.domain.workflow.WorkflowRunLog;
+import com.kuaishou.intelligentanalysisplatform.domain.workflow.WorkflowRunLogRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorInfoDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ExecutionStatus;
@@ -60,14 +63,25 @@ public class WorkflowStreamExecutor {
     /** 每个 node_progress 事件携带的最大行数 */
     static final int DEFAULT_CHUNK_SIZE = 500;
 
-    private static final int WORKFLOW_TIMEOUT_MINUTES = 10;
+    private static final int    WORKFLOW_TIMEOUT_MINUTES = 10;
+    private static final String CONDITION_NODE_TYPE      = "condition";
+
+    // ─── 条件边数据结构 ────────────────────────────────────────────────────────
+    record ConditionalEdge(String source, String target, String condition) {}
 
     private final NodeExecuteDispatcher nodeExecuteDispatcher;
     private final ObjectMapper objectMapper;
+    private final WorkflowRunLogRepository workflowRunLogRepository;
+    private final MeterRegistry meterRegistry;
 
-    public WorkflowStreamExecutor(NodeExecuteDispatcher nodeExecuteDispatcher, ObjectMapper objectMapper) {
+    public WorkflowStreamExecutor(NodeExecuteDispatcher nodeExecuteDispatcher,
+                                   ObjectMapper objectMapper,
+                                   WorkflowRunLogRepository workflowRunLogRepository,
+                                   MeterRegistry meterRegistry) {
         this.nodeExecuteDispatcher = nodeExecuteDispatcher;
         this.objectMapper = objectMapper;
+        this.workflowRunLogRepository = workflowRunLogRepository;
+        this.meterRegistry = meterRegistry;
     }
 
     // -------------------------------------------------------------------------
@@ -100,6 +114,25 @@ public class WorkflowStreamExecutor {
         List<WorkflowNodeDTO> nodes = request.getNodes();
         List<WorkflowEdgeDTO> edges = request.getEdges() != null ? request.getEdges() : List.of();
 
+        String tenantId = request.getContext() != null ? request.getContext().getTenantId() : "unknown";
+        String userId   = request.getContext() != null ? request.getContext().getUserId()   : null;
+
+        // 执行开始时写入 RUNNING 记录
+        try {
+            workflowRunLogRepository.insert(WorkflowRunLog.builder()
+                    .runId(runId)
+                    .workflowId(request.getWorkflowId())
+                    .tenantId(tenantId)
+                    .triggerType("STREAM")
+                    .status("RUNNING")
+                    .nodeCount(nodes.size())
+                    .startedAt(workflowStart)
+                    .createdBy(userId)
+                    .build());
+        } catch (Exception ex) {
+            log.warn("Failed to insert stream run log for runId={}: {}", runId, ex.getMessage());
+        }
+
         // Build dependency graph (same logic as WorkflowDagExecutor)
         Map<String, WorkflowNodeDTO> nodeMap = new LinkedHashMap<>();
         Map<String, Set<String>> dependsOn = new HashMap<>();
@@ -107,11 +140,22 @@ public class WorkflowStreamExecutor {
             nodeMap.put(node.getNodeId(), node);
             dependsOn.put(node.getNodeId(), new HashSet<>());
         }
+
+        // 条件边索引：sourceNodeId → 该节点发出的所有条件边列表
+        Map<String, List<ConditionalEdge>> conditionalEdgesMap = new HashMap<>();
+
         for (WorkflowEdgeDTO edge : edges) {
             String src = edge.getSource();
             String tgt = edge.getTarget();
-            if (src != null && tgt != null && nodeMap.containsKey(tgt)) {
-                dependsOn.get(tgt).add(src);
+            if (src == null || tgt == null || !nodeMap.containsKey(tgt)) {
+                continue;
+            }
+            dependsOn.get(tgt).add(src);
+
+            if (edge.getCondition() != null) {
+                conditionalEdgesMap
+                        .computeIfAbsent(src, k -> new ArrayList<>())
+                        .add(new ConditionalEdge(src, tgt, edge.getCondition()));
             }
         }
 
@@ -138,9 +182,10 @@ public class WorkflowStreamExecutor {
             }
 
             final WorkflowNodeDTO finalNode = node;
+            final Map<String, List<ConditionalEdge>> finalConditionalEdgesMap = conditionalEdgesMap;
             trigger.thenRunAsync(
                     () -> executeStreamNode(finalNode, deps, futures, completedResults,
-                            nodeResultsMap, request, runId, emitter),
+                            nodeResultsMap, request, runId, emitter, finalConditionalEdgesMap),
                     ForkJoinPool.commonPool()
             ).exceptionally(ex -> {
                 completeNodeWithError(finalNode, futures, nodeResultsMap, ex.getMessage(), runId, emitter);
@@ -154,6 +199,8 @@ public class WorkflowStreamExecutor {
                     .get(WORKFLOW_TIMEOUT_MINUTES, TimeUnit.MINUTES);
         } catch (TimeoutException e) {
             futures.values().forEach(f -> f.cancel(true));
+            long elapsedOnTimeout = System.currentTimeMillis() - workflowStart;
+            completeRunLog(runId, request.getWorkflowId(), "FAILED", elapsedOnTimeout, null);
             sendEvent(emitter, new WorkflowErrorEvent(runId, request.getWorkflowId(),
                     ErrorInfoDTO.builder()
                             .code(ErrorCode.INTERNAL_ERROR.getCode())
@@ -173,6 +220,25 @@ public class WorkflowStreamExecutor {
                 .anyMatch(r -> r.getStatus() == ExecutionStatus.FAILED);
         String status = anyFailed ? "FAILED" : "SUCCEEDED";
         long elapsed = System.currentTimeMillis() - workflowStart;
+
+        // 写入终态 run log
+        String traceJson = buildNodeTraceJson(nodes, nodeResultsMap);
+        completeRunLog(runId, request.getWorkflowId(), status, elapsed, traceJson);
+
+        // 上报 Micrometer 指标
+        meterRegistry.counter("workflow.run.count",
+                "status", status,
+                "workflowId", request.getWorkflowId()
+        ).increment();
+        meterRegistry.timer("workflow.run.duration",
+                "workflowId", request.getWorkflowId()
+        ).record(elapsed, TimeUnit.MILLISECONDS);
+
+        if (elapsed > 60_000) {
+            log.warn("slow_stream_workflow workflowId={} runId={} elapsedMs={}",
+                    request.getWorkflowId(), runId, elapsed);
+        }
+
         sendEvent(emitter, new WorkflowDoneEvent(runId, request.getWorkflowId(), status, elapsed));
         emitter.complete();
     }
@@ -184,23 +250,33 @@ public class WorkflowStreamExecutor {
                                    ConcurrentHashMap<String, NodeResultDTO> nodeResultsMap,
                                    WorkflowRunRequestDTO request,
                                    String runId,
-                                   SseEmitter emitter) {
-        // Skip if any upstream failed
+                                   SseEmitter emitter,
+                                   Map<String, List<ConditionalEdge>> conditionalEdgesMap) {
+        // 已被条件路由预置为 SKIPPED，跳过重复执行
+        if (futures.get(node.getNodeId()).isDone()) {
+            return;
+        }
+
+        // 检查上游状态：FAILED 或 SKIPPED 均导致当前节点 SKIPPED
         for (String depId : deps) {
             CompletableFuture<NodeResultDTO> depFuture = futures.get(depId);
-            if (depFuture != null && depFuture.isDone()) {
-                try {
-                    NodeResultDTO depResult = depFuture.get();
-                    if (depResult != null && depResult.getStatus() == ExecutionStatus.FAILED) {
-                        completeNodeWithError(node, futures, nodeResultsMap,
-                                "upstream node [" + depId + "] failed, skipping", runId, emitter);
-                        return;
-                    }
-                } catch (Exception ignored) {
-                    completeNodeWithError(node, futures, nodeResultsMap,
-                            "upstream node [" + depId + "] threw exception", runId, emitter);
-                    return;
-                }
+            if (depFuture == null || !depFuture.isDone()) continue;
+
+            NodeResultDTO depResult;
+            try {
+                depResult = depFuture.get();
+            } catch (Exception ignored) {
+                completeNodeWithSkip(node, futures, nodeResultsMap,
+                        "upstream node [" + depId + "] threw exception", runId, emitter);
+                return;
+            }
+            if (depResult == null) continue;
+
+            ExecutionStatus depStatus = depResult.getStatus();
+            if (depStatus == ExecutionStatus.FAILED || depStatus == ExecutionStatus.SKIPPED) {
+                completeNodeWithSkip(node, futures, nodeResultsMap,
+                        "upstream node [" + depId + "] is " + depStatus + ", skipping", runId, emitter);
+                return;
             }
         }
 
@@ -212,6 +288,7 @@ public class WorkflowStreamExecutor {
                 .nodeId(node.getNodeId())
                 .upstreamResults(snapshot)
                 .requestContext(request.getContext())
+                .allNodes(request.getNodes())
                 .build();
 
         // Push node_start
@@ -221,6 +298,12 @@ public class WorkflowStreamExecutor {
         long nodeStart = System.currentTimeMillis();
         try {
             NodeResultDTO result = nodeExecuteDispatcher.dispatch(node, context);
+
+            // CONDITION 节点：预置非匹配分支为 SKIPPED，并推送 SKIPPED 事件
+            if (CONDITION_NODE_TYPE.equals(node.getNodeType())) {
+                activateConditionalEdges(node.getNodeId(), result, conditionalEdgesMap,
+                        futures, nodeResultsMap, runId, emitter);
+            }
 
             // Chunk large datasets before pushing node_result
             StandardResultDTO streamResult = chunkAndStreamDataset(
@@ -285,6 +368,53 @@ public class WorkflowStreamExecutor {
     }
 
     // -------------------------------------------------------------------------
+    // Conditional routing
+    // -------------------------------------------------------------------------
+
+    private void activateConditionalEdges(String conditionNodeId,
+                                           NodeResultDTO result,
+                                           Map<String, List<ConditionalEdge>> conditionalEdgesMap,
+                                           ConcurrentHashMap<String, CompletableFuture<NodeResultDTO>> futures,
+                                           ConcurrentHashMap<String, NodeResultDTO> nodeResultsMap,
+                                           String runId,
+                                           SseEmitter emitter) {
+        List<ConditionalEdge> edges = conditionalEdgesMap.get(conditionNodeId);
+        if (edges == null || edges.isEmpty()) return;
+
+        String branch = extractBranch(result);
+        if (branch == null) return;
+
+        for (ConditionalEdge edge : edges) {
+            if (edge.condition() != null && !edge.condition().equals(branch)) {
+                NodeResultDTO skipped = NodeResultDTO.builder()
+                        .nodeId(edge.target())
+                        .status(ExecutionStatus.SKIPPED)
+                        .error(ErrorInfoDTO.builder()
+                                .code("SKIPPED")
+                                .message("condition node [" + conditionNodeId + "] branch=" + branch
+                                        + ", edge.condition=" + edge.condition() + " → SKIPPED")
+                                .retryable(false)
+                                .build())
+                        .build();
+                nodeResultsMap.put(edge.target(), skipped);
+                CompletableFuture<NodeResultDTO> future = futures.get(edge.target());
+                if (future != null) {
+                    future.complete(skipped);
+                }
+                sendEvent(emitter, new NodeResultEvent(runId, edge.target(), "SKIPPED", null, null));
+            }
+        }
+    }
+
+    private String extractBranch(NodeResultDTO result) {
+        if (result == null || result.getResult() == null) return null;
+        Map<String, Object> vars = result.getResult().getVariables();
+        if (vars == null) return null;
+        Object branch = vars.get("_branch");
+        return branch != null ? branch.toString() : null;
+    }
+
+    // -------------------------------------------------------------------------
     // Chunking helpers
     // -------------------------------------------------------------------------
 
@@ -343,6 +473,31 @@ public class WorkflowStreamExecutor {
     // Error helpers
     // -------------------------------------------------------------------------
 
+    private void completeNodeWithSkip(WorkflowNodeDTO node,
+                                      ConcurrentHashMap<String, CompletableFuture<NodeResultDTO>> futures,
+                                      ConcurrentHashMap<String, NodeResultDTO> nodeResultsMap,
+                                      String reason,
+                                      String runId,
+                                      SseEmitter emitter) {
+        NodeResultDTO skipped = NodeResultDTO.builder()
+                .nodeId(node.getNodeId())
+                .nodeType(node.getNodeType())
+                .status(ExecutionStatus.SKIPPED)
+                .error(ErrorInfoDTO.builder()
+                        .code("SKIPPED")
+                        .message(reason != null ? reason : "upstream skipped or failed")
+                        .retryable(false)
+                        .build())
+                .build();
+        nodeResultsMap.put(node.getNodeId(), skipped);
+        CompletableFuture<NodeResultDTO> future = futures.get(node.getNodeId());
+        if (future != null) {
+            future.complete(skipped);
+        }
+        sendEvent(emitter, new NodeResultEvent(
+                runId, node.getNodeId(), "SKIPPED", null, null));
+    }
+
     private void completeNodeWithError(WorkflowNodeDTO node,
                                        ConcurrentHashMap<String, CompletableFuture<NodeResultDTO>> futures,
                                        ConcurrentHashMap<String, NodeResultDTO> nodeResultsMap,
@@ -364,6 +519,43 @@ public class WorkflowStreamExecutor {
 
         sendEvent(emitter, new NodeResultEvent(
                 runId, node.getNodeId(), "FAILED", null, null));
+    }
+
+    // -------------------------------------------------------------------------
+    // Run log helpers
+    // -------------------------------------------------------------------------
+
+    private void completeRunLog(String runId, String workflowId, String status,
+                                 long elapsedMs, String nodeTraceJson) {
+        try {
+            workflowRunLogRepository.complete(runId, status, elapsedMs,
+                    System.currentTimeMillis(), nodeTraceJson);
+        } catch (Exception ex) {
+            log.warn("Failed to complete stream run log runId={}: {}", runId, ex.getMessage());
+        }
+    }
+
+    private String buildNodeTraceJson(List<WorkflowNodeDTO> nodes,
+                                       ConcurrentHashMap<String, NodeResultDTO> nodeResultsMap) {
+        List<Map<String, Object>> traces = new ArrayList<>();
+        for (WorkflowNodeDTO node : nodes) {
+            NodeResultDTO r = nodeResultsMap.get(node.getNodeId());
+            if (r == null) continue;
+            Map<String, Object> trace = new LinkedHashMap<>();
+            trace.put("nodeId",   node.getNodeId());
+            trace.put("nodeType", node.getNodeType());
+            trace.put("status",   r.getStatus() != null ? r.getStatus().name() : "UNKNOWN");
+            if (r.getError() != null) {
+                trace.put("error", r.getError().getMessage());
+            }
+            traces.add(trace);
+        }
+        try {
+            return objectMapper.writeValueAsString(traces);
+        } catch (Exception e) {
+            log.warn("Failed to serialize stream node traces: {}", e.getMessage());
+            return "[]";
+        }
     }
 
     // -------------------------------------------------------------------------
