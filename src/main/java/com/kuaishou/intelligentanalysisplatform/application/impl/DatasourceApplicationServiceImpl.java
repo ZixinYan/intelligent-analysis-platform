@@ -16,12 +16,15 @@ import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceQueryR
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceTestConnectionRequestDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceTestConnectionResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceUpdateRequestDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.FieldSchemaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.RequestContextDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.ai.TableSchemaDTO;
 import com.kuaishou.intelligentanalysisplatform.domain.datasource.AnalysisDatasource;
 import com.kuaishou.intelligentanalysisplatform.domain.datasource.DatasourceRepository;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.Connector;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.ConnectorFactory;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.HealthCheckResult;
+import com.kuaishou.intelligentanalysisplatform.domain.query.connector.QueryCommand;
 import com.kuaishou.intelligentanalysisplatform.infra.security.CredentialEncryptor;
 import org.springframework.stereotype.Service;
 
@@ -175,6 +178,51 @@ public class DatasourceApplicationServiceImpl implements DatasourceApplicationSe
             String detail = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
             throw new BaseBusinessException(ErrorCode.DATASOURCE_CONNECTION_FAILED, "list datasource tables failed", detail, null, false);
         }
+    }
+
+    @Override
+    public List<FieldSchemaDTO> introspectTableSchema(String datasourceId, String tableName, RequestContextDTO context) {
+        permissionChecker.requireRead(context);
+        AnalysisDatasource datasource = requireOwnedDatasource(datasourceId, context);
+        try {
+            Connector connector = connectorFactory.create(datasource);
+            QueryCommand command = QueryCommand.builder()
+                    .normalizedSql("SELECT * FROM " + tableName + " LIMIT 0")
+                    .maxRows(0)
+                    .build();
+            return connector.inferSchema(datasource, command);
+        } catch (RuntimeException e) {
+            String detail = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
+            throw new BaseBusinessException(ErrorCode.DATASOURCE_CONNECTION_FAILED, "introspect table schema failed", detail, null, false);
+        }
+    }
+
+    @Override
+    public List<TableSchemaDTO> introspectAllTableSchemas(String datasourceId, RequestContextDTO context) {
+        permissionChecker.requireRead(context);
+        AnalysisDatasource datasource = requireOwnedDatasource(datasourceId, context);
+        Connector connector = connectorFactory.create(datasource);
+        List<String> tables;
+        try {
+            tables = connector.listTables(datasource);
+        } catch (RuntimeException e) {
+            String detail = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
+            throw new BaseBusinessException(ErrorCode.DATASOURCE_CONNECTION_FAILED, "list datasource tables failed", detail, null, false);
+        }
+        return tables.stream()
+                .map(tableName -> {
+                    try {
+                        QueryCommand command = QueryCommand.builder()
+                                .normalizedSql("SELECT * FROM " + tableName + " LIMIT 0")
+                                .maxRows(0)
+                                .build();
+                        List<FieldSchemaDTO> fields = connector.inferSchema(datasource, command);
+                        return TableSchemaDTO.builder().tableName(tableName).fields(fields).build();
+                    } catch (Exception e) {
+                        return TableSchemaDTO.builder().tableName(tableName).fields(List.of()).build();
+                    }
+                })
+                .toList();
     }
 
     private AnalysisDatasource requireOwnedDatasource(String id, RequestContextDTO context) {

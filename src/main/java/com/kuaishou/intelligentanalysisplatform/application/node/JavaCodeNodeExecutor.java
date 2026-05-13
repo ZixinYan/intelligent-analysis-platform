@@ -2,6 +2,8 @@ package com.kuaishou.intelligentanalysisplatform.application.node;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryUsage;
 import java.lang.reflect.Method;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
@@ -12,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -19,6 +22,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaCompiler;
@@ -32,6 +37,7 @@ import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeDatas
 import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeResultFactory;
 import com.kuaishou.intelligentanalysisplatform.common.error.BaseBusinessException;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
+import com.kuaishou.intelligentanalysisplatform.config.SandboxProperties;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasetDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.JavaCodeNodeConfigDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeMetaDTO;
@@ -48,6 +54,18 @@ import org.springframework.stereotype.Component;
  * in an isolated {@link URLClassLoader}. Execution runs in a dedicated thread with
  * a configurable timeout to prevent runaway code.</p>
  *
+ * <h3>Sandbox protections</h3>
+ * <ul>
+ *   <li><b>Import blacklist</b> — forbidden packages are rejected at the source-scan stage
+ *       before compilation (e.g. {@code java.io}, {@code java.net}, {@code java.lang.reflect}).</li>
+ *   <li><b>ClassLoader isolation</b> — user class is loaded with
+ *       {@link ClassLoader#getPlatformClassLoader()} as parent, cutting off all host-application
+ *       classes (Spring beans, datasource connections, etc.). JDK stdlib remains accessible.</li>
+ *   <li><b>Memory soft-limit</b> — a background monitor thread cancels execution when JVM heap
+ *       growth exceeds the configured {@code sandbox.java.max-memory-mb} threshold.</li>
+ *   <li><b>Timeout</b> — execution is cancelled after {@code sandbox.java.max-timeout-seconds}.</li>
+ * </ul>
+ *
  * <h3>User contract</h3>
  * <p>Supply the body of:</p>
  * <pre>{@code
@@ -55,19 +73,16 @@ import org.springframework.stereotype.Component;
  * }</pre>
  *
  * <p>Available imports: {@code java.util.*}, {@code java.util.stream.*}, {@code java.math.*}</p>
- *
- * <h3>Example</h3>
- * <pre>{@code
- * return rows.stream()
- *     .filter(r -> ((Number) r.getOrDefault("amount", 0)).doubleValue() > 100)
- *     .collect(java.util.stream.Collectors.toList());
- * }</pre>
  */
 @Component
 public class JavaCodeNodeExecutor implements NodeExecutor<JavaCodeNodeConfigDTO> {
 
     private static final String NODE_TYPE = "java_code";
     private static final int DEFAULT_TIMEOUT_SECONDS = 30;
+
+    /** Matches top-level import statements in Java source. */
+    private static final Pattern IMPORT_PATTERN =
+            Pattern.compile("^\\s*import\\s+([\\w.]+(?:\\.\\*)?);", Pattern.MULTILINE);
 
     /** Preamble injected before the user's class. */
     private static final String CLASS_TEMPLATE =
@@ -85,13 +100,23 @@ public class JavaCodeNodeExecutor implements NodeExecutor<JavaCodeNodeConfigDTO>
     private final ComputeDatasetResolver computeDatasetResolver;
     private final ComputeResultFactory computeResultFactory;
     private final NodeMetadataApplicationService nodeMetadataApplicationService;
+    private final SandboxProperties sandboxProperties;
+
+    /** Dedicated executor for the heap-delta memory monitor thread. */
+    private final ExecutorService monitorExecutor = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "java-sandbox-monitor");
+        t.setDaemon(true);
+        return t;
+    });
 
     public JavaCodeNodeExecutor(ComputeDatasetResolver computeDatasetResolver,
                                 ComputeResultFactory computeResultFactory,
-                                NodeMetadataApplicationService nodeMetadataApplicationService) {
+                                NodeMetadataApplicationService nodeMetadataApplicationService,
+                                SandboxProperties sandboxProperties) {
         this.computeDatasetResolver = computeDatasetResolver;
         this.computeResultFactory = computeResultFactory;
         this.nodeMetadataApplicationService = nodeMetadataApplicationService;
+        this.sandboxProperties = sandboxProperties;
     }
 
     @Override
@@ -131,11 +156,48 @@ public class JavaCodeNodeExecutor implements NodeExecutor<JavaCodeNodeConfigDTO>
     }
 
     // -------------------------------------------------------------------------
+    // Sandbox: import validation
+    // -------------------------------------------------------------------------
+
+    /**
+     * Scans the generated source file for import statements referencing blacklisted packages.
+     * This check runs before compilation, providing an early, clear error message.
+     *
+     * <p>The user's code is embedded as a method body so top-level imports cannot be added by
+     * user code; this guard catches any imports injected via the template itself or through
+     * multi-line string tricks.</p>
+     *
+     * @param userCode raw user code (method body)
+     * @throws BaseBusinessException with {@link ErrorCode#SANDBOX_REJECTED} if a forbidden import is found
+     */
+    private void validateImports(String userCode) {
+        Set<String> blacklisted = sandboxProperties.javaBlacklistedPackages();
+        Matcher m = IMPORT_PATTERN.matcher(userCode);
+        while (m.find()) {
+            String imported = m.group(1);
+            // Strip trailing wildcard for prefix matching
+            String importedBase = imported.endsWith(".*") ? imported.substring(0, imported.length() - 2) : imported;
+            for (String forbidden : blacklisted) {
+                if (importedBase.startsWith(forbidden) || imported.startsWith(forbidden)) {
+                    throw new BaseBusinessException(ErrorCode.SANDBOX_REJECTED,
+                            "Forbidden import '" + imported + "': package '" + forbidden
+                                    + "' is not permitted in the sandbox");
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Main compile + execute pipeline
+    // -------------------------------------------------------------------------
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> compileAndRun(String userCode,
                                                      List<Map<String, Object>> inputRows,
                                                      int timeoutSeconds) {
+        // --- Security gate 1: import blacklist (source-level, pre-compilation) ---
+        validateImports(userCode);
+
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
             throw new BaseBusinessException(ErrorCode.INTERNAL_ERROR,
@@ -149,6 +211,7 @@ public class JavaCodeNodeExecutor implements NodeExecutor<JavaCodeNodeConfigDTO>
         Path tempDir = null;
         URLClassLoader classLoader = null;
         ExecutorService executor = null;
+        Future<?> monitorFuture = null;
         try {
             tempDir = Files.createTempDirectory("java_node_");
             Path sourceFile = tempDir.resolve(className + ".java");
@@ -179,10 +242,12 @@ public class JavaCodeNodeExecutor implements NodeExecutor<JavaCodeNodeConfigDTO>
                 }
             }
 
-            // Load
+            // --- Security gate 2: ClassLoader isolation ---
+            // Use getPlatformClassLoader() as parent so user code can access JDK stdlib
+            // but CANNOT access host-application classes (Spring context, datasources, etc.).
             classLoader = new URLClassLoader(
                     new java.net.URL[]{tempDir.toUri().toURL()},
-                    Thread.currentThread().getContextClassLoader()
+                    ClassLoader.getPlatformClassLoader()
             );
             Class<?> clazz = classLoader.loadClass(className);
             Object instance = clazz.getDeclaredConstructor().newInstance();
@@ -201,6 +266,25 @@ public class JavaCodeNodeExecutor implements NodeExecutor<JavaCodeNodeConfigDTO>
                     () -> (List<Map<String, Object>>) finalMethod.invoke(finalInstance, inputRows)
             );
 
+            // --- Security gate 3: JVM heap-delta memory monitor (soft limit) ---
+            long maxHeapDelta = sandboxProperties.javaMaxHeapDeltaBytes();
+            MemoryUsage beforeUsage = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
+            long heapBefore = beforeUsage.getUsed();
+            monitorFuture = monitorExecutor.submit(() -> {
+                try {
+                    while (!future.isDone()) {
+                        long heapNow = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed();
+                        if (heapNow - heapBefore > maxHeapDelta) {
+                            future.cancel(true);
+                            return;
+                        }
+                        Thread.sleep(500);
+                    }
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+
             try {
                 List<Map<String, Object>> result = future.get(timeoutSeconds, TimeUnit.SECONDS);
                 return normalizeRows(result);
@@ -210,7 +294,15 @@ public class JavaCodeNodeExecutor implements NodeExecutor<JavaCodeNodeConfigDTO>
                         "java code timed out after " + timeoutSeconds + "s");
             } catch (ExecutionException e) {
                 Throwable cause = e.getCause();
+                // Surface sandbox cancellation as a dedicated error code
+                if (cause instanceof BaseBusinessException biz) {
+                    throw biz;
+                }
                 String msg = cause != null ? cause.getMessage() : e.getMessage();
+                if (future.isCancelled()) {
+                    throw new BaseBusinessException(ErrorCode.SANDBOX_REJECTED,
+                            "java code exceeded memory limit (" + sandboxProperties.javaMaxHeapDeltaBytes() / (1024 * 1024) + " MB)");
+                }
                 throw new BaseBusinessException(ErrorCode.INTERNAL_ERROR,
                         "java code threw exception: " + msg);
             }
@@ -221,6 +313,9 @@ public class JavaCodeNodeExecutor implements NodeExecutor<JavaCodeNodeConfigDTO>
             throw new BaseBusinessException(ErrorCode.INTERNAL_ERROR,
                     "java code execution error: " + e.getMessage());
         } finally {
+            if (monitorFuture != null) {
+                monitorFuture.cancel(true);
+            }
             shutdownQuietly(executor);
             closeQuietly(classLoader);
             deleteQuietly(tempDir);

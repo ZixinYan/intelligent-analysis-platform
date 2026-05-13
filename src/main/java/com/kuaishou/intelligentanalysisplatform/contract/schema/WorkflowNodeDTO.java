@@ -36,7 +36,9 @@ public class WorkflowNodeDTO {
             @JsonSubTypes.Type(value = ChartOutputNodeConfigDTO.class, name = "chart_output"),
             @JsonSubTypes.Type(value = TableOutputNodeConfigDTO.class, name = "table_output"),
             @JsonSubTypes.Type(value = PythonScriptNodeConfigDTO.class, name = "python_script"),
-            @JsonSubTypes.Type(value = JavaCodeNodeConfigDTO.class, name = "java_code")
+            @JsonSubTypes.Type(value = JavaCodeNodeConfigDTO.class, name = "java_code"),
+            @JsonSubTypes.Type(value = ConditionNodeConfigDTO.class, name = "condition"),
+            @JsonSubTypes.Type(value = ErrorHandlerNodeConfigDTO.class, name = "error_handler")
     })
     private BaseNodeConfigDTO config;
 }

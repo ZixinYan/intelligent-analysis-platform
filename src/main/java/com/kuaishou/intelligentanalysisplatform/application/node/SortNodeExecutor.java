@@ -4,18 +4,30 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
+import com.kuaishou.intelligentanalysisplatform.application.DatasourceApplicationService;
 import com.kuaishou.intelligentanalysisplatform.application.NodeMetadataApplicationService;
+import com.kuaishou.intelligentanalysisplatform.application.QueryApplicationService;
+import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeCapabilityRegistry;
 import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeDatasetResolver;
 import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeResultFactory;
 import com.kuaishou.intelligentanalysisplatform.application.compute.InMemorySortComputeService;
+import com.kuaishou.intelligentanalysisplatform.application.compute.pushdown.DatasourceDialect;
+import com.kuaishou.intelligentanalysisplatform.application.compute.pushdown.PushdownDecider;
+import com.kuaishou.intelligentanalysisplatform.application.compute.pushdown.SortSqlGenerator;
+import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceType;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.ComputeAuditDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.ComputeStepDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasetDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeMetaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeResultDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.QueryRequestDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.QueryResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.SortFieldDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.SortNodeConfigDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.ValidateResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.spi.NodeExecuteContextDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.spi.NodeExecutor;
 import com.kuaishou.intelligentanalysisplatform.contract.spi.ValidationResultDTO;
@@ -27,15 +39,30 @@ public class SortNodeExecutor implements NodeExecutor<SortNodeConfigDTO> {
     private final ComputeDatasetResolver computeDatasetResolver;
     private final InMemorySortComputeService sortComputeService;
     private final ComputeResultFactory computeResultFactory;
+    private final PushdownDecider pushdownDecider;
+    private final ComputeCapabilityRegistry capabilityRegistry;
+    private final SortSqlGenerator sortSqlGenerator;
+    private final QueryApplicationService queryApplicationService;
+    private final DatasourceApplicationService datasourceApplicationService;
 
     public SortNodeExecutor(NodeMetadataApplicationService nodeMetadataApplicationService,
                             ComputeDatasetResolver computeDatasetResolver,
                             InMemorySortComputeService sortComputeService,
-                            ComputeResultFactory computeResultFactory) {
+                            ComputeResultFactory computeResultFactory,
+                            PushdownDecider pushdownDecider,
+                            ComputeCapabilityRegistry capabilityRegistry,
+                            SortSqlGenerator sortSqlGenerator,
+                            QueryApplicationService queryApplicationService,
+                            DatasourceApplicationService datasourceApplicationService) {
         this.nodeMetadataApplicationService = nodeMetadataApplicationService;
         this.computeDatasetResolver = computeDatasetResolver;
         this.sortComputeService = sortComputeService;
         this.computeResultFactory = computeResultFactory;
+        this.pushdownDecider = pushdownDecider;
+        this.capabilityRegistry = capabilityRegistry;
+        this.sortSqlGenerator = sortSqlGenerator;
+        this.queryApplicationService = queryApplicationService;
+        this.datasourceApplicationService = datasourceApplicationService;
     }
 
     @Override
@@ -47,12 +74,33 @@ public class SortNodeExecutor implements NodeExecutor<SortNodeConfigDTO> {
     public NodeResultDTO execute(NodeExecuteContextDTO context, SortNodeConfigDTO config) {
         long start = System.currentTimeMillis();
         DatasetDTO input = computeDatasetResolver.resolve(config.getDatasetRef(), context.getUpstreamResults());
-        DatasetDTO output = sortComputeService.compute(config, input);
+
+        DatasourceType dsType = resolveDatasourceType(input, context);
+        boolean pushdown = pushdownDecider.canPushdown(capabilityRegistry.getByCode("sort"), input, dsType);
+
+        DatasetDTO output;
+        if (pushdown) {
+            DatasourceDialect dialect = DatasourceDialect.from(dsType);
+            String pushdownSql = sortSqlGenerator.generate(input.getSourceSql(), config, dialect);
+            QueryRequestDTO queryReq = buildPushdownRequest(input.getSourceDatasourceId(), pushdownSql, context);
+            ValidateResultDTO validateResult = queryApplicationService.validate(queryReq);
+            if (validateResult.isValid()) {
+                QueryResultDTO result = queryApplicationService.preview(queryReq);
+                output = enrichSourceInfo(result.getDataset(), pushdownSql, input.getSourceDatasourceId());
+            } else {
+                // SQL Guard 拒绝，回退到内存计算
+                pushdown = false;
+                output = sortComputeService.compute(config, input);
+            }
+        } else {
+            output = sortComputeService.compute(config, input);
+        }
+
         return computeResultFactory.success(
                 context.getNodeId(),
                 supportType(),
                 output,
-                false,
+                pushdown,
                 supportType(),
                 System.currentTimeMillis() - start,
                 buildAudit(config, input, output)
@@ -67,6 +115,42 @@ public class SortNodeExecutor implements NodeExecutor<SortNodeConfigDTO> {
     @Override
     public NodeMetaDTO metadata() {
         return nodeMetadataApplicationService.getNodeDefinition(supportType());
+    }
+
+    private DatasourceType resolveDatasourceType(DatasetDTO input, NodeExecuteContextDTO context) {
+        if (input == null || input.getSourceDatasourceId() == null || input.getSourceDatasourceId().isBlank()) {
+            return null;
+        }
+        try {
+            DatasourceDTO ds = datasourceApplicationService.getById(input.getSourceDatasourceId(), context.getRequestContext());
+            return ds == null ? null : ds.getType();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private QueryRequestDTO buildPushdownRequest(String datasourceId, String sql, NodeExecuteContextDTO context) {
+        return QueryRequestDTO.builder()
+                .requestId(UUID.randomUUID().toString())
+                .datasourceId(datasourceId)
+                .sql(sql)
+                .parameters(Map.of())
+                .context(context.getRequestContext())
+                .build();
+    }
+
+    private DatasetDTO enrichSourceInfo(DatasetDTO dataset, String sourceSql, String sourceDatasourceId) {
+        if (dataset == null) {
+            return null;
+        }
+        return DatasetDTO.builder()
+                .schema(dataset.getSchema())
+                .rows(dataset.getRows())
+                .page(dataset.getPage())
+                .stat(dataset.getStat())
+                .sourceSql(sourceSql)
+                .sourceDatasourceId(sourceDatasourceId)
+                .build();
     }
 
     private ComputeAuditDTO buildAudit(SortNodeConfigDTO config, DatasetDTO input, DatasetDTO output) {

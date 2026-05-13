@@ -7,6 +7,7 @@ import java.util.UUID;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kuaishou.intelligentanalysisplatform.application.WorkflowApplicationService;
+import com.kuaishou.intelligentanalysisplatform.application.WorkflowVersionApplicationService;
 import com.kuaishou.intelligentanalysisplatform.common.error.BaseBusinessException;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
 import com.kuaishou.intelligentanalysisplatform.common.response.PageResult;
@@ -20,16 +21,21 @@ import com.kuaishou.intelligentanalysisplatform.contract.schema.WorkflowSaveRequ
 import com.kuaishou.intelligentanalysisplatform.domain.workflow.WorkflowDefinition;
 import com.kuaishou.intelligentanalysisplatform.domain.workflow.WorkflowDefinitionRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DefaultWorkflowApplicationService implements WorkflowApplicationService {
     private static final Class<WorkflowDocument> WORKFLOW_DOCUMENT_CLASS = WorkflowDocument.class;
+
     private final WorkflowDefinitionRepository workflowDefinitionRepository;
+    private final WorkflowVersionApplicationService workflowVersionApplicationService;
     private final ObjectMapper objectMapper;
 
     public DefaultWorkflowApplicationService(WorkflowDefinitionRepository workflowDefinitionRepository,
+                                             WorkflowVersionApplicationService workflowVersionApplicationService,
                                              ObjectMapper objectMapper) {
         this.workflowDefinitionRepository = workflowDefinitionRepository;
+        this.workflowVersionApplicationService = workflowVersionApplicationService;
         this.objectMapper = objectMapper;
     }
 
@@ -51,6 +57,7 @@ public class DefaultWorkflowApplicationService implements WorkflowApplicationSer
     }
 
     @Override
+    @Transactional
     public WorkflowDefinitionDTO update(String workflowId, WorkflowSaveRequestDTO request) {
         validateRequest(request);
         WorkflowDefinition current = getDefinition(workflowId, request.getContext());
@@ -62,9 +69,16 @@ public class DefaultWorkflowApplicationService implements WorkflowApplicationSer
                 .operatorId(request.getContext().getUserId())
                 .createdAt(current.getCreatedAt())
                 .updatedAt(System.currentTimeMillis())
+                .currentVersionId(current.getCurrentVersionId())
+                .publishedVersionId(current.getPublishedVersionId())
                 .build();
         workflowDefinitionRepository.update(definition);
-        return toDto(definition);
+
+        // 自动创建版本快照（限频：5 分钟内重复更新只创建一个版本）
+        workflowVersionApplicationService.snapshot(workflowId, "auto-save", request.getContext());
+
+        // reload to get updated version refs
+        return toDto(getDefinition(workflowId, request.getContext()));
     }
 
     @Override
@@ -109,6 +123,8 @@ public class DefaultWorkflowApplicationService implements WorkflowApplicationSer
                 .positions(document.getPositions())
                 .createdAt(definition.getCreatedAt())
                 .updatedAt(definition.getUpdatedAt())
+                .currentVersionId(definition.getCurrentVersionId())
+                .publishedVersionId(definition.getPublishedVersionId())
                 .build();
     }
 

@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { QueryResultDTO, StandardResultDTO } from '@/types/contract'
+import { computed, ref, watch } from 'vue'
+import type { QueryResultDTO, StandardResultDTO, ChartRecommendationDTO } from '@/types/contract'
 import { resolveRendererModel, type RendererMode } from '@/components/output/renderer'
+import AiRecommendBadge from '@/components/ai/AiRecommendBadge.vue'
+import { recommendChart } from '@/api/ai'
 
 const props = defineProps<{
   result?: StandardResultDTO | QueryResultDTO
   mode?: RendererMode
+}>()
+
+const emit = defineEmits<{
+  'chartTypeChange': [chartType: string]
 }>()
 
 const model = computed(() => resolveRendererModel(props.result, props.mode ?? 'runtime'))
@@ -27,6 +33,52 @@ function asPercent(value: unknown) {
   }
   return `${Math.max((current / maxValue.value) * 100, 6)}%`
 }
+
+// AI 图表推荐
+const recommendation = ref<ChartRecommendationDTO | null>(null)
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+let currentAbortController: AbortController | null = null
+
+function extractFields() {
+  const result = props.result as StandardResultDTO | undefined
+  return result?.dataset?.schema?.fields ?? []
+}
+
+watch(() => props.result, (newResult) => {
+  // 取消上一次未完成的请求和定时器
+  if (debounceTimer !== null) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+  if (currentAbortController) {
+    currentAbortController.abort()
+    currentAbortController = null
+  }
+  if (!newResult) { recommendation.value = null; return }
+  const fields = extractFields()
+  if (fields.length === 0) { recommendation.value = null; return }
+
+  debounceTimer = setTimeout(async () => {
+    const controller = new AbortController()
+    currentAbortController = controller
+    try {
+      const recs = await recommendChart({ fields }, controller.signal)
+      recommendation.value = recs[0] ?? null
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return
+      if ((err as { code?: string }).code === 'ERR_CANCELED') return
+      recommendation.value = null
+    } finally {
+      if (currentAbortController === controller) currentAbortController = null
+    }
+  }, 200)
+}, { immediate: true })
+
+function applyRecommendation() {
+  if (recommendation.value) {
+    emit('chartTypeChange', recommendation.value.chartType)
+  }
+}
 </script>
 
 <template>
@@ -35,6 +87,11 @@ function asPercent(value: unknown) {
       <strong>{{ model.title }}</strong>
       <span>{{ model.kind === 'chart' ? model.chartType : 'EMPTY' }}</span>
     </div>
+    <AiRecommendBadge
+      v-if="recommendation"
+      :recommendation="recommendation"
+      @accept="applyRecommendation"
+    />
     <div v-for="notice in model.notices" :key="notice.message" class="chart-preview__notice" :data-tone="notice.tone">
       {{ notice.message }}
     </div>

@@ -17,4 +17,6 @@ public class WorkflowDefinition {
     private String operatorId;
     private Long createdAt;
     private Long updatedAt;
+    private String currentVersionId;
+    private String publishedVersionId;
 }

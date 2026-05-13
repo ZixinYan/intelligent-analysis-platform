@@ -6,11 +6,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,6 +20,7 @@ import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeDatas
 import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeResultFactory;
 import com.kuaishou.intelligentanalysisplatform.common.error.BaseBusinessException;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
+import com.kuaishou.intelligentanalysisplatform.config.SandboxProperties;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasetDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeMetaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeResultDTO;
@@ -34,6 +36,17 @@ import org.springframework.stereotype.Component;
  * <p>The script is executed in an isolated OS subprocess via {@code python3}.
  * Input rows are written to the process stdin as JSON; the script must write
  * the result rows to stdout as JSON. Both streams use UTF-8.</p>
+ *
+ * <h3>Sandbox protections</h3>
+ * <ul>
+ *   <li><b>Restricted mode (default)</b> — wraps the user script in a security harness that
+ *       patches {@code builtins.__import__} to block dangerous modules (configurable via
+ *       {@code sandbox.python.blocked-modules}) and removes {@code builtins.open}.</li>
+ *   <li><b>Firejail mode</b> — wraps the {@code python3} process with {@code firejail}
+ *       (Linux only). Requires {@code firejail} to be installed on the host.</li>
+ *   <li><b>Timeout</b> — process is killed with {@link Process#destroyForcibly()} after
+ *       {@code sandbox.python.max-timeout-seconds}.</li>
+ * </ul>
  *
  * <h3>User contract</h3>
  * <pre>{@code
@@ -51,33 +64,61 @@ public class PythonScriptNodeExecutor implements NodeExecutor<PythonScriptNodeCo
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     /**
-     * Wrapper template: injects {@code rows} from stdin, expects {@code output_rows} to be set.
+     * Restricted execution wrapper (macOS / universal — method B from design doc).
+     *
+     * <p>Substitution tokens (replaced via {@link String#replace}, not {@link String#format}):
+     * <ul>
+     *   <li>{@code {{BLOCKED_MODULES}}} — Python frozenset literal of blocked module names</li>
+     *   <li>{@code {{USER_CODE}}}       — raw user script body</li>
+     * </ul></p>
      */
-    private static final String SCRIPT_TEMPLATE =
-            "import sys, json\n" +
-            "_payload = json.loads(sys.stdin.read())\n" +
+    private static final String RESTRICTED_TEMPLATE =
+            "import sys as _sys, json as _json, builtins as _builtins\n" +
+            "\n" +
+            "# Sandbox: block dangerous module imports via __import__ hook\n" +
+            "_SANDBOX_BLOCKED = {{BLOCKED_MODULES}}\n" +
+            "_real_import = _builtins.__import__\n" +
+            "\n" +
+            "def _guarded_import(name, *args, **kwargs):\n" +
+            "    top = name.split('.')[0]\n" +
+            "    if top in _SANDBOX_BLOCKED:\n" +
+            "        raise ImportError(\"Module '{}' is blocked by the execution sandbox\".format(name))\n" +
+            "    return _real_import(name, *args, **kwargs)\n" +
+            "\n" +
+            "_builtins.__import__ = _guarded_import\n" +
+            "\n" +
+            "# Sandbox: disable direct file I/O\n" +
+            "_builtins.open = None\n" +
+            "\n" +
+            "# Load input rows from stdin\n" +
+            "_payload = _json.loads(_sys.stdin.read())\n" +
             "rows = _payload.get('rows', [])\n" +
+            "\n" +
             "# ---- user script begin ----\n" +
-            "%s\n" +
+            "{{USER_CODE}}\n" +
             "# ---- user script end ----\n" +
+            "\n" +
             "if 'output_rows' in dir():\n" +
-            "    sys.stdout.write(json.dumps({'rows': output_rows}))\n" +
+            "    _sys.stdout.write(_json.dumps({'rows': output_rows}))\n" +
             "else:\n" +
-            "    sys.stdout.write(json.dumps({'rows': rows}))\n";
+            "    _sys.stdout.write(_json.dumps({'rows': rows}))\n";
 
     private final ComputeDatasetResolver computeDatasetResolver;
     private final ComputeResultFactory computeResultFactory;
     private final NodeMetadataApplicationService nodeMetadataApplicationService;
     private final ObjectMapper objectMapper;
+    private final SandboxProperties sandboxProperties;
 
     public PythonScriptNodeExecutor(ComputeDatasetResolver computeDatasetResolver,
                                     ComputeResultFactory computeResultFactory,
                                     NodeMetadataApplicationService nodeMetadataApplicationService,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    SandboxProperties sandboxProperties) {
         this.computeDatasetResolver = computeDatasetResolver;
         this.computeResultFactory = computeResultFactory;
         this.nodeMetadataApplicationService = nodeMetadataApplicationService;
         this.objectMapper = objectMapper;
+        this.sandboxProperties = sandboxProperties;
     }
 
     @Override
@@ -121,62 +162,94 @@ public class PythonScriptNodeExecutor implements NodeExecutor<PythonScriptNodeCo
     private List<Map<String, Object>> runScript(String userScript,
                                                  List<Map<String, Object>> inputRows,
                                                  int timeoutSeconds) {
+        String mode = sandboxProperties.getPythonMode();
+        if ("firejail".equals(mode)) {
+            return runWithFirejail(userScript, inputRows, timeoutSeconds);
+        } else {
+            return runWithRestrictedPython(userScript, inputRows, timeoutSeconds);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Mode A: firejail (Linux)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Executes the user script inside a {@code firejail} sandbox (Linux only).
+     *
+     * <p>Requires {@code firejail} to be installed. Key restrictions applied:
+     * <ul>
+     *   <li>{@code --net=none} — no outbound network</li>
+     *   <li>{@code --read-only=/} — root filesystem is read-only</li>
+     *   <li>{@code --read-write=<tempDir>} — only the script's temp directory is writable</li>
+     *   <li>{@code --noroot} — prevents privilege escalation</li>
+     * </ul></p>
+     */
+    private List<Map<String, Object>> runWithFirejail(String userScript,
+                                                       List<Map<String, Object>> inputRows,
+                                                       int timeoutSeconds) {
+        Path scriptFile = null;
+        Path tempDir = null;
+        try {
+            tempDir = Files.createTempDirectory("py_node_firejail_");
+            String wrappedScript = buildRestrictedScript(userScript);
+            scriptFile = tempDir.resolve("script.py");
+            Files.writeString(scriptFile, wrappedScript, StandardCharsets.UTF_8);
+
+            String inputJson = objectMapper.writeValueAsString(Map.of("rows", inputRows));
+
+            ProcessBuilder pb = new ProcessBuilder(
+                    "firejail",
+                    "--quiet",
+                    "--net=none",
+                    "--read-only=/",
+                    "--read-write=" + tempDir.toAbsolutePath(),
+                    "--noroot",
+                    sandboxProperties.getPythonBin(),
+                    scriptFile.toAbsolutePath().toString()
+            );
+            pb.redirectErrorStream(true);
+
+            return executeProcess(pb, inputJson, timeoutSeconds);
+        } catch (BaseBusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BaseBusinessException(ErrorCode.INTERNAL_ERROR,
+                    "python script (firejail) execution error: " + e.getMessage());
+        } finally {
+            deleteQuietly(tempDir);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Mode B: restricted Python (macOS / universal)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Executes the user script with a Python-level import hook that blocks dangerous modules.
+     *
+     * <p>This mode works on all platforms without additional OS tools. The harness patches
+     * {@code builtins.__import__} before running user code, blocking any attempt to import
+     * modules in the configured blocked list.</p>
+     */
+    private List<Map<String, Object>> runWithRestrictedPython(String userScript,
+                                                               List<Map<String, Object>> inputRows,
+                                                               int timeoutSeconds) {
         Path scriptFile = null;
         try {
-            // Materialize wrapped script to a temp file
-            String wrappedScript = String.format(SCRIPT_TEMPLATE, userScript);
+            String wrappedScript = buildRestrictedScript(userScript);
             scriptFile = Files.createTempFile("py_node_", ".py");
             Files.writeString(scriptFile, wrappedScript, StandardCharsets.UTF_8);
 
             String inputJson = objectMapper.writeValueAsString(Map.of("rows", inputRows));
 
-            ProcessBuilder pb = new ProcessBuilder("python3", scriptFile.toAbsolutePath().toString());
-            pb.redirectErrorStream(true);   // merge stderr → stdout for unified error capture
-            Process process = pb.start();
+            ProcessBuilder pb = new ProcessBuilder(
+                    sandboxProperties.getPythonBin(),
+                    scriptFile.toAbsolutePath().toString()
+            );
+            pb.redirectErrorStream(true);
 
-            // Write stdin in a daemon thread to avoid pipe deadlock
-            byte[] inputBytes = inputJson.getBytes(StandardCharsets.UTF_8);
-            Thread stdinWriter = new Thread(() -> {
-                try (OutputStream os = process.getOutputStream()) {
-                    os.write(inputBytes);
-                } catch (IOException ignored) {
-                    // process may have died early
-                }
-            });
-            stdinWriter.setDaemon(true);
-            stdinWriter.start();
-
-            // Read stdout in a background future; the real timeout guard is waitFor() below.
-            // Doing this avoids blocking the main thread when the script produces no output
-            // before the OS pipe buffer fills up.
-            CompletableFuture<byte[]> outputFuture = CompletableFuture.supplyAsync(() -> {
-                try {
-                    return process.getInputStream().readAllBytes();
-                } catch (IOException e) {
-                    return new byte[0];
-                }
-            });
-
-            // Enforce timeout: waitFor blocks until the process exits or the deadline passes
-            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly(); // closes the stream → outputFuture unblocks
-                throw new BaseBusinessException(ErrorCode.INTERNAL_ERROR,
-                        "python script timed out after " + timeoutSeconds + "s");
-            }
-
-            // Process exited normally; stdout is fully buffered — collect it quickly
-            byte[] outputBytes = outputFuture.get(5, TimeUnit.SECONDS);
-            int exitCode = process.exitValue();
-            String output = new String(outputBytes, StandardCharsets.UTF_8).trim();
-
-            if (exitCode != 0) {
-                throw new BaseBusinessException(ErrorCode.INTERNAL_ERROR,
-                        "python script failed (exit=" + exitCode + "): " + truncate(output, 500));
-            }
-
-            return parseOutputRows(output);
-
+            return executeProcess(pb, inputJson, timeoutSeconds);
         } catch (BaseBusinessException e) {
             throw e;
         } catch (Exception e) {
@@ -192,6 +265,83 @@ public class PythonScriptNodeExecutor implements NodeExecutor<PythonScriptNodeCo
             }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Shared process execution logic
+    // -------------------------------------------------------------------------
+
+    private List<Map<String, Object>> executeProcess(ProcessBuilder pb,
+                                                      String inputJson,
+                                                      int timeoutSeconds) throws Exception {
+        Process process = pb.start();
+
+        // Write stdin in a daemon thread to avoid pipe deadlock
+        byte[] inputBytes = inputJson.getBytes(StandardCharsets.UTF_8);
+        Thread stdinWriter = new Thread(() -> {
+            try (OutputStream os = process.getOutputStream()) {
+                os.write(inputBytes);
+            } catch (IOException ignored) {
+                // process may have died early
+            }
+        });
+        stdinWriter.setDaemon(true);
+        stdinWriter.start();
+
+        // Read stdout asynchronously to prevent pipe-buffer deadlock
+        CompletableFuture<byte[]> outputFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return process.getInputStream().readAllBytes();
+            } catch (IOException e) {
+                return new byte[0];
+            }
+        });
+
+        // Enforce timeout
+        boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new BaseBusinessException(ErrorCode.INTERNAL_ERROR,
+                    "python script timed out after " + timeoutSeconds + "s");
+        }
+
+        byte[] outputBytes = outputFuture.get(5, TimeUnit.SECONDS);
+        int exitCode = process.exitValue();
+        String output = new String(outputBytes, StandardCharsets.UTF_8).trim();
+
+        if (exitCode != 0) {
+            // Detect sandbox import block errors
+            if (output.contains("blocked by the execution sandbox")) {
+                throw new BaseBusinessException(ErrorCode.SANDBOX_REJECTED,
+                        "python script attempted a forbidden import: " + truncate(output, 300));
+            }
+            throw new BaseBusinessException(ErrorCode.INTERNAL_ERROR,
+                    "python script failed (exit=" + exitCode + "): " + truncate(output, 500));
+        }
+
+        return parseOutputRows(output);
+    }
+
+    // -------------------------------------------------------------------------
+    // Script construction
+    // -------------------------------------------------------------------------
+
+    /**
+     * Builds the security-hardened script by substituting blocked-modules list and user code
+     * into {@link #RESTRICTED_TEMPLATE}.
+     */
+    private String buildRestrictedScript(String userCode) {
+        String blockedModulesPyLiteral = sandboxProperties.pythonBlockedModules().stream()
+                .map(m -> "'" + m + "'")
+                .collect(Collectors.joining(", ", "frozenset({", "})"));
+
+        return RESTRICTED_TEMPLATE
+                .replace("{{BLOCKED_MODULES}}", blockedModulesPyLiteral)
+                .replace("{{USER_CODE}}", userCode);
+    }
+
+    // -------------------------------------------------------------------------
+    // Output parsing & helpers
+    // -------------------------------------------------------------------------
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> parseOutputRows(String output) {
@@ -226,5 +376,17 @@ public class PythonScriptNodeExecutor implements NodeExecutor<PythonScriptNodeCo
     private String truncate(String s, int max) {
         if (s == null) return "";
         return s.length() <= max ? s : s.substring(0, max) + "...";
+    }
+
+    private void deleteQuietly(Path dir) {
+        if (dir == null) return;
+        try {
+            Files.walk(dir)
+                    .sorted(java.util.Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(java.io.File::delete);
+        } catch (IOException ignored) {
+            // best-effort cleanup
+        }
     }
 }

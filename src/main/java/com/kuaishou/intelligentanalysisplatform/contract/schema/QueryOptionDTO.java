@@ -19,4 +19,8 @@ public class QueryOptionDTO {
     private Integer cacheTtlSeconds;
     private Boolean readOnly;
     private Boolean asyncPreferred;
+    /** 流式分块大小（行数），默认 500；仅 streaming=true 时生效 */
+    private Integer chunkSize;
+    /** 是否启用 SSE 流式推送 */
+    private Boolean streaming;
 }

@@ -11,6 +11,7 @@ import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ExecutionStatus;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ResultKind;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.AsyncSubmitResponseDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasetDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeRunMetaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.QueryParameterDTO;
@@ -73,7 +74,7 @@ public class SqlQueryNodeExecutor implements NodeExecutor<SqlQueryNodeConfigDTO>
                 .status(result.getStatus())
                 .result(StandardResultDTO.builder()
                         .kind(ResultKind.DATASET)
-                        .dataset(result.getDataset())
+                        .dataset(enrichDataset(result.getDataset(), config.getSqlTemplate(), config.getDatasourceId()))
                         .build())
                 .meta(NodeRunMetaDTO.builder()
                         .elapsedMs(System.currentTimeMillis() - start)
@@ -132,5 +133,19 @@ public class SqlQueryNodeExecutor implements NodeExecutor<SqlQueryNodeConfigDTO>
             return context.getRunId() + "-" + context.getNodeId();
         }
         return UUID.randomUUID().toString();
+    }
+
+    private DatasetDTO enrichDataset(DatasetDTO dataset, String sourceSql, String sourceDatasourceId) {
+        if (dataset == null) {
+            return null;
+        }
+        return DatasetDTO.builder()
+                .schema(dataset.getSchema())
+                .rows(dataset.getRows())
+                .page(dataset.getPage())
+                .stat(dataset.getStat())
+                .sourceSql(sourceSql)
+                .sourceDatasourceId(sourceDatasourceId)
+                .build();
     }
 }

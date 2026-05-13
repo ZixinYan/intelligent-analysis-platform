@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { PanelFieldDTO } from '@/types/contract'
+import AiSqlDialog from '@/components/ai/AiSqlDialog.vue'
 
 const props = defineProps<{
   field: PanelFieldDTO
@@ -13,9 +14,16 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
+const showAiDialog = ref(false)
+
 const currentTable = computed(() => {
   const tableId = props.model?.tableId
   return typeof tableId === 'string' && tableId ? tableId : null
+})
+
+const currentDatasourceId = computed(() => {
+  const ds = props.model?.datasourceId
+  return typeof ds === 'string' && ds ? ds : null
 })
 
 function handleInput(event: Event) {
@@ -27,6 +35,11 @@ function insertTableRef() {
   const current = String(props.modelValue ?? '').trim()
   const template = `SELECT *\nFROM ${currentTable.value}\nLIMIT 100`
   emit('update:modelValue', current ? `${current}\n\n/* table ref: ${currentTable.value} */` : template)
+}
+
+function onAiSqlAccepted(sql: string) {
+  emit('update:modelValue', sql)
+  showAiDialog.value = false
 }
 </script>
 
@@ -41,6 +54,13 @@ function insertTableRef() {
         :disabled="disabled"
         @click="insertTableRef"
       >插入示例 SQL</button>
+      <button
+        v-if="currentDatasourceId"
+        type="button"
+        class="sql-table-hint__btn sql-table-hint__btn--ai"
+        :disabled="disabled"
+        @click="showAiDialog = true"
+      >✦ AI 生成</button>
     </div>
     <textarea
       class="sql-editor"
@@ -50,6 +70,14 @@ function insertTableRef() {
       :disabled="disabled"
       spellcheck="false"
       @input="handleInput"
+    />
+
+    <AiSqlDialog
+      v-if="showAiDialog && currentDatasourceId && currentTable"
+      :datasourceId="currentDatasourceId"
+      :tableName="currentTable"
+      @accept="onAiSqlAccepted"
+      @cancel="showAiDialog = false"
     />
   </div>
 </template>
@@ -105,6 +133,16 @@ function insertTableRef() {
 .sql-table-hint__btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.sql-table-hint__btn--ai {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #a5b4fc;
+}
+
+.sql-table-hint__btn--ai:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.35);
 }
 
 .sql-editor {

@@ -229,7 +229,63 @@ export interface QueryOptionDTO {
   timeoutMs?: number
   limit?: number
   useCache?: boolean
+  /** 流式分块大小（行数），默认 500 */
+  chunkSize?: number
+  /** 是否启用 SSE 流式推送 */
+  streaming?: boolean
 }
+
+// ---------------------------------------------------------------------------
+// 流式执行 SSE 事件类型
+// ---------------------------------------------------------------------------
+
+export interface NodeStartEventDTO {
+  eventType: 'node_start'
+  runId: string
+  nodeId: string
+  nodeType: string
+  startedAt: number
+}
+
+export interface NodeProgressEventDTO {
+  eventType: 'node_progress'
+  runId: string
+  nodeId: string
+  chunkIndex: number
+  totalChunks?: number
+  rows: Record<string, unknown>[]
+}
+
+export interface NodeResultEventDTO {
+  eventType: 'node_result'
+  runId: string
+  nodeId: string
+  status: string
+  result?: StandardResultDTO
+  meta?: NodeRunMetaDTO
+}
+
+export interface WorkflowDoneEventDTO {
+  eventType: 'workflow_done'
+  runId: string
+  workflowId: string
+  status: string
+  elapsedMs: number
+}
+
+export interface WorkflowErrorEventDTO {
+  eventType: 'workflow_error'
+  runId: string
+  workflowId: string
+  error: ErrorInfoDTO
+}
+
+export type WorkflowStreamEventDTO =
+  | NodeStartEventDTO
+  | NodeProgressEventDTO
+  | NodeResultEventDTO
+  | WorkflowDoneEventDTO
+  | WorkflowErrorEventDTO
 
 export interface QueryParameterDTO {
   name?: string
@@ -246,6 +302,22 @@ export interface SqlQueryNodeConfigDTO extends BaseNodeConfigDTO {
   sqlTemplate?: string
   parameters?: QueryParameterDTO[]
   queryOption?: QueryOptionDTO
+}
+
+export type JoinType = 'INNER' | 'LEFT' | 'RIGHT' | 'FULL'
+
+export interface JoinCondition {
+  leftField: string
+  rightField: string
+}
+
+export interface DataJoinNodeConfigDTO extends BaseNodeConfigDTO {
+  leftDatasetRef?: string
+  rightDatasetRef?: string
+  joinType?: JoinType
+  on?: JoinCondition[]
+  selectColumns?: string[]
+  memoryRowLimit?: number
 }
 
 export interface QueryRequestDTO {
@@ -368,6 +440,10 @@ export interface DatasetDTO {
     fields?: FieldSchemaDTO[]
   }
   total?: number
+  /** 产生此数据集的原始 SQL（下推时作为子查询使用） */
+  sourceSql?: string
+  /** 来源数据源 ID（必须与下游算子一致才可下推） */
+  sourceDatasourceId?: string
 }
 
 export interface QueryResultDTO {
@@ -405,6 +481,7 @@ export interface WorkflowEdgeDTO {
   target: string
   sourceHandle?: string
   targetHandle?: string
+  condition?: 'true' | 'false' | null   // null = 无条件边（向后兼容）
 }
 
 export interface WorkflowPositionDTO {
@@ -420,6 +497,30 @@ export interface WorkflowDefinitionDTO {
   positions: Record<string, WorkflowPositionDTO>
   createdAt?: number
   updatedAt?: number
+  currentVersionId?: string
+  currentVersionNumber?: number
+  publishedVersionId?: string
+  publishedVersionNumber?: number
+}
+
+export interface WorkflowVersionDTO {
+  versionId: string
+  workflowId: string
+  versionNumber: number
+  changeSummary?: string
+  published: boolean
+  createdBy?: string
+  createdAt: number
+}
+
+export interface WorkflowVersionDiffDTO {
+  fromVersion: number
+  toVersion: number
+  addedNodeIds: string[]
+  removedNodeIds: string[]
+  modifiedNodeIds: string[]
+  addedEdgeIds: string[]
+  removedEdgeIds: string[]
 }
 
 export interface WorkflowSaveRequestDTO {
@@ -433,6 +534,14 @@ export interface WorkflowSaveRequestDTO {
 export interface WorkflowQueryRequestDTO {
   page?: number
   pageSize?: number
+  context?: RequestContextDTO
+}
+
+export interface WorkflowRunRequestDTO {
+  workflowId?: string
+  nodes: WorkflowNodeDTO[]
+  edges?: WorkflowEdgeDTO[]
+  inputs?: Record<string, unknown>
   context?: RequestContextDTO
 }
 
@@ -506,3 +615,62 @@ export interface DatasourceTestConnectionResultDTO {
   message?: string
   serverVersion?: string
 }
+
+// ---------------------------------------------------------------------------
+// Phase 8: 工作流执行历史
+// ---------------------------------------------------------------------------
+
+export interface NodeTraceDTO {
+  nodeId: string
+  nodeType: string
+  status: string
+  elapsedMs?: number
+  cached?: boolean
+  rowCount?: number
+  pushdown?: boolean
+  error?: string
+}
+
+export interface WorkflowRunLogDTO {
+  runId: string
+  workflowId: string
+  versionId?: string
+  tenantId?: string
+  status: string
+  triggerType: string
+  nodeCount?: number
+  startedAt: number
+  finishedAt?: number
+  elapsedMs?: number
+  createdBy?: string
+  nodeTraces?: NodeTraceDTO[]
+}
+
+// ---------------------------------------------------------------------------
+// Phase 10: AI 辅助工作流
+// ---------------------------------------------------------------------------
+
+export interface AiSqlRequestDTO {
+  datasourceId: string
+  tableName: string
+  description: string
+}
+
+export interface AiChartRecommendRequestDTO {
+  fields: FieldSchemaDTO[]
+  context?: string
+}
+
+export interface ChartRecommendationDTO {
+  chartType: ChartType
+  confidence: number
+  reason: string
+  fieldMapping?: Record<string, string>
+}
+
+export interface AiWorkflowBuildRequestDTO {
+  datasourceId: string
+  description: string
+  workflowName?: string
+}
+

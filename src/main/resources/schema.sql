@@ -26,6 +26,27 @@ BEGIN
     END IF;
 END //
 
+-- Helper: conditionally add a column (MySQL 8.x compatible)
+CREATE PROCEDURE IF NOT EXISTS try_add_column(
+    IN tbl_name VARCHAR(64),
+    IN col_name VARCHAR(64),
+    IN col_def  VARCHAR(256)
+)
+BEGIN
+    DECLARE col_count INT DEFAULT 0;
+    SELECT COUNT(*) INTO col_count
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name  = tbl_name
+          AND column_name = col_name;
+    IF col_count = 0 THEN
+        SET @ddl = CONCAT('ALTER TABLE ', tbl_name, ' ADD COLUMN ', col_name, ' ', col_def);
+        PREPARE stmt FROM @ddl;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END //
+
 -- ============================================================
 -- Tables
 -- ============================================================
@@ -84,6 +105,27 @@ CREATE TABLE IF NOT EXISTS workflow_definition (
 
 CALL try_create_index('idx_workflow_definition_tenant_updated', 'workflow_definition', 'tenant_id, updated_at', FALSE) //
 CALL try_create_index('uq_workflow_definition_id_tenant', 'workflow_definition', 'workflow_id, tenant_id', TRUE) //
+
+-- Version tracking columns (added by Phase 4)
+CALL try_add_column('workflow_definition', 'current_version_id',   'VARCHAR(64)') //
+CALL try_add_column('workflow_definition', 'published_version_id', 'VARCHAR(64)') //
+
+CREATE TABLE IF NOT EXISTS workflow_version (
+    version_id      VARCHAR(64) PRIMARY KEY,
+    workflow_id     VARCHAR(64) NOT NULL,
+    tenant_id       VARCHAR(64) NOT NULL,
+    version_number  INT NOT NULL,
+    definition_json MEDIUMTEXT NOT NULL,
+    change_summary  VARCHAR(1000),
+    published       BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by      VARCHAR(64),
+    created_at      BIGINT NOT NULL
+) //
+
+CALL try_create_index('idx_wf_version_workflow_num', 'workflow_version',
+    'workflow_id, version_number', FALSE) //
+CALL try_create_index('idx_wf_version_tenant_published', 'workflow_version',
+    'tenant_id, workflow_id, published', FALSE) //
 
 CREATE TABLE IF NOT EXISTS datasource_config (
     id VARCHAR(64) PRIMARY KEY,
@@ -156,5 +198,29 @@ CREATE TABLE IF NOT EXISTS export_file (
 CALL try_create_index('idx_export_file_tenant', 'export_file', 'tenant_id', FALSE) //
 CALL try_create_index('idx_export_file_expires', 'export_file', 'expires_at', FALSE) //
 
+-- ============================================================
+-- Phase 8: 工作流执行记录表
+-- ============================================================
+CREATE TABLE IF NOT EXISTS workflow_run_log (
+    run_id          VARCHAR(64) PRIMARY KEY,
+    workflow_id     VARCHAR(64) NOT NULL,
+    version_id      VARCHAR(64),
+    tenant_id       VARCHAR(64) NOT NULL,
+    trigger_type    VARCHAR(16) NOT NULL,
+    status          VARCHAR(16) NOT NULL,
+    node_count      INT,
+    started_at      BIGINT NOT NULL,
+    finished_at     BIGINT,
+    elapsed_ms      BIGINT,
+    node_trace_json MEDIUMTEXT,
+    created_by      VARCHAR(64)
+) //
+
+CALL try_create_index('idx_run_log_workflow_started', 'workflow_run_log',
+    'workflow_id, started_at', FALSE) //
+CALL try_create_index('idx_run_log_tenant_status', 'workflow_run_log',
+    'tenant_id, status, started_at', FALSE) //
+
 -- Clean up
 DROP PROCEDURE IF EXISTS try_create_index //
+DROP PROCEDURE IF EXISTS try_add_column //

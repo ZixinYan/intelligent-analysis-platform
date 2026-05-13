@@ -30,6 +30,8 @@ const categoryLabel = computed(() => ({
   GOVERNANCE: '治理',
 }[props.data.meta?.category ?? 'QUERY'] ?? ''))
 
+const isConditionNode = computed(() => props.data.meta?.nodeType === 'condition')
+
 const statusConfig = computed(() => ({
   idle:    { color: '#64748b', label: '就绪',   dot: false },
   draft:   { color: '#f59e0b', label: '草稿',   dot: false },
@@ -37,6 +39,7 @@ const statusConfig = computed(() => ({
   running: { color: '#a855f7', label: '运行中', dot: true  },
   success: { color: '#22c55e', label: '成功',   dot: false },
   error:   { color: '#ef4444', label: '错误',   dot: false },
+  skipped: { color: '#94a3b8', label: '已跳过', dot: false },
 }[props.data.status] ?? { color: '#64748b', label: props.data.status, dot: false }))
 
 interface UsageHint { label: string; icon: string }
@@ -142,7 +145,24 @@ const showTooltip = ref(false)
     </Transition>
 
     <Handle id="input"  type="target" :position="Position.Left"  class="ans__handle ans__handle--in" />
-    <Handle id="output" type="source" :position="Position.Right" class="ans__handle ans__handle--out" />
+    <!-- CONDITION 节点：渲染 true（绿色）和 false（红色）两个出口；其余节点渲染单一出口 -->
+    <template v-if="isConditionNode">
+      <Handle
+        id="true"
+        type="source"
+        :position="Position.Right"
+        class="ans__handle ans__handle--out ans__handle--true"
+        style="top: calc(35% - 10px)"
+      />
+      <Handle
+        id="false"
+        type="source"
+        :position="Position.Right"
+        class="ans__handle ans__handle--out ans__handle--false"
+        style="top: calc(65% - 10px)"
+      />
+    </template>
+    <Handle v-else id="output" type="source" :position="Position.Right" class="ans__handle ans__handle--out" />
 
     <!-- 节点主体 -->
     <div class="ans" :style="{ '--cat': categoryColor }">
@@ -426,6 +446,19 @@ const showTooltip = ref(false)
   right: -15px !important;
   top: calc(50% - 13px) !important;
 }
+
+/* CONDITION 节点：true 分支绿色，false 分支红色 */
+.ans__handle--true {
+  border-color: #22c55e !important;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.5), 0 0 12px -2px #22c55e !important;
+}
+.ans__handle--true::after { color: #22c55e !important; }
+
+.ans__handle--false {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.5), 0 0 12px -2px #ef4444 !important;
+}
+.ans__handle--false::after { color: #ef4444 !important; }
 
 /* ── 头部 ─────────────────────────────────── */
 .ans__header {

@@ -46,8 +46,8 @@ public class ComputeResultFactory {
                 .meta(NodeRunMetaDTO.builder()
                         .elapsedMs(elapsedMs)
                         .capabilityType(capabilityType)
-                        .computeEngine("MEMORY")
-                        .pushdownApplied(false)
+                        .computeEngine(pushdownPlanned ? "DB" : "MEMORY")
+                        .pushdownApplied(pushdownPlanned)
                         .executionBoundary(executionBoundary)
                         .audit(normalizedAudit)
                         .build())
@@ -60,9 +60,9 @@ public class ComputeResultFactory {
                                       String executionBoundary,
                                       ComputeAuditDTO audit) {
         Map<String, Object> extensions = new LinkedHashMap<>();
-        extensions.put("computeEngine", "MEMORY");
+        extensions.put("computeEngine", pushdownPlanned ? "DB" : "MEMORY");
         extensions.put("pushdownPlanned", pushdownPlanned);
-        extensions.put("pushdownApplied", false);
+        extensions.put("pushdownApplied", pushdownPlanned);
         extensions.put("capabilityType", capabilityType);
         extensions.put("executionBoundary", executionBoundary);
         if (audit != null) {
@@ -80,6 +80,8 @@ public class ComputeResultFactory {
                 .rows(dataset == null ? null : dataset.getRows())
                 .page(dataset == null ? null : dataset.getPage())
                 .stat(stat)
+                .sourceSql(dataset == null ? null : dataset.getSourceSql())
+                .sourceDatasourceId(dataset == null ? null : dataset.getSourceDatasourceId())
                 .build();
     }
 
@@ -128,6 +130,9 @@ public class ComputeResultFactory {
         }
         if ("formula".equals(capabilityType)) {
             return "IN_MEMORY_DERIVED_METRIC";
+        }
+        if ("data_join".equals(capabilityType)) {
+            return pushdownPlanned ? "SQL_JOIN_PUSHDOWN" : "IN_MEMORY_HASH_JOIN";
         }
         return "IN_MEMORY_COMPUTE";
     }

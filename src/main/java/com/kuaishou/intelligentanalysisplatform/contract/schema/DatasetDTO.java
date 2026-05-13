@@ -13,4 +13,8 @@ public class DatasetDTO {
     private List<Map<String, Object>> rows;
     private DatasetPageDTO page;
     private DatasetStatDTO stat;
+    /** 产生此数据集的原始 SQL，下推时作为子查询使用 */
+    private String sourceSql;
+    /** 来源数据源 ID，下推时必须与下游算子一致 */
+    private String sourceDatasourceId;
 }

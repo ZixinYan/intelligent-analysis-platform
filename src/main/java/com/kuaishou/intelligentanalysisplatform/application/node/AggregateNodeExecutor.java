@@ -4,19 +4,31 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
+import com.kuaishou.intelligentanalysisplatform.application.DatasourceApplicationService;
 import com.kuaishou.intelligentanalysisplatform.application.NodeMetadataApplicationService;
+import com.kuaishou.intelligentanalysisplatform.application.QueryApplicationService;
+import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeCapabilityRegistry;
 import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeDatasetResolver;
 import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeResultFactory;
 import com.kuaishou.intelligentanalysisplatform.application.compute.InMemoryAggregateComputeService;
+import com.kuaishou.intelligentanalysisplatform.application.compute.pushdown.AggregateSqlGenerator;
+import com.kuaishou.intelligentanalysisplatform.application.compute.pushdown.DatasourceDialect;
+import com.kuaishou.intelligentanalysisplatform.application.compute.pushdown.PushdownDecider;
+import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceType;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.AggregateMetricDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.AggregateNodeConfigDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.ComputeAuditDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.ComputeStepDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasetDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeMetaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeResultDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.QueryRequestDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.QueryResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.SortFieldDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.ValidateResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.spi.NodeExecuteContextDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.spi.NodeExecutor;
 import com.kuaishou.intelligentanalysisplatform.contract.spi.ValidationResultDTO;
@@ -28,15 +40,30 @@ public class AggregateNodeExecutor implements NodeExecutor<AggregateNodeConfigDT
     private final ComputeDatasetResolver computeDatasetResolver;
     private final InMemoryAggregateComputeService aggregateComputeService;
     private final ComputeResultFactory computeResultFactory;
+    private final PushdownDecider pushdownDecider;
+    private final ComputeCapabilityRegistry capabilityRegistry;
+    private final AggregateSqlGenerator aggregateSqlGenerator;
+    private final QueryApplicationService queryApplicationService;
+    private final DatasourceApplicationService datasourceApplicationService;
 
     public AggregateNodeExecutor(NodeMetadataApplicationService nodeMetadataApplicationService,
                                  ComputeDatasetResolver computeDatasetResolver,
                                  InMemoryAggregateComputeService aggregateComputeService,
-                                 ComputeResultFactory computeResultFactory) {
+                                 ComputeResultFactory computeResultFactory,
+                                 PushdownDecider pushdownDecider,
+                                 ComputeCapabilityRegistry capabilityRegistry,
+                                 AggregateSqlGenerator aggregateSqlGenerator,
+                                 QueryApplicationService queryApplicationService,
+                                 DatasourceApplicationService datasourceApplicationService) {
         this.nodeMetadataApplicationService = nodeMetadataApplicationService;
         this.computeDatasetResolver = computeDatasetResolver;
         this.aggregateComputeService = aggregateComputeService;
         this.computeResultFactory = computeResultFactory;
+        this.pushdownDecider = pushdownDecider;
+        this.capabilityRegistry = capabilityRegistry;
+        this.aggregateSqlGenerator = aggregateSqlGenerator;
+        this.queryApplicationService = queryApplicationService;
+        this.datasourceApplicationService = datasourceApplicationService;
     }
 
     @Override
@@ -48,12 +75,33 @@ public class AggregateNodeExecutor implements NodeExecutor<AggregateNodeConfigDT
     public NodeResultDTO execute(NodeExecuteContextDTO context, AggregateNodeConfigDTO config) {
         long start = System.currentTimeMillis();
         DatasetDTO input = computeDatasetResolver.resolve(config.getDatasetRef(), context.getUpstreamResults());
-        DatasetDTO output = aggregateComputeService.compute(config, input);
+
+        DatasourceType dsType = resolveDatasourceType(input, context);
+        boolean pushdown = pushdownDecider.canPushdown(capabilityRegistry.getByCode("aggregate"), input, dsType);
+
+        DatasetDTO output;
+        if (pushdown) {
+            DatasourceDialect dialect = DatasourceDialect.from(dsType);
+            String pushdownSql = aggregateSqlGenerator.generate(input.getSourceSql(), config, dialect);
+            QueryRequestDTO queryReq = buildPushdownRequest(input.getSourceDatasourceId(), pushdownSql, context);
+            ValidateResultDTO validateResult = queryApplicationService.validate(queryReq);
+            if (validateResult.isValid()) {
+                QueryResultDTO result = queryApplicationService.preview(queryReq);
+                output = enrichSourceInfo(result.getDataset(), pushdownSql, input.getSourceDatasourceId());
+            } else {
+                // SQL Guard 拒绝，回退到内存计算
+                pushdown = false;
+                output = aggregateComputeService.compute(config, input);
+            }
+        } else {
+            output = aggregateComputeService.compute(config, input);
+        }
+
         return computeResultFactory.success(
                 context.getNodeId(),
                 supportType(),
                 output,
-                Boolean.TRUE.equals(config.getPushdownEnabled()),
+                pushdown,
                 supportType(),
                 System.currentTimeMillis() - start,
                 buildAudit(config, input, output)
@@ -76,6 +124,42 @@ public class AggregateNodeExecutor implements NodeExecutor<AggregateNodeConfigDT
     @Override
     public NodeMetaDTO metadata() {
         return nodeMetadataApplicationService.getNodeDefinition(supportType());
+    }
+
+    private DatasourceType resolveDatasourceType(DatasetDTO input, NodeExecuteContextDTO context) {
+        if (input == null || input.getSourceDatasourceId() == null || input.getSourceDatasourceId().isBlank()) {
+            return null;
+        }
+        try {
+            DatasourceDTO ds = datasourceApplicationService.getById(input.getSourceDatasourceId(), context.getRequestContext());
+            return ds == null ? null : ds.getType();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private QueryRequestDTO buildPushdownRequest(String datasourceId, String sql, NodeExecuteContextDTO context) {
+        return QueryRequestDTO.builder()
+                .requestId(UUID.randomUUID().toString())
+                .datasourceId(datasourceId)
+                .sql(sql)
+                .parameters(Map.of())
+                .context(context.getRequestContext())
+                .build();
+    }
+
+    private DatasetDTO enrichSourceInfo(DatasetDTO dataset, String sourceSql, String sourceDatasourceId) {
+        if (dataset == null) {
+            return null;
+        }
+        return DatasetDTO.builder()
+                .schema(dataset.getSchema())
+                .rows(dataset.getRows())
+                .page(dataset.getPage())
+                .stat(dataset.getStat())
+                .sourceSql(sourceSql)
+                .sourceDatasourceId(sourceDatasourceId)
+                .build();
     }
 
     private ComputeAuditDTO buildAudit(AggregateNodeConfigDTO config, DatasetDTO input, DatasetDTO output) {

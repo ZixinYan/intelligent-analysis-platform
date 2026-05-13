@@ -1,4 +1,4 @@
-export type AnalysisNodeStatus = 'idle' | 'draft' | 'valid' | 'running' | 'success' | 'error'
+export type AnalysisNodeStatus = 'idle' | 'draft' | 'valid' | 'running' | 'success' | 'error' | 'skipped'
 
 export interface WorkflowNodeData {
   nodeType: string
@@ -27,4 +27,6 @@ export interface WorkflowEdge {
   sourceHandle?: string | null
   targetHandle?: string | null
   animated?: boolean
+  condition?: 'true' | 'false' | null   // null = 无条件边
+  conditionLabel?: string               // 画布标注文字
 }

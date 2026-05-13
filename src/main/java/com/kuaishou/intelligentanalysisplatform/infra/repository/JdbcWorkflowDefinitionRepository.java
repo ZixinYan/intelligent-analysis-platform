@@ -22,9 +22,11 @@ public class JdbcWorkflowDefinitionRepository implements WorkflowDefinitionRepos
     public void save(WorkflowDefinition definition) {
         jdbcTemplate.update("""
                 INSERT INTO workflow_definition (
-                    workflow_id, tenant_id, workflow_name, definition_json, operator_id, created_at, updated_at
+                    workflow_id, tenant_id, workflow_name, definition_json, operator_id,
+                    created_at, updated_at, current_version_id, published_version_id
                 ) VALUES (
-                    :workflowId, :tenantId, :workflowName, :definitionJson, :operatorId, :createdAt, :updatedAt
+                    :workflowId, :tenantId, :workflowName, :definitionJson, :operatorId,
+                    :createdAt, :updatedAt, :currentVersionId, :publishedVersionId
                 )
                 """, toParams(definition));
     }
@@ -43,9 +45,44 @@ public class JdbcWorkflowDefinitionRepository implements WorkflowDefinitionRepos
     }
 
     @Override
+    public void updateVersionRef(WorkflowDefinition definition) {
+        jdbcTemplate.update("""
+                UPDATE workflow_definition
+                SET current_version_id   = :currentVersionId,
+                    published_version_id = :publishedVersionId
+                WHERE workflow_id = :workflowId
+                  AND tenant_id  = :tenantId
+                """, new MapSqlParameterSource()
+                .addValue("workflowId", definition.getWorkflowId())
+                .addValue("tenantId", definition.getTenantId())
+                .addValue("currentVersionId", definition.getCurrentVersionId())
+                .addValue("publishedVersionId", definition.getPublishedVersionId()));
+    }
+
+    @Override
+    public void updateDefinitionAndVersionRef(WorkflowDefinition definition) {
+        jdbcTemplate.update("""
+                UPDATE workflow_definition
+                SET definition_json      = :definitionJson,
+                    updated_at           = :updatedAt,
+                    current_version_id   = :currentVersionId,
+                    published_version_id = :publishedVersionId
+                WHERE workflow_id = :workflowId
+                  AND tenant_id  = :tenantId
+                """, new MapSqlParameterSource()
+                .addValue("workflowId", definition.getWorkflowId())
+                .addValue("tenantId", definition.getTenantId())
+                .addValue("definitionJson", definition.getDefinitionJson())
+                .addValue("updatedAt", definition.getUpdatedAt())
+                .addValue("currentVersionId", definition.getCurrentVersionId())
+                .addValue("publishedVersionId", definition.getPublishedVersionId()));
+    }
+
+    @Override
     public Optional<WorkflowDefinition> findByIdAndTenantId(String workflowId, String tenantId) {
         return jdbcTemplate.query("""
-                SELECT workflow_id, tenant_id, workflow_name, definition_json, operator_id, created_at, updated_at
+                SELECT workflow_id, tenant_id, workflow_name, definition_json, operator_id,
+                       created_at, updated_at, current_version_id, published_version_id
                 FROM workflow_definition
                 WHERE workflow_id = :workflowId
                   AND tenant_id = :tenantId
@@ -53,15 +90,7 @@ public class JdbcWorkflowDefinitionRepository implements WorkflowDefinitionRepos
             if (!rs.next()) {
                 return Optional.empty();
             }
-            return Optional.of(WorkflowDefinition.builder()
-                    .workflowId(rs.getString("workflow_id"))
-                    .tenantId(rs.getString("tenant_id"))
-                    .workflowName(rs.getString("workflow_name"))
-                    .definitionJson(rs.getString("definition_json"))
-                    .operatorId(rs.getString("operator_id"))
-                    .createdAt(rs.getLong("created_at"))
-                    .updatedAt(rs.getLong("updated_at"))
-                    .build());
+            return Optional.of(mapRow(rs));
         });
     }
 
@@ -78,7 +107,8 @@ public class JdbcWorkflowDefinitionRepository implements WorkflowDefinitionRepos
     @Override
     public List<WorkflowDefinition> findByTenantId(String tenantId, int offset, int limit) {
         return jdbcTemplate.query("""
-                SELECT workflow_id, tenant_id, workflow_name, definition_json, operator_id, created_at, updated_at
+                SELECT workflow_id, tenant_id, workflow_name, definition_json, operator_id,
+                       created_at, updated_at, current_version_id, published_version_id
                 FROM workflow_definition
                 WHERE tenant_id = :tenantId
                 ORDER BY updated_at DESC
@@ -86,7 +116,11 @@ public class JdbcWorkflowDefinitionRepository implements WorkflowDefinitionRepos
                 """, new MapSqlParameterSource()
                 .addValue("tenantId", tenantId)
                 .addValue("offset", offset)
-                .addValue("limit", limit), (rs, rowNum) -> WorkflowDefinition.builder()
+                .addValue("limit", limit), (rs, rowNum) -> mapRow(rs));
+    }
+
+    private WorkflowDefinition mapRow(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return WorkflowDefinition.builder()
                 .workflowId(rs.getString("workflow_id"))
                 .tenantId(rs.getString("tenant_id"))
                 .workflowName(rs.getString("workflow_name"))
@@ -94,7 +128,9 @@ public class JdbcWorkflowDefinitionRepository implements WorkflowDefinitionRepos
                 .operatorId(rs.getString("operator_id"))
                 .createdAt(rs.getLong("created_at"))
                 .updatedAt(rs.getLong("updated_at"))
-                .build());
+                .currentVersionId(rs.getString("current_version_id"))
+                .publishedVersionId(rs.getString("published_version_id"))
+                .build();
     }
 
     private MapSqlParameterSource toParams(WorkflowDefinition definition) {
@@ -105,6 +141,8 @@ public class JdbcWorkflowDefinitionRepository implements WorkflowDefinitionRepos
                 .addValue("definitionJson", definition.getDefinitionJson())
                 .addValue("operatorId", definition.getOperatorId())
                 .addValue("createdAt", definition.getCreatedAt())
-                .addValue("updatedAt", definition.getUpdatedAt());
+                .addValue("updatedAt", definition.getUpdatedAt())
+                .addValue("currentVersionId", definition.getCurrentVersionId())
+                .addValue("publishedVersionId", definition.getPublishedVersionId());
     }
 }

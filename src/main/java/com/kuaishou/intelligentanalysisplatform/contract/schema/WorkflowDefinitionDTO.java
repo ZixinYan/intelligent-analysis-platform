@@ -20,4 +20,8 @@ public class WorkflowDefinitionDTO {
     private Map<String, WorkflowPositionDTO> positions;
     private Long createdAt;
     private Long updatedAt;
+    private String currentVersionId;
+    private Integer currentVersionNumber;
+    private String publishedVersionId;
+    private Integer publishedVersionNumber;
 }

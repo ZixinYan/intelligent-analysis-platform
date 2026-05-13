@@ -12,13 +12,16 @@ public enum NodeType {
     FORMULA("formula", NodeCategory.COMPUTE),
     PYTHON_SCRIPT("python_script", NodeCategory.COMPUTE),
     JAVA_CODE("java_code", NodeCategory.COMPUTE),
+    DATA_JOIN("data_join", NodeCategory.COMPUTE),
     CHART_OUTPUT("chart_output", NodeCategory.OUTPUT),
     TABLE_OUTPUT("table_output", NodeCategory.OUTPUT),
     EXPORT_OUTPUT("export_output", NodeCategory.OUTPUT),
     DATA_LIMIT("data_limit", NodeCategory.GOVERNANCE),
     APPROVAL_GATE("approval_gate", NodeCategory.GOVERNANCE),
     CACHE_POLICY("cache_policy", NodeCategory.GOVERNANCE),
-    MASKING("masking", NodeCategory.GOVERNANCE);
+    MASKING("masking", NodeCategory.GOVERNANCE),
+    CONDITION("condition", NodeCategory.GOVERNANCE),
+    ERROR_HANDLER("error_handler", NodeCategory.GOVERNANCE);
 
     private final String code;
     private final NodeCategory category;

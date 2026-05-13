@@ -8,7 +8,9 @@ import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceQueryR
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceTestConnectionRequestDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceTestConnectionResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceUpdateRequestDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.FieldSchemaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.RequestContextDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.ai.TableSchemaDTO;
 
 import java.util.List;
 
@@ -28,4 +30,14 @@ public interface DatasourceApplicationService {
     DatasourceQueryAccessDTO getQueryAccess(String datasourceId, RequestContextDTO context);
 
     List<String> listTables(String datasourceId, RequestContextDTO context);
+
+    /**
+     * 获取指定表的字段 Schema（字段名 + 类型），用于 AI SQL 生成的上下文。
+     */
+    List<FieldSchemaDTO> introspectTableSchema(String datasourceId, String tableName, RequestContextDTO context);
+
+    /**
+     * 批量获取数据源所有表的 Schema，用于 AI 工作流构建。
+     */
+    List<TableSchemaDTO> introspectAllTableSchemas(String datasourceId, RequestContextDTO context);
 }

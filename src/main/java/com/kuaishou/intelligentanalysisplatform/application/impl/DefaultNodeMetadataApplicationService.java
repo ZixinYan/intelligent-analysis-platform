@@ -48,7 +48,10 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 buildPythonScriptDefinition(),
                 buildJavaCodeDefinition(),
                 buildChartOutputDefinition(),
-                buildTableOutputDefinition());
+                buildTableOutputDefinition(),
+                buildConditionDefinition(),
+                buildErrorHandlerDefinition(),
+                buildDataJoinDefinition());
     }
 
     @Override
@@ -974,6 +977,246 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 .build();
     }
 
+    private NodeMetaDTO buildConditionDefinition() {
+        return NodeMetaDTO.builder()
+                .protocolVersion("1.0")
+                .metadataVersion("2026-05-11")
+                .nodeType(NodeType.CONDITION.getCode())
+                .nodeVersion("1.0")
+                .displayName("条件分支")
+                .category(NodeCategory.GOVERNANCE)
+                .description("根据上游数据字段值进行条件判断，激活 true 或 false 出边")
+                .tags(List.of("condition", "branch", "if-else", "governance"))
+                .defaults(Map.of())
+                .configSchema(NodeConfigSchemaDTO.builder()
+                        .schemaType("panel")
+                        .schemaVersion("1.0")
+                        .panelId("analysis.condition")
+                        .layout(Map.of("type", "section-list"))
+                        .sections(List.of(
+                                PanelSectionDTO.builder()
+                                        .key("condition")
+                                        .title("条件配置")
+                                        .order(1)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("sourceNodeId")
+                                                        .label("引用上游节点")
+                                                        .componentType(FieldComponentType.VARIABLE_PICKER)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("选择上游节点")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择上游节点").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("fieldPath")
+                                                        .label("字段路径")
+                                                        .componentType(FieldComponentType.INPUT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(2)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("如 dataset.rows.0.amount")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请填写字段路径").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("operator")
+                                                        .label("运算符")
+                                                        .componentType(FieldComponentType.SELECT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(3)
+                                                        .valueType(ValueType.STRING)
+                                                        .optionsSource(OptionsSourceDTO.builder()
+                                                                .type("static")
+                                                                .staticOptions(List.of(
+                                                                        OptionDTO.builder().value(ConditionOperator.EQ.name()).label("等于 (=)").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.NEQ.name()).label("不等于 (≠)").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.GT.name()).label("大于 (>)").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.GTE.name()).label("大于等于 (≥)").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.LT.name()).label("小于 (<)").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.LTE.name()).label("小于等于 (≤)").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.CONTAINS.name()).label("包含").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.NOT_CONTAINS.name()).label("不包含").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.IN.name()).label("在列表中 (IN)").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.NOT_IN.name()).label("不在列表中 (NOT IN)").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.IS_EMPTY.name()).label("为空").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.IS_NOT_EMPTY.name()).label("不为空").build()))
+                                                                .build())
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择运算符").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("compareValue")
+                                                        .label("比较值")
+                                                        .componentType(FieldComponentType.INPUT)
+                                                        .required(false)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(4)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("IS_EMPTY/IS_NOT_EMPTY 无需填写")
+                                                        .build()))
+                                        .build()))
+                        .rules(List.of())
+                        .build())
+                .inputPorts(List.of(NodePortMetaDTO.builder()
+                        .name("input")
+                        .label("上游结果")
+                        .valueType(ValueType.ANY)
+                        .required(true)
+                        .multiple(false)
+                        .build()))
+                .outputPorts(List.of(
+                        NodePortMetaDTO.builder()
+                                .name("true")
+                                .label("条件成立")
+                                .valueType(ValueType.ANY)
+                                .required(false)
+                                .multiple(false)
+                                .build(),
+                        NodePortMetaDTO.builder()
+                                .name("false")
+                                .label("条件不成立")
+                                .valueType(ValueType.ANY)
+                                .required(false)
+                                .multiple(false)
+                                .build()))
+                .capabilities(List.of(
+                        NodeCapabilityDTO.builder().code("CONDITIONAL_ROUTING").name("条件路由").build()))
+                .build();
+    }
+
+    private NodeMetaDTO buildErrorHandlerDefinition() {
+        return NodeMetaDTO.builder()
+                .protocolVersion("1.0")
+                .metadataVersion("2026-05-11")
+                .nodeType(NodeType.ERROR_HANDLER.getCode())
+                .nodeVersion("1.0")
+                .displayName("错误恢复")
+                .category(NodeCategory.GOVERNANCE)
+                .description("监听指定节点的失败状态，执行重试或 fallback 兜底，避免整体工作流中断")
+                .tags(List.of("error", "handler", "retry", "fallback", "governance"))
+                .defaults(Map.of("maxRetries", 0, "retryDelayMs", 1000, "fallbackBehavior", "SKIP"))
+                .configSchema(NodeConfigSchemaDTO.builder()
+                        .schemaType("panel")
+                        .schemaVersion("1.0")
+                        .panelId("analysis.error-handler")
+                        .layout(Map.of("type", "section-list"))
+                        .sections(List.of(
+                                PanelSectionDTO.builder()
+                                        .key("target")
+                                        .title("保护目标")
+                                        .order(1)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("guardedNodeId")
+                                                        .label("被保护节点")
+                                                        .componentType(FieldComponentType.VARIABLE_PICKER)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("选择要保护的节点")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择被保护节点").build()))
+                                                        .build()))
+                                        .build(),
+                                PanelSectionDTO.builder()
+                                        .key("retry")
+                                        .title("重试策略")
+                                        .order(2)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("maxRetries")
+                                                        .label("最大重试次数")
+                                                        .componentType(FieldComponentType.NUMBER_INPUT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.INTEGER)
+                                                        .defaultValue(0)
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("min").min(0).message("重试次数最小为 0").build(),
+                                                                ValidationRuleDTO.builder().type("max").max(5).message("重试次数最大为 5").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("retryDelayMs")
+                                                        .label("重试间隔(ms)")
+                                                        .componentType(FieldComponentType.NUMBER_INPUT)
+                                                        .required(false)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(2)
+                                                        .valueType(ValueType.INTEGER)
+                                                        .defaultValue(1000)
+                                                        .build()))
+                                        .build(),
+                                PanelSectionDTO.builder()
+                                        .key("fallback")
+                                        .title("兜底行为")
+                                        .order(3)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("fallbackBehavior")
+                                                        .label("失败处理方式")
+                                                        .componentType(FieldComponentType.SELECT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.STRING)
+                                                        .defaultValue("SKIP")
+                                                        .optionsSource(OptionsSourceDTO.builder()
+                                                                .type("static")
+                                                                .staticOptions(List.of(
+                                                                        OptionDTO.builder().value("SKIP").label("跳过（整体继续）").build(),
+                                                                        OptionDTO.builder().value("DEFAULT_VALUE").label("使用默认值").build(),
+                                                                        OptionDTO.builder().value("FAIL").label("向下传播失败").build()))
+                                                                .build())
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("defaultValue")
+                                                        .label("默认值")
+                                                        .componentType(FieldComponentType.INPUT)
+                                                        .required(false)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(2)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("fallbackBehavior=DEFAULT_VALUE 时使用")
+                                                        .build()))
+                                        .build()))
+                        .rules(List.of())
+                        .build())
+                .inputPorts(List.of(NodePortMetaDTO.builder()
+                        .name("input")
+                        .label("被保护节点输出")
+                        .valueType(ValueType.ANY)
+                        .required(true)
+                        .multiple(false)
+                        .build()))
+                .outputPorts(List.of(NodePortMetaDTO.builder()
+                        .name("output")
+                        .label("恢复结果")
+                        .valueType(ValueType.ANY)
+                        .required(false)
+                        .multiple(false)
+                        .build()))
+                .capabilities(List.of(
+                        NodeCapabilityDTO.builder().code("ERROR_RECOVERY").name("错误恢复").build()))
+                .build();
+    }
+
     private FieldCandidateSlotDTO buildSlot(String slot, Boolean required, List<String> acceptedTypes,
                                             List<String> acceptedCapabilities,
                                             List<FieldMappingCandidateDTO> candidates) {
@@ -991,6 +1234,45 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 .fieldId(fieldId)
                 .score(score)
                 .reason(reason)
+                .build();
+    }
+
+    private NodeMetaDTO buildDataJoinDefinition() {
+        return NodeMetaDTO.builder()
+                .protocolVersion("1.0")
+                .metadataVersion("2026-05-11")
+                .nodeType(NodeType.DATA_JOIN.getCode())
+                .nodeVersion("1.0")
+                .displayName("Data Join")
+                .category(NodeCategory.COMPUTE)
+                .description("跨数据源 JOIN 节点，支持 INNER/LEFT/RIGHT/FULL JOIN；同源数据集自动下推 SQL JOIN")
+                .tags(List.of("join", "compute", "cross-source"))
+                .inputPorts(List.of(
+                        NodePortMetaDTO.builder()
+                                .name("leftDataset")
+                                .label("左表")
+                                .valueType(ValueType.DATASET)
+                                .required(true)
+                                .multiple(false)
+                                .build(),
+                        NodePortMetaDTO.builder()
+                                .name("rightDataset")
+                                .label("右表")
+                                .valueType(ValueType.DATASET)
+                                .required(true)
+                                .multiple(false)
+                                .build()))
+                .outputPorts(List.of(NodePortMetaDTO.builder()
+                        .name("dataset")
+                        .label("JOIN 结果")
+                        .valueType(ValueType.DATASET)
+                        .required(true)
+                        .multiple(false)
+                        .build()))
+                .capabilities(List.of(NodeCapabilityDTO.builder()
+                        .code("COMPUTE_DATA_JOIN")
+                        .name("跨源 JOIN")
+                        .build()))
                 .build();
     }
 }
