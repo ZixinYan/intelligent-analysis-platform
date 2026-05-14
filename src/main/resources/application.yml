@@ -81,9 +81,21 @@ ai:
     base-url: ${AI_BASE_URL:https://api.openai.com/v1}
     api-key: ${AI_API_KEY:}
     model: ${AI_MODEL:gpt-4o-mini}
+    embedding-model: ${AI_EMBEDDING_MODEL:text-embedding-3-small}
     timeout-seconds: 60
     max-tokens: 4096
     stream-threads: 20
+
+knowledge:
+  es:
+    url: ${KNOWLEDGE_ES_URL:http://192.168.1.114:9200}
+    index-name: ${KNOWLEDGE_ES_INDEX:knowledge_chunk}
+    vector-dimension: 1536
+    num-candidates: 100
+    username: ${KNOWLEDGE_ES_USERNAME:}
+    password: ${KNOWLEDGE_ES_PASSWORD:}
+    connect-timeout-seconds: 5
+    read-timeout-seconds: 30
 
 elasticsearch:
   log:

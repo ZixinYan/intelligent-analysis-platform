@@ -11,6 +11,7 @@ public class AiProviderProperties {
     private String baseUrl = "https://api.openai.com/v1";
     private String apiKey = "";
     private String model = "gpt-4o-mini";
+    private String embeddingModel = "text-embedding-3-small";
     private int timeoutSeconds = 60;
     private int maxTokens = 4096;
     private int streamThreads = 20;
@@ -26,6 +27,9 @@ public class AiProviderProperties {
 
     public String getModel() { return model; }
     public void setModel(String model) { this.model = model; }
+
+    public String getEmbeddingModel() { return embeddingModel; }
+    public void setEmbeddingModel(String embeddingModel) { this.embeddingModel = embeddingModel; }
 
     public int getTimeoutSeconds() { return timeoutSeconds; }
     public void setTimeoutSeconds(int timeoutSeconds) { this.timeoutSeconds = timeoutSeconds; }

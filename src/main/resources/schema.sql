@@ -231,6 +231,60 @@ ALTER TABLE workflow_definition
 ALTER TABLE task_result
     MODIFY COLUMN result_json MEDIUMTEXT NOT NULL //
 
+-- ============================================================
+-- P0：AI 多轮对话会话记忆
+-- ============================================================
+CREATE TABLE IF NOT EXISTS ai_conversation (
+    conversation_id VARCHAR(64) PRIMARY KEY,
+    tenant_id       VARCHAR(64) NOT NULL,
+    user_id         VARCHAR(64),
+    topic           VARCHAR(256),
+    messages_json   MEDIUMTEXT NOT NULL DEFAULT '[]',
+    created_at      BIGINT NOT NULL,
+    updated_at      BIGINT NOT NULL
+) //
+
+CALL try_create_index('idx_ai_conv_tenant_updated', 'ai_conversation', 'tenant_id, updated_at', FALSE) //
+
+-- ============================================================
+-- P1：RAG 知识库（元数据存 MySQL，向量存 ES）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS knowledge_base (
+    id          VARCHAR(64) PRIMARY KEY,
+    tenant_id   VARCHAR(64) NOT NULL,
+    name        VARCHAR(255) NOT NULL,
+    description TEXT,
+    created_at  BIGINT NOT NULL,
+    updated_at  BIGINT NOT NULL
+) //
+
+CALL try_create_index('idx_knowledge_base_tenant', 'knowledge_base', 'tenant_id', FALSE) //
+
+-- ============================================================
+-- P2：工作流触发器（定时 + Webhook）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS workflow_trigger (
+    id              VARCHAR(64) PRIMARY KEY,
+    workflow_id     VARCHAR(64) NOT NULL,
+    tenant_id       VARCHAR(64) NOT NULL,
+    trigger_type    VARCHAR(32) NOT NULL,
+    trigger_status  VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+    cron_expr       VARCHAR(128),
+    next_fire_at    BIGINT,
+    webhook_token   VARCHAR(128),
+    secret_key      VARCHAR(256),
+    default_inputs  TEXT,
+    last_fire_at    BIGINT,
+    last_run_id     VARCHAR(64),
+    last_status     VARCHAR(32),
+    created_at      BIGINT NOT NULL,
+    updated_at      BIGINT NOT NULL
+) //
+
+CALL try_create_index('idx_trigger_type_status', 'workflow_trigger', 'trigger_type, trigger_status', FALSE) //
+CALL try_create_index('idx_trigger_webhook_token', 'workflow_trigger', 'webhook_token', FALSE) //
+CALL try_create_index('idx_trigger_workflow_id', 'workflow_trigger', 'workflow_id', FALSE) //
+
 -- Clean up
 DROP PROCEDURE IF EXISTS try_create_index //
 DROP PROCEDURE IF EXISTS try_add_column //

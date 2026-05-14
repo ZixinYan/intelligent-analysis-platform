@@ -7,6 +7,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -121,6 +123,91 @@ public class OpenAiProviderClient implements AiProviderClient {
     @Override
     public String providerType() {
         return "openai";
+    }
+
+    @Override
+    public void streamCompletionWithHistory(List<Map<String, String>> history,
+                                            String userMessage,
+                                            Consumer<String> onToken,
+                                            Runnable onComplete,
+                                            Consumer<Throwable> onError) {
+        streamExecutor.submit(() -> {
+            try {
+                String requestBody = buildRequestBodyFromHistory(history, userMessage, true);
+                HttpRequest request = buildHttpRequest(requestBody);
+                HttpResponse<java.io.InputStream> response =
+                        httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+                if (response.statusCode() != 200) {
+                    String errorBody = new String(response.body().readAllBytes());
+                    onError.accept(new RuntimeException("AI API error " + response.statusCode() + ": " + errorBody));
+                    return;
+                }
+
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (!line.startsWith(DATA_PREFIX)) continue;
+                        String data = line.substring(DATA_PREFIX.length()).trim();
+                        if (DONE_SIGNAL.equals(data)) break;
+                        if (data.isEmpty()) continue;
+                        try {
+                            com.fasterxml.jackson.databind.JsonNode chunk = objectMapper.readTree(data);
+                            String token = extractDeltaContent(chunk);
+                            if (token != null && !token.isEmpty()) {
+                                onToken.accept(token);
+                            }
+                        } catch (Exception e) {
+                            log.debug("skip malformed SSE chunk: {}", data);
+                        }
+                    }
+                }
+                onComplete.run();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                onError.accept(e);
+            } catch (Exception e) {
+                onError.accept(e);
+            }
+        });
+    }
+
+    @Override
+    public String completionWithHistory(List<Map<String, String>> history, String userMessage) {
+        try {
+            String requestBody = buildRequestBodyFromHistory(history, userMessage, false);
+            HttpRequest request = buildHttpRequest(requestBody);
+            HttpResponse<String> response =
+                    httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new RuntimeException("AI API error " + response.statusCode() + ": " + response.body());
+            }
+            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(response.body());
+            return root.path("choices").get(0).path("message").path("content").asText("");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("AI completion interrupted", e);
+        } catch (Exception e) {
+            throw new RuntimeException("AI completion failed: " + e.getMessage(), e);
+        }
+    }
+
+    private String buildRequestBodyFromHistory(List<Map<String, String>> history,
+                                               String userMessage, boolean stream) {
+        try {
+            ObjectNode body = objectMapper.createObjectNode();
+            body.put("model", props.getModel());
+            body.put("stream", stream);
+            body.put("max_tokens", props.getMaxTokens());
+            ArrayNode messages = body.putArray("messages");
+            history.forEach(m -> messages.addObject()
+                    .put("role", m.get("role"))
+                    .put("content", m.get("content")));
+            messages.addObject().put("role", "user").put("content", userMessage);
+            return objectMapper.writeValueAsString(body);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to build AI request body", e);
+        }
     }
 
     private String buildRequestBody(String systemPrompt, String userMessage, boolean stream) {

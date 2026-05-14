@@ -21,7 +21,8 @@ public enum NodeType {
     CACHE_POLICY("cache_policy", NodeCategory.GOVERNANCE),
     MASKING("masking", NodeCategory.GOVERNANCE),
     CONDITION("condition", NodeCategory.GOVERNANCE),
-    ERROR_HANDLER("error_handler", NodeCategory.GOVERNANCE);
+    ERROR_HANDLER("error_handler", NodeCategory.GOVERNANCE),
+    KNOWLEDGE_RETRIEVAL("knowledge_retrieval", NodeCategory.QUERY);
 
     private final String code;
     private final NodeCategory category;
