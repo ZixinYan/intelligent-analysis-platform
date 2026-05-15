@@ -17,6 +17,7 @@ const categoryMeta: Record<string, { label: string; color: string; desc: string 
   COMPUTE:    { label: '计算',  color: '#8b5cf6', desc: '数据转换与运算' },
   OUTPUT:     { label: '输出',  color: '#10b981', desc: '渲染图表或表格' },
   GOVERNANCE: { label: '治理',  color: '#f59e0b', desc: '数据质量与权限' },
+  ANALYSIS:   { label: '分析',  color: '#06b6d4', desc: '数据分析智能节点' },
 }
 
 const groupedNodes = computed(() => {

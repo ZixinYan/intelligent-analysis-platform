@@ -3,9 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import FormRenderer from '@/components/form/FormRenderer.vue'
 import NodeRunPanel from '@/components/workflow/NodeRunPanel.vue'
+import QueryActionsBar from '@/components/query/QueryActionsBar.vue'
+import AiRecommendBadge from '@/components/ai/AiRecommendBadge.vue'
 import type { WorkflowNode } from '@/types/workflow'
 import { usePanelController } from '@/composables/usePanelController'
 import { useWorkflowStore } from '@/stores/workflow'
+import { recommendChart } from '@/api/ai'
+import type { ChartRecommendationDTO } from '@/types/contract'
 
 const props = defineProps<{
   node?: WorkflowNode
@@ -19,10 +23,10 @@ const nodeData = computed(() => activeNode.value?.data)
 const { draft, meta, schema, schemaLoading, schemaError, candidateSlots, handleUpdate, handleValid } = usePanelController(activeNode)
 
 const categoryLabel: Record<string, string> = {
-  QUERY: '取数', COMPUTE: '计算', OUTPUT: '输出', GOVERNANCE: '治理',
+  QUERY: '取数', COMPUTE: '计算', OUTPUT: '输出', GOVERNANCE: '治理', ANALYSIS: '分析',
 }
 const categoryColor: Record<string, string> = {
-  QUERY: '#3b82f6', COMPUTE: '#8b5cf6', OUTPUT: '#10b981', GOVERNANCE: '#f59e0b',
+  QUERY: '#3b82f6', COMPUTE: '#8b5cf6', OUTPUT: '#10b981', GOVERNANCE: '#f59e0b', ANALYSIS: '#06b6d4',
 }
 
 const nodeCategoryLabel = computed(() => categoryLabel[meta.value?.category ?? ''] ?? meta.value?.category ?? '')
@@ -58,6 +62,65 @@ function handleRunNode() {
   if (activeNode.value) {
     workflow.runNodeDebug(activeNode.value.id)
   }
+}
+
+// ── SQL Query 节点：查询操作栏 ─────────────────────
+const SQL_QUERY_TYPES = new Set(['analysis-sql-query', 'sql_query'])
+
+const isSqlQueryNode = computed(() =>
+  SQL_QUERY_TYPES.has(activeNode.value?.data.nodeType ?? ''),
+)
+
+function handleSqlUpdate(sql: string) {
+  const cleaned = Object.fromEntries(
+    Object.entries(draft).filter(([k]) => k !== '__schema'),
+  )
+  handleUpdate({ ...cleaned, sqlTemplate: sql })
+}
+
+// ── Chart Output 节点：AI 图表推荐 ─────────────────
+const CHART_OUTPUT_TYPES = new Set(['analysis-chart-output', 'chart_output'])
+
+const isChartOutputNode = computed(() =>
+  CHART_OUTPUT_TYPES.has(activeNode.value?.data.nodeType ?? ''),
+)
+
+const chartRecommendations = ref<ChartRecommendationDTO[]>([])
+const chartRecommendLoading = ref(false)
+const chartRecommendError = ref('')
+
+watch(() => activeNode.value?.id, () => {
+  chartRecommendations.value = []
+  chartRecommendError.value = ''
+})
+
+const upstreamFields = computed(() => {
+  if (!activeNode.value) return []
+  const upstream = workflow.getUpstreamNode(activeNode.value.id)
+  return upstream?.data.schema?.fields ?? []
+})
+
+async function requestChartRecommend() {
+  if (chartRecommendLoading.value || upstreamFields.value.length === 0) return
+  chartRecommendLoading.value = true
+  chartRecommendError.value = ''
+  try {
+    chartRecommendations.value = await recommendChart({ fields: upstreamFields.value })
+  }
+  catch (err) {
+    chartRecommendError.value = (err as Error).message || 'AI 推荐失败，请重试'
+  }
+  finally {
+    chartRecommendLoading.value = false
+  }
+}
+
+function applyChartRecommendation(rec: ChartRecommendationDTO) {
+  const cleaned = Object.fromEntries(
+    Object.entries(draft).filter(([k]) => k !== '__schema'),
+  )
+  handleUpdate({ ...cleaned, chartType: rec.chartType })
+  chartRecommendations.value = []
 }
 </script>
 
@@ -121,6 +184,39 @@ function handleRunNode() {
             @update:model-value="handleUpdate"
             @valid="handleValid"
           />
+          <QueryActionsBar
+            v-if="isSqlQueryNode && activeNode && schema && !schemaLoading"
+            :node="activeNode!"
+            :datasource-id="String(draft.datasourceId ?? '')"
+            :sql-template="String(draft.sqlTemplate ?? '')"
+            :table-name="String(draft.tableId ?? '')"
+            @sql-update="handleSqlUpdate"
+          />
+
+          <!-- AI 图表推荐 -->
+          <div v-if="isChartOutputNode" class="ncp__ai-recommend">
+            <button
+              class="ncp__ai-btn"
+              :disabled="chartRecommendLoading || upstreamFields.length === 0"
+              @click="requestChartRecommend"
+            >
+              <span v-if="chartRecommendLoading" class="ncp__run-spinner" />
+              <span v-else>✦</span>
+              {{ chartRecommendLoading ? 'AI 推荐中...' : 'AI 推荐图表类型' }}
+            </button>
+            <div v-if="chartRecommendError" class="ncp__ai-error">{{ chartRecommendError }}</div>
+            <div v-if="upstreamFields.length === 0 && !chartRecommendLoading" class="ncp__ai-hint">
+              请先连接上游数据节点以获取字段信息
+            </div>
+            <div v-if="chartRecommendations.length > 0" class="ncp__ai-results">
+              <AiRecommendBadge
+                v-for="rec in chartRecommendations"
+                :key="rec.chartType"
+                :recommendation="rec"
+                @accept="applyChartRecommendation(rec)"
+              />
+            </div>
+          </div>
         </template>
 
         <!-- 输入 Tab (Mock 上游数据) -->
@@ -378,4 +474,25 @@ function handleRunNode() {
   font-size: 13px;
 }
 .ncp__empty-icon { font-size: 28px; color: #1e293b; }
+
+/* ── AI 图表推荐 ────────────────────────────── */
+.ncp__ai-recommend { display: flex; flex-direction: column; gap: 8px; }
+.ncp__ai-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  background: rgba(99, 102, 241, 0.12);
+  color: #a5b4fc;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ncp__ai-btn:hover:not(:disabled) { background: rgba(99, 102, 241, 0.25); }
+.ncp__ai-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ncp__ai-error { font-size: 11px; color: #fca5a5; }
+.ncp__ai-hint { font-size: 11px; color: #475569; }
+.ncp__ai-results { display: flex; flex-direction: column; gap: 6px; }
 </style>

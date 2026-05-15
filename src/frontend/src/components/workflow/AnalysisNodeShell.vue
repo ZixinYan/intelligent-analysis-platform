@@ -3,7 +3,9 @@ import { computed, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import type { WorkflowNodeData } from '@/types/workflow'
 import { resolveNodeIcon } from '@/utils/node-preview'
+import { normalizeNodeType } from '@/constants/analysis-nodes'
 import { useWorkflowStore } from '@/stores/workflow'
+import { resolveRendererModel } from '@/components/output/renderer'
 
 const props = defineProps<{
   id: string
@@ -21,6 +23,7 @@ const categoryColor = computed(() => ({
   COMPUTE:    '#8b5cf6',
   OUTPUT:     '#10b981',
   GOVERNANCE: '#f59e0b',
+  ANALYSIS:   '#06b6d4',
 }[props.data.meta?.category ?? 'QUERY'] ?? '#64748b'))
 
 const categoryLabel = computed(() => ({
@@ -28,6 +31,7 @@ const categoryLabel = computed(() => ({
   COMPUTE:    '计算',
   OUTPUT:     '输出',
   GOVERNANCE: '治理',
+  ANALYSIS:   '分析',
 }[props.data.meta?.category ?? 'QUERY'] ?? ''))
 
 const isConditionNode = computed(() => props.data.meta?.nodeType === 'condition')
@@ -45,7 +49,8 @@ const statusConfig = computed(() => ({
 interface UsageHint { label: string; icon: string }
 
 const usageHints = computed<UsageHint[]>(() => {
-  const nodeType = props.data.meta?.nodeType ?? ''
+  // 统一规范化：analysis-sql-query → sql_query，兼容新旧命名
+  const nodeType = normalizeNodeType(props.data.meta?.nodeType ?? '')
   const hintMap: Record<string, UsageHint[]> = {
     sql_query: [
       { label: '连接数据源，执行 SQL 查询', icon: '📝' },
@@ -112,6 +117,18 @@ const outputPorts = computed(() => props.data.meta?.outputPorts ?? [])
 const visibleTags = computed(() => (props.data.meta?.tags ?? []).slice(0, 3))
 
 const showTooltip = ref(false)
+
+// 结果摘要（OUTPUT 节点成功执行后展示）
+const isOutputNode = computed(() => props.data.meta?.category === 'OUTPUT')
+const resultSummary = computed(() => {
+  if (!isOutputNode.value || props.data.status !== 'success') return null
+  const debugResult = props.data.debugResult
+  if (!debugResult?.result) return null
+  const model = resolveRendererModel(debugResult.result, 'runtime')
+  if (model.kind === 'chart') return { icon: '📊', text: `${model.chartType} 图表已渲染` }
+  if (model.kind === 'table') return { icon: '📋', text: `${model.rows.length.toLocaleString()} 行数据` }
+  return null
+})
 </script>
 
 <template>
@@ -234,6 +251,12 @@ const showTooltip = ref(false)
         <div class="ans__tags">
           <span v-for="tag in visibleTags" :key="tag" class="ans__tag">{{ tag }}</span>
         </div>
+      </div>
+
+      <!-- 结果摘要（OUTPUT 节点成功后显示） -->
+      <div v-if="resultSummary" class="ans__result-badge">
+        <span class="ans__result-badge-icon">{{ resultSummary.icon }}</span>
+        <span class="ans__result-badge-text">{{ resultSummary.text }}</span>
       </div>
     </div>
   </div>
@@ -752,5 +775,29 @@ const showTooltip = ref(false)
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.07);
   color: #475569;
+}
+
+/* ── 结果摘要徽章 ─────────────────────────── */
+.ans__result-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 14px 10px 18px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--cat) 8%, rgba(15,23,42,0.8));
+  border: 1px solid color-mix(in srgb, var(--cat) 22%, transparent);
+}
+.ans__result-badge-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.ans__result-badge-text {
+  font-size: 11px;
+  color: color-mix(in srgb, var(--cat) 80%, #e2e8f0);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

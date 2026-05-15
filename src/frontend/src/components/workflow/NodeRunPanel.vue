@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import TablePreview from '@/components/output/TablePreview.vue'
-import ChartPreview from '@/components/output/ChartPreview.vue'
+import OutputRenderer from '@/components/output/OutputRenderer.vue'
 import type { NodeResultDTO } from '@/types/contract'
 import type { StreamNodeState } from '@/composables/useWorkflowStream'
 
@@ -99,14 +98,8 @@ const streamingMode = computed(() => !!props.streamState)
 
       <!-- 流式完成后的最终结果（非大数据集） -->
       <template v-if="isStreamSuccess && streamState?.result">
-        <div
-          v-if="(streamState.result.kind === 'DATASET' || streamState.result.kind === 'TABLE') && !streamHasChunks"
-          class="nrp__result-block"
-        >
-          <TablePreview :result="streamState.result" mode="preview" />
-        </div>
-        <div v-if="streamState.result.kind === 'CHART'" class="nrp__result-block">
-          <ChartPreview :result="streamState.result" mode="preview" />
+        <div v-if="!streamHasChunks" class="nrp__result-block">
+          <OutputRenderer :result="streamState.result" mode="preview" />
         </div>
       </template>
 
@@ -145,14 +138,9 @@ const streamingMode = computed(() => !!props.streamState)
           <div class="nrp__error-msg">{{ result.error.message ?? '未知错误' }}</div>
         </div>
 
-        <!-- DATASET result -->
-        <div v-if="(resultKind === 'DATASET' || resultKind === 'TABLE') && standardResult" class="nrp__result-block">
-          <TablePreview :result="standardResult" mode="preview" />
-        </div>
-
-        <!-- CHART result -->
-        <div v-if="resultKind === 'CHART' && standardResult" class="nrp__result-block">
-          <ChartPreview :result="standardResult" mode="preview" />
+        <!-- DATASET / TABLE / CHART 结果 -->
+        <div v-if="(resultKind === 'DATASET' || resultKind === 'TABLE' || resultKind === 'CHART') && standardResult" class="nrp__result-block">
+          <OutputRenderer :result="standardResult" mode="preview" />
         </div>
 
         <!-- VARIABLES result -->

@@ -37,6 +37,7 @@ export type FieldComponentType =
   | 'CODE_EDITOR'
   | 'FIELD_PICKER'
   | 'FIELD_MULTI_SELECTOR'
+  | 'DATASOURCE_SELECT'
 export type ExecutionStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'CANCELLED'
 export type ConditionOperator = 'EQ' | 'NE' | 'IN' | 'NOT_IN' | 'GT' | 'LT' | 'CONTAINS' | 'IS_EMPTY' | 'IS_NOT_EMPTY'
 
@@ -672,5 +673,131 @@ export interface AiWorkflowBuildRequestDTO {
   datasourceId: string
   description: string
   workflowName?: string
+}
+
+// ---------------------------------------------------------------------------
+// 触发器（Trigger）
+// ---------------------------------------------------------------------------
+
+export type TriggerType = 'CRON' | 'WEBHOOK'
+export type TriggerStatus = 'ACTIVE' | 'PAUSED' | 'DELETED'
+
+export interface TriggerDTO {
+  triggerId: string
+  workflowId: string
+  triggerType: TriggerType
+  triggerStatus: TriggerStatus
+  cronExpr?: string
+  nextFireAt?: number
+  webhookToken?: string
+  webhookUrl?: string
+  defaultInputs?: string
+  lastFireAt?: number
+  lastRunId?: string
+  lastStatus?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface CreateTriggerRequestDTO {
+  triggerType: TriggerType
+  cronExpr?: string
+  defaultInputs?: string
+  secretKey?: string
+  context?: RequestContextDTO
+}
+
+// ---------------------------------------------------------------------------
+// 已保存数据集（SavedDataset）
+// ---------------------------------------------------------------------------
+
+export interface SavedDatasetSummaryDTO {
+  datasetId: string
+  tenantId?: string
+  name: string
+  description?: string
+  createdBy?: string
+  rowCount?: number
+  sourceWorkflowId?: string
+  sourceNodeId?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface SavedDatasetDetailDTO extends SavedDatasetSummaryDTO {
+  schema?: Record<string, unknown>
+  columns?: TableColumnDTO[]
+  rows?: Array<Record<string, unknown>>
+}
+
+// ---------------------------------------------------------------------------
+// 导出（Export）
+// ---------------------------------------------------------------------------
+
+export interface ExportFileDTO {
+  fileId: string
+  tenantId?: string
+  fileName: string
+  format: string
+  fileSizeBytes?: number
+  rowCount?: number
+  createdAt: number
+  expiresAt?: number
+}
+
+export interface TriggerExportRequestDTO {
+  datasetId: string
+  format: 'csv' | 'xlsx' | 'json'
+  fileName?: string
+}
+
+// ---------------------------------------------------------------------------
+// 审批（Approval）
+// ---------------------------------------------------------------------------
+
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export interface ApprovalRequestDTO {
+  requestId: string
+  workflowId: string
+  nodeId: string
+  tenantId?: string
+  reason?: string
+  approversJson?: string
+  status: ApprovalStatus
+  decidedBy?: string
+  decisionComment?: string
+  createdAt: number
+  decidedAt?: number
+  expiresAt?: number
+}
+
+export interface ApprovalDecideRequestDTO {
+  comment?: string
+}
+
+// ---------------------------------------------------------------------------
+// 运维指标（Ops）
+// ---------------------------------------------------------------------------
+
+export interface SlowQueryDTO {
+  sql: string
+  elapsedMs: number
+  count: number
+}
+
+export interface OpsMetricsSummaryDTO {
+  activeQueryCount: number
+  todayQueryCount: number
+  avgElapsedMs: number
+  errorRate: number
+  slowQueryTop?: SlowQueryDTO[]
+}
+
+export interface ActiveQueryDTO {
+  queryId: string
+  datasourceId: string
+  sql: string
+  startedAt: number
 }
 

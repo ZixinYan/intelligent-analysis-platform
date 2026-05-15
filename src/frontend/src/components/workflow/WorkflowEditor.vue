@@ -12,6 +12,8 @@ import AnalysisNodeShell from './AnalysisNodeShell.vue'
 import NodePalette from './NodePalette.vue'
 import NodeConfigPanel from './NodeConfigPanel.vue'
 import RunHistoryPanel from './RunHistoryPanel.vue'
+import VersionHistoryPanel from './VersionHistoryPanel.vue'
+import TriggerPanel from './TriggerPanel.vue'
 import AiWorkflowDialog from '@/components/ai/AiWorkflowDialog.vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { storeToRefs } from 'pinia'
@@ -19,8 +21,13 @@ import { storeToRefs } from 'pinia'
 const workflow = useWorkflowStore()
 const { nodes, edges, selectedNode, workflowName, workflowId, saving, workflowList, loading } = storeToRefs(workflow)
 
-const rightPanel = ref<'config' | 'history'>('config')
+type RightPanel = 'config' | 'versions' | 'triggers' | 'history'
+const rightPanel = ref<RightPanel>('config')
 const showAiDialog = ref(false)
+
+function togglePanel(panel: Exclude<RightPanel, 'config'>) {
+  rightPanel.value = rightPanel.value === panel ? 'config' : panel
+}
 
 const aiDatasourceId = computed(() => {
   const sqlNode = nodes.value.find(n => n.data.nodeType === 'sql_query' && n.data.config?.datasourceId)
@@ -82,10 +89,27 @@ function handleAiDraftBuilt(draft: WorkflowDefinitionDTO) {
       </select>
       <button
         class="workflow-editor__button"
-        :class="{ 'workflow-editor__button--active': rightPanel === 'history' }"
-        @click="rightPanel = rightPanel === 'history' ? 'config' : 'history'"
+        :class="{ 'workflow-editor__button--active': rightPanel === 'versions' }"
+        :disabled="!workflowId"
+        @click="togglePanel('versions')"
       >
-        执行历史
+        版本历史
+      </button>
+      <button
+        class="workflow-editor__button"
+        :class="{ 'workflow-editor__button--active': rightPanel === 'triggers' }"
+        :disabled="!workflowId"
+        @click="togglePanel('triggers')"
+      >
+        触发器
+      </button>
+      <button
+        class="workflow-editor__button"
+        :class="{ 'workflow-editor__button--active': rightPanel === 'history' }"
+        :disabled="!workflowId"
+        @click="togglePanel('history')"
+      >
+        运行记录
       </button>
     </header>
     <AiWorkflowDialog
@@ -111,6 +135,15 @@ function handleAiDraftBuilt(draft: WorkflowDefinitionDTO) {
       </VueFlow>
     </div>
     <NodeConfigPanel v-if="rightPanel === 'config'" :node="selectedNode" />
+    <VersionHistoryPanel
+      v-else-if="rightPanel === 'versions' && workflowId"
+      :workflow-id="workflowId"
+      @rollback="workflow.load(workflowId!)"
+    />
+    <TriggerPanel
+      v-else-if="rightPanel === 'triggers' && workflowId"
+      :workflow-id="workflowId"
+    />
     <RunHistoryPanel v-else-if="rightPanel === 'history' && workflowId" :workflow-id="workflowId" />
   </div>
 </template>
@@ -166,6 +199,10 @@ function handleAiDraftBuilt(draft: WorkflowDefinitionDTO) {
   border-color: rgba(99, 102, 241, 0.5);
   background: rgba(99, 102, 241, 0.15);
   color: #a5b4fc;
+}
+.workflow-editor__button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 .workflow-editor__canvas {
   position: relative;

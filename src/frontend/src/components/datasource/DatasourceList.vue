@@ -2,11 +2,13 @@
 import { onMounted, reactive, ref } from 'vue'
 import type { DatasourceTestConnectionResultDTO } from '@/types/contract'
 import DatasourceForm from './DatasourceForm.vue'
+import TableBrowserModal from './TableBrowserModal.vue'
 import { useDatasourceStore } from '@/stores/datasource'
 
 const store = useDatasourceStore()
 const formVisible = ref(false)
 const editingId = ref<string>()
+const browsingId = ref<string>()
 const testLoading = reactive<Record<string, boolean>>({})
 const deleteLoading = reactive<Record<string, boolean>>({})
 const testResults = reactive<Record<string, DatasourceTestConnectionResultDTO | undefined>>({})
@@ -32,6 +34,14 @@ function openEdit(id: string) {
 
 function closeForm() {
   formVisible.value = false
+}
+
+function openBrowse(id: string) {
+  browsingId.value = id
+}
+
+function closeBrowse() {
+  browsingId.value = undefined
 }
 
 async function handleDelete(id: string) {
@@ -106,6 +116,7 @@ onMounted(() => {
           <button class="ghost-button" type="button" :disabled="testLoading[datasource.id] || deleteLoading[datasource.id]" @click="handleTest(datasource.id)">
             {{ testLoading[datasource.id] ? '测试中...' : '测试连接' }}
           </button>
+          <button class="ghost-button" type="button" :disabled="testLoading[datasource.id] || deleteLoading[datasource.id]" @click="openBrowse(datasource.id)">浏览表</button>
           <button class="danger-button" type="button" :disabled="deleteLoading[datasource.id] || testLoading[datasource.id]" @click="handleDelete(datasource.id)">
             {{ deleteLoading[datasource.id] ? '删除中...' : '删除' }}
           </button>
@@ -114,6 +125,13 @@ onMounted(() => {
     </div>
 
     <DatasourceForm :visible="formVisible" :editing-id="editingId" @close="closeForm" @saved="loadDatasources" />
+    <TableBrowserModal
+      v-if="browsingId"
+      :visible="Boolean(browsingId)"
+      :datasource-id="browsingId"
+      :datasource-name="store.findById(browsingId)?.name ?? browsingId"
+      @close="closeBrowse"
+    />
   </section>
 </template>
 

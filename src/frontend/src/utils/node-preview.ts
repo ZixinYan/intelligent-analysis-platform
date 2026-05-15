@@ -1,13 +1,23 @@
 import type { NodeMetaDTO } from '@/types/contract'
+import { normalizeNodeType } from '@/constants/analysis-nodes'
 
 const categoryIcons: Record<string, string> = {
   QUERY:      '🔍',
   COMPUTE:    '⚙️',
   OUTPUT:     '📊',
   GOVERNANCE: '🛡️',
+  ANALYSIS:   '📐',
 }
 
 const nodeTypeIcons: Record<string, string> = {
+  // 新版 analysis- 前缀（Phase 2 规范）
+  'analysis-sql-query':           '🔍',
+  'analysis-aggregate':           '∑',
+  'analysis-time-series-compute': '📈',
+  'analysis-pivot':               '⊞',
+  'analysis-chart-output':        '📊',
+  'analysis-table-output':        '📋',
+  // 旧版 snake_case（向后兼容）
   sql_query:           '🔍',
   aggregate:           '∑',
   time_series_compute: '📈',
@@ -34,7 +44,10 @@ export function resolveNodeIcon(meta?: NodeMetaDTO) {
 export function buildNodePreview(meta?: NodeMetaDTO, config: Record<string, unknown> = {}): string[] {
   if (!meta) return ['未绑定元数据']
 
-  switch (meta.nodeType) {
+  // 统一规范化节点类型：analysis-sql-query → sql_query，sql_query → sql_query
+  const type = normalizeNodeType(meta.nodeType)
+
+  switch (type) {
     case 'sql_query': {
       const ds  = config.datasourceId ? `数据源: ${config.datasourceId}` : '未选择数据源'
       const sql = String(config.sqlTemplate ?? '').trim()
@@ -79,10 +92,10 @@ export function buildNodePreview(meta?: NodeMetaDTO, config: Record<string, unkn
       return lines.length ? [`${lines.length} 行代码`, lines[0].slice(0, 55)] : ['未填写代码']
     }
     case 'chart_output': {
-      const type = String(config.chartType ?? 'line')
+      const chartType = String(config.chartType ?? 'line')
       const x    = String(config.xField ?? '未选择 X 轴')
       const y    = String(config.yField ?? '未选择 Y 轴')
-      return [`图表: ${type}`, `X: ${x}  Y: ${y}`]
+      return [`图表: ${chartType}`, `X: ${x}  Y: ${y}`]
     }
     case 'table_output': {
       const cols = Array.isArray(config.columns) ? config.columns.join(', ') : '全部列'

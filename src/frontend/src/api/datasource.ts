@@ -35,3 +35,7 @@ export function testDatasourceConnection(id: string) {
 export function getDatasourceTables(id: string) {
   return unwrapResponse<string[]>(client.get(`/api/v1/datasources/${id}/tables`))
 }
+
+export function listDatasourceOptions() {
+  return unwrapResponse<import('@/types/contract').OptionDTO[]>(client.get('/api/v1/datasources/options'))
+}

@@ -75,3 +75,54 @@ export function buildWorkflowDraft(request: AiWorkflowBuildRequestDTO) {
     client.post('/api/v1/ai/workflow/build', request),
   )
 }
+
+/**
+ * AI 通用对话（SSE 流式）。
+ * 复用 SQL 生成接口，后续可切换为专用 chat 接口。
+ */
+export async function* streamChat(
+  prompt: string,
+  signal?: AbortSignal,
+): AsyncIterable<string> {
+  const response = await fetch('/api/v1/ai/sql/generate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      ...requestContextHeaders,
+    },
+    body: JSON.stringify({ prompt }),
+    signal,
+  })
+
+  if (!response.ok || !response.body) {
+    throw new Error(`AI chat request failed: ${response.status} ${response.statusText}`)
+  }
+
+  const decoder = new TextDecoder()
+  const reader = response.body.getReader()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const blocks = buffer.split('\n\n')
+      buffer = blocks.pop() ?? ''
+      for (const block of blocks) {
+        const lines = block.split('\n')
+        const eventLine = lines.find(l => l.startsWith('event:'))
+        const dataLine = lines.find(l => l.startsWith('data:'))
+        const eventName = eventLine ? eventLine.slice('event:'.length).trim() : 'token'
+        const data = dataLine ? dataLine.slice('data:'.length).trim() : ''
+        if (eventName === 'error') throw new Error(data || 'AI chat error')
+        if (eventName === 'done') return
+        if (eventName === 'token' && data) yield data
+      }
+    }
+  }
+  finally {
+    reader.releaseLock()
+  }
+}

@@ -4,7 +4,7 @@ import { generateSqlStream } from '@/api/ai'
 
 const props = defineProps<{
   datasourceId: string
-  tableName: string
+  tableName?: string
 }>()
 
 const emit = defineEmits<{
@@ -29,7 +29,7 @@ async function generate() {
     for await (const token of generateSqlStream(
       {
         datasourceId: props.datasourceId,
-        tableName: props.tableName,
+        tableName: props.tableName ?? '',
         description: description.value.trim(),
       },
       abortController.signal,
@@ -75,7 +75,7 @@ const canAccept = computed(() => generatedSql.value.trim().length > 0 && !isStre
       </header>
 
       <div class="ai-sql-dialog__body">
-        <div class="ai-sql-dialog__meta">
+        <div v-if="tableName" class="ai-sql-dialog__meta">
           <span>数据表：<strong>{{ tableName }}</strong></span>
         </div>
 

@@ -1,6 +1,10 @@
 import client, { requestContextHeaders, unwrapResponse } from './client'
 import type {
+  AsyncSubmitResponseDTO,
+  CreateTriggerRequestDTO,
   PageResult,
+  TriggerDTO,
+  TriggerStatus,
   WorkflowDefinitionDTO,
   WorkflowQueryRequestDTO,
   WorkflowRunLogDTO,
@@ -142,5 +146,37 @@ export function listRuns(workflowId: string, page = 1, pageSize = 20, status?: s
 export function getRunDetail(workflowId: string, runId: string) {
   return unwrapResponse<WorkflowRunLogDTO>(
     client.get(`/api/v1/workflows/${workflowId}/runs/${runId}`),
+  )
+}
+
+// ── Trigger API ──────────────────────────────────────────────────────────────
+
+export function createTrigger(workflowId: string, payload: CreateTriggerRequestDTO) {
+  return unwrapResponse<TriggerDTO>(
+    client.post(`/api/v1/workflows/${workflowId}/triggers`, payload),
+  )
+}
+
+export function listTriggers(workflowId: string) {
+  return unwrapResponse<TriggerDTO[]>(
+    client.get(`/api/v1/workflows/${workflowId}/triggers`),
+  )
+}
+
+export function updateTriggerStatus(triggerId: string, status: TriggerStatus) {
+  return unwrapResponse<TriggerDTO>(
+    client.patch(`/api/v1/triggers/${triggerId}/status`, { status }),
+  )
+}
+
+export function deleteTrigger(triggerId: string) {
+  return unwrapResponse<void>(
+    client.delete(`/api/v1/triggers/${triggerId}`),
+  )
+}
+
+export function fireTrigger(triggerId: string) {
+  return unwrapResponse<AsyncSubmitResponseDTO>(
+    client.post(`/api/v1/triggers/${triggerId}/fire`),
   )
 }

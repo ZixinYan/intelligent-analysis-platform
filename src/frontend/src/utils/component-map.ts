@@ -7,6 +7,7 @@ import SqlEditorField from '@/components/form/fields/SqlEditorField.vue'
 import CodeEditorField from '@/components/form/fields/CodeEditorField.vue'
 import FieldPickerField from '@/components/form/fields/FieldPickerField.vue'
 import VariableBindingField from '@/components/form/fields/VariableBindingField.vue'
+import DatasourceSelectField from '@/components/form/fields/DatasourceSelectField.vue'
 import type { FieldComponentType } from '@/types/contract'
 
 const componentMap: Record<FieldComponentType, Component> = {
@@ -20,6 +21,7 @@ const componentMap: Record<FieldComponentType, Component> = {
   CODE_EDITOR: CodeEditorField,
   FIELD_PICKER: FieldPickerField,
   FIELD_MULTI_SELECTOR: FieldPickerField,
+  DATASOURCE_SELECT: DatasourceSelectField,
 }
 
 export function resolveFieldComponent(componentType: FieldComponentType) {
