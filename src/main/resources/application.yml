@@ -77,11 +77,11 @@ sandbox:
 
 ai:
   provider:
-    type: openai          # openai | mock
-    base-url: ${AI_BASE_URL:https://api.openai.com/v1}
-    api-key: ${AI_API_KEY:}
-    model: ${AI_MODEL:gpt-4o-mini}
-    embedding-model: ${AI_EMBEDDING_MODEL:text-embedding-3-small}
+    type: openai
+    base-url: ${AI_BASE_URL:https://api.deepseek.com}
+    api-key: ${AI_API_KEY:sk-6ad391af1f354c1fa4ecafbc52e8eda9}
+    model: ${AI_MODEL:deepseek-v4-pro}
+    embedding-model: ${AI_EMBEDDING_MODEL:deepseek-v4-pro}
     timeout-seconds: 60
     max-tokens: 4096
     stream-threads: 20
@@ -89,7 +89,7 @@ ai:
 knowledge:
   es:
     url: ${KNOWLEDGE_ES_URL:http://192.168.1.114:9200}
-    index-name: ${KNOWLEDGE_ES_INDEX:knowledge_chunk}
+    index-name: ${KNOWLEDGE_ES_INDEX:intelligent_analysis_knowledge}
     vector-dimension: 1536
     num-candidates: 100
     username: ${KNOWLEDGE_ES_USERNAME:}

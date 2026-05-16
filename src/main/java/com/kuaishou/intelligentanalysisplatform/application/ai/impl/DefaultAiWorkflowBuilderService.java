@@ -142,7 +142,7 @@ public class DefaultAiWorkflowBuilderService implements AiWorkflowBuilderService
             if (!positions.containsKey(nodeId)) {
                 positions.put(nodeId, WorkflowPositionDTO.builder()
                         .x(100 + i * 350.0)
-                        .y(150)
+                        .y(Double.valueOf(150))
                         .build());
             }
         }

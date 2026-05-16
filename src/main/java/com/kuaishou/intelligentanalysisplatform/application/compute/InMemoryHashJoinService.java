@@ -86,10 +86,10 @@ public class InMemoryHashJoinService {
 
     private long estimateResultRows(int leftSize, int rightSize, JoinType joinType) {
         if (joinType == JoinType.INNER) {
-            return (long) leftSize * rightSize * SELECTIVITY;
+            return (long) ((long) leftSize * rightSize * SELECTIVITY);
         }
         // LEFT/RIGHT/FULL：至少保留较大的一侧
-        long innerEstimate = (long) leftSize * rightSize * SELECTIVITY;
+        long innerEstimate = (long) ((long) leftSize * rightSize * SELECTIVITY);
         return Math.max(innerEstimate, Math.max(leftSize, rightSize));
     }
 

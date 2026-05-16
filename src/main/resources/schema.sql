@@ -239,7 +239,7 @@ CREATE TABLE IF NOT EXISTS ai_conversation (
     tenant_id       VARCHAR(64) NOT NULL,
     user_id         VARCHAR(64),
     topic           VARCHAR(256),
-    messages_json   MEDIUMTEXT NOT NULL DEFAULT '[]',
+    messages_json   MEDIUMTEXT NOT NULL,
     created_at      BIGINT NOT NULL,
     updated_at      BIGINT NOT NULL
 ) //

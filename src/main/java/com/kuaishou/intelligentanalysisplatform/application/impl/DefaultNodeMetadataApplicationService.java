@@ -1036,13 +1036,13 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                                                         .valueType(ValueType.STRING)
                                                         .optionsSource(OptionsSourceDTO.builder()
                                                                 .type("static")
-                                                                .staticOptions(List.of(
-                                                                        OptionDTO.builder().value(ConditionOperator.EQ.name()).label("等于 (=)").build(),
-                                                                        OptionDTO.builder().value(ConditionOperator.NEQ.name()).label("不等于 (≠)").build(),
-                                                                        OptionDTO.builder().value(ConditionOperator.GT.name()).label("大于 (>)").build(),
-                                                                        OptionDTO.builder().value(ConditionOperator.GTE.name()).label("大于等于 (≥)").build(),
-                                                                        OptionDTO.builder().value(ConditionOperator.LT.name()).label("小于 (<)").build(),
-                                                                        OptionDTO.builder().value(ConditionOperator.LTE.name()).label("小于等于 (≤)").build(),
+                                                                .options(List.of(
+                                                                        OptionDTO.builder().value(ConditionOperator.EQ.name()).label("等于 ").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.NEQ.name()).label("不等于").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.GT.name()).label("大于").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.GTE.name()).label("大于等于").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.LT.name()).label("小于").build(),
+                                                                        OptionDTO.builder().value(ConditionOperator.LTE.name()).label("小于等于").build(),
                                                                         OptionDTO.builder().value(ConditionOperator.CONTAINS.name()).label("包含").build(),
                                                                         OptionDTO.builder().value(ConditionOperator.NOT_CONTAINS.name()).label("不包含").build(),
                                                                         OptionDTO.builder().value(ConditionOperator.IN.name()).label("在列表中 (IN)").build(),
@@ -1178,7 +1178,7 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                                                         .defaultValue("SKIP")
                                                         .optionsSource(OptionsSourceDTO.builder()
                                                                 .type("static")
-                                                                .staticOptions(List.of(
+                                                                .options(List.of(
                                                                         OptionDTO.builder().value("SKIP").label("跳过（整体继续）").build(),
                                                                         OptionDTO.builder().value("DEFAULT_VALUE").label("使用默认值").build(),
                                                                         OptionDTO.builder().value("FAIL").label("向下传播失败").build()))

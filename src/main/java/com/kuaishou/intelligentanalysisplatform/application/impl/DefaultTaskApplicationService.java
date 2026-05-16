@@ -107,6 +107,7 @@ public class DefaultTaskApplicationService implements TaskApplicationService {
             case PENDING, QUEUED -> 0;
             case RUNNING -> 50;
             case SUCCEEDED, FAILED, CANCELLED -> 100;
+            case SKIPPED -> 150;
         };
     }
 }

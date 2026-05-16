@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 public class DefaultAiChartRecommendationService implements AiChartRecommendationService {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultAiChartRecommendationService.class);
+    private boolean RULE_SWITCH = true; // 规则引擎开关，方便后续逐步迁移和 A/B 测试
 
     private final AiProviderClient aiProviderClient;
     private final ObjectMapper objectMapper;
@@ -37,9 +38,11 @@ public class DefaultAiChartRecommendationService implements AiChartRecommendatio
         if (fields == null || fields.isEmpty()) return List.of();
 
         // 1. 规则引擎（快速，无 LLM）
-        List<ChartRecommendationDTO> ruleResults = applyRules(fields);
-        if (!ruleResults.isEmpty()) {
-            return ruleResults;
+        if (RULE_SWITCH) {
+            List<ChartRecommendationDTO> ruleResults = applyRules(fields);
+            if (!ruleResults.isEmpty()) {
+                return ruleResults;
+            }
         }
 
         // 2. LLM 兜底
