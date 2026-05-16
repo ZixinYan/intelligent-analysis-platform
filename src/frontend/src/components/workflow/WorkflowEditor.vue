@@ -23,6 +23,7 @@ const { nodes, edges, selectedNode, workflowName, workflowId, saving, workflowLi
 
 type RightPanel = 'config' | 'versions' | 'triggers' | 'history'
 const rightPanel = ref<RightPanel>('config')
+const rightPanelVisible = ref(true)
 const showAiDialog = ref(false)
 
 function togglePanel(panel: Exclude<RightPanel, 'config'>) {
@@ -73,7 +74,7 @@ function handleAiDraftBuilt(draft: WorkflowDefinitionDTO) {
 </script>
 
 <template>
-  <div class="workflow-editor">
+  <div class="workflow-editor" :class="{ 'workflow-editor--panel-hidden': !rightPanelVisible }">
     <header class="workflow-editor__toolbar">
       <input v-model="workflowName" class="workflow-editor__name-input" placeholder="工作流名称" />
       <button class="workflow-editor__button workflow-editor__button--primary" :disabled="saving" @click="workflow.save()">
@@ -111,6 +112,13 @@ function handleAiDraftBuilt(draft: WorkflowDefinitionDTO) {
       >
         运行记录
       </button>
+      <button
+        class="workflow-editor__button workflow-editor__button--icon"
+        :title="rightPanelVisible ? '隐藏右侧面板' : '显示右侧面板'"
+        @click="rightPanelVisible = !rightPanelVisible"
+      >
+        {{ rightPanelVisible ? '▶' : '◀' }}
+      </button>
     </header>
     <AiWorkflowDialog
       v-if="showAiDialog"
@@ -134,17 +142,17 @@ function handleAiDraftBuilt(draft: WorkflowDefinitionDTO) {
         <Controls />
       </VueFlow>
     </div>
-    <NodeConfigPanel v-if="rightPanel === 'config'" :node="selectedNode" />
+    <NodeConfigPanel v-if="rightPanelVisible && rightPanel === 'config'" :node="selectedNode" />
     <VersionHistoryPanel
-      v-else-if="rightPanel === 'versions' && workflowId"
+      v-else-if="rightPanelVisible && rightPanel === 'versions' && workflowId"
       :workflow-id="workflowId"
       @rollback="workflow.load(workflowId!)"
     />
     <TriggerPanel
-      v-else-if="rightPanel === 'triggers' && workflowId"
+      v-else-if="rightPanelVisible && rightPanel === 'triggers' && workflowId"
       :workflow-id="workflowId"
     />
-    <RunHistoryPanel v-else-if="rightPanel === 'history' && workflowId" :workflow-id="workflowId" />
+    <RunHistoryPanel v-else-if="rightPanelVisible && rightPanel === 'history' && workflowId" :workflow-id="workflowId" />
   </div>
 </template>
 
@@ -154,6 +162,9 @@ function handleAiDraftBuilt(draft: WorkflowDefinitionDTO) {
   display: grid;
   grid-template-columns: 280px 1fr 360px;
   grid-template-rows: auto 1fr;
+}
+.workflow-editor--panel-hidden {
+  grid-template-columns: 280px 1fr 0px;
 }
 .workflow-editor__toolbar {
   grid-column: 1 / -1;
@@ -194,6 +205,12 @@ function handleAiDraftBuilt(draft: WorkflowDefinitionDTO) {
 .workflow-editor__button--active {
   border-color: #3b82f6;
   color: #93c5fd;
+}
+.workflow-editor__button--icon {
+  padding: 10px 10px;
+  min-width: 36px;
+  font-size: 11px;
+  margin-left: auto;
 }
 .workflow-editor__button--ai {
   border-color: rgba(99, 102, 241, 0.5);

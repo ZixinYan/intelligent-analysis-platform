@@ -2,10 +2,13 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { Connection, NodeChange, XYPosition } from '@vue-flow/core'
 import type {
+  DatasetDTO,
+  FieldSchemaDTO,
   NodeDebugRequestDTO,
   NodeMetaDTO,
   NodeResultDTO,
   PageResult,
+  SchemaInferResultDTO,
   WorkflowDefinitionDTO,
   WorkflowEdgeDTO,
   WorkflowPositionDTO,
@@ -18,6 +21,38 @@ import { runNodeDebug as runNodeDebugApi } from '@/api/node-debug'
 
 function createNodeId(nodeType: string) {
   return `${nodeType}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+/** Derive a SchemaInferResultDTO from a debug-run dataset result. */
+function inferSchemaFromDataset(dataset: DatasetDTO, nodeId: string): SchemaInferResultDTO | null {
+  // Use schema.fields provided by backend
+  if (dataset.schema?.fields?.length) {
+    return {
+      protocolVersion: '1',
+      schemaId: `debug-${nodeId}-${Date.now()}`,
+      schemaVersion: '1',
+      kind: 'DATASET',
+      fields: dataset.schema.fields,
+    }
+  }
+  // Derive from columns array
+  const columns = dataset.columns ?? []
+  if (columns.length > 0) {
+    const fields: FieldSchemaDTO[] = columns.map((col, i) => {
+      const name = String(col['field'] ?? col['name'] ?? Object.values(col)[0] ?? `col${i}`)
+      return { fieldId: name, name, path: [name], valueType: 'STRING', nullable: true, displayName: name }
+    })
+    return { protocolVersion: '1', schemaId: `debug-${nodeId}-${Date.now()}`, schemaVersion: '1', kind: 'DATASET', fields }
+  }
+  // Derive from first row keys
+  const rows = dataset.rows ?? []
+  if (rows.length > 0) {
+    const fields: FieldSchemaDTO[] = Object.keys(rows[0]).map(key => ({
+      fieldId: key, name: key, path: [key], valueType: 'STRING' as FieldSchemaDTO['valueType'], nullable: true, displayName: key,
+    }))
+    return { protocolVersion: '1', schemaId: `debug-${nodeId}-${Date.now()}`, schemaVersion: '1', kind: 'DATASET', fields }
+  }
+  return null
 }
 
 function toPositionMap(nodes: WorkflowNode[]) {
@@ -141,8 +176,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
     propagateSchemaFrom(connection.source)
   }
 
-  /** Propagate source node's schema to all downstream nodes */
-  function propagateSchemaFrom(sourceNodeId: string) {
+  /** Propagate source node's schema to all downstream nodes.
+   *  @param force When true, overwrites existing schemas on downstream nodes (e.g. after a debug run transforms the schema). */
+  function propagateSchemaFrom(sourceNodeId: string, force = false) {
     const sourceNode = nodes.value.find(n => n.id === sourceNodeId)
     if (!sourceNode?.data.schema) {
       return
@@ -151,11 +187,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
     const outgoingEdges = edges.value.filter(e => e.source === sourceNodeId)
     for (const edge of outgoingEdges) {
       const targetNode = nodes.value.find(n => n.id === edge.target)
-      if (targetNode && !targetNode.data.schema) {
+      if (targetNode && (force || !targetNode.data.schema)) {
         // Propagate the schema downstream
         updateNodeSchema(edge.target, sourceNode.data.schema)
         // Recursively propagate further
-        propagateSchemaFrom(edge.target)
+        propagateSchemaFrom(edge.target, force)
       }
     }
   }
@@ -307,6 +343,18 @@ export const useWorkflowStore = defineStore('workflow', () => {
       const nextStatus: AnalysisNodeStatus = result.status === 'SUCCESS' ? 'success'
         : result.status === 'FAILED' ? 'error' : 'running'
       updateNodeStatus(nodeId, nextStatus)
+
+      // Update node output schema from debug result so downstream nodes see correct fields
+      if (result.status === 'SUCCESS') {
+        const dataset = result.result?.dataset
+        if (dataset) {
+          const schema = inferSchemaFromDataset(dataset, nodeId)
+          if (schema) {
+            updateNodeSchema(nodeId, schema)
+            propagateSchemaFrom(nodeId, true) // force=true: overwrite downstream schemas
+          }
+        }
+      }
     } catch (err) {
       const errorResult: NodeResultDTO = {
         nodeId,

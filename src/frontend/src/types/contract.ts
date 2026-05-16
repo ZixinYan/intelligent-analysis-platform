@@ -752,31 +752,6 @@ export interface TriggerExportRequestDTO {
 }
 
 // ---------------------------------------------------------------------------
-// 审批（Approval）
-// ---------------------------------------------------------------------------
-
-export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
-
-export interface ApprovalRequestDTO {
-  requestId: string
-  workflowId: string
-  nodeId: string
-  tenantId?: string
-  reason?: string
-  approversJson?: string
-  status: ApprovalStatus
-  decidedBy?: string
-  decisionComment?: string
-  createdAt: number
-  decidedAt?: number
-  expiresAt?: number
-}
-
-export interface ApprovalDecideRequestDTO {
-  comment?: string
-}
-
-// ---------------------------------------------------------------------------
 // 运维指标（Ops）
 // ---------------------------------------------------------------------------
 

@@ -78,20 +78,21 @@ export function buildWorkflowDraft(request: AiWorkflowBuildRequestDTO) {
 
 /**
  * AI 通用对话（SSE 流式）。
- * 复用 SQL 生成接口，后续可切换为专用 chat 接口。
+ * 调用 /api/v1/ai/chat，接收 prompt 和可选历史。
  */
 export async function* streamChat(
   prompt: string,
   signal?: AbortSignal,
+  history?: Array<{ role: string; content: string }>,
 ): AsyncIterable<string> {
-  const response = await fetch('/api/v1/ai/sql/generate', {
+  const response = await fetch('/api/v1/ai/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
       ...requestContextHeaders,
     },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ prompt, history }),
     signal,
   })
 

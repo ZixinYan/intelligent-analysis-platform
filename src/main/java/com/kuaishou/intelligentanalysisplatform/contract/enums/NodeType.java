@@ -17,7 +17,6 @@ public enum NodeType {
     TABLE_OUTPUT("table_output", NodeCategory.OUTPUT),
     EXPORT_OUTPUT("export_output", NodeCategory.OUTPUT),
     DATA_LIMIT("data_limit", NodeCategory.GOVERNANCE),
-    APPROVAL_GATE("approval_gate", NodeCategory.GOVERNANCE),
     CACHE_POLICY("cache_policy", NodeCategory.GOVERNANCE),
     MASKING("masking", NodeCategory.GOVERNANCE),
     CONDITION("condition", NodeCategory.GOVERNANCE),
