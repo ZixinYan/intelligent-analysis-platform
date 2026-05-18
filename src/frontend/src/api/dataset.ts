@@ -26,16 +26,6 @@ export function deleteDataset(datasetId: string) {
   return unwrapResponse<void>(client.delete(`/api/v1/datasets/${datasetId}`))
 }
 
-export function saveDatasetFromQuery(payload: {
-  name: string
-  description?: string
-  queryId: string
-}) {
-  return unwrapResponse<SavedDatasetSummaryDTO>(
-    client.post('/api/v1/datasets/from-query', payload),
-  )
-}
-
 export function updateDatasetMeta(datasetId: string, payload: { name?: string; description?: string }) {
   return unwrapResponse<SavedDatasetSummaryDTO>(
     client.patch(`/api/v1/datasets/${datasetId}`, payload),

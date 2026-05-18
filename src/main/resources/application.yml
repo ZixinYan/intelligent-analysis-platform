@@ -96,15 +96,3 @@ knowledge:
     password: ${KNOWLEDGE_ES_PASSWORD:}
     connect-timeout-seconds: 5
     read-timeout-seconds: 30
-
-elasticsearch:
-  log:
-    enabled: false
-    urls: ${ES_URLS:http://192.168.1.114:9200}
-    index-prefix: ${ES_INDEX_PREFIX:intelligent-analysis-platform}
-    batch-size: 200
-    flush-interval-seconds: 5
-    connect-timeout-seconds: 5
-    read-timeout-seconds: 10
-    max-retries: 3
-    verbose: false

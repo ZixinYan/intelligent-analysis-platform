@@ -26,7 +26,6 @@ BEGIN
     END IF;
 END //
 
--- Helper: conditionally add a column (MySQL 8.x compatible)
 CREATE PROCEDURE IF NOT EXISTS try_add_column(
     IN tbl_name VARCHAR(64),
     IN col_name VARCHAR(64),
@@ -47,9 +46,6 @@ BEGIN
     END IF;
 END //
 
--- ============================================================
--- Tables
--- ============================================================
 CREATE TABLE IF NOT EXISTS query_execution (
     query_id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
@@ -106,7 +102,6 @@ CREATE TABLE IF NOT EXISTS workflow_definition (
 CALL try_create_index('idx_workflow_definition_tenant_updated', 'workflow_definition', 'tenant_id, updated_at', FALSE) //
 CALL try_create_index('uq_workflow_definition_id_tenant', 'workflow_definition', 'workflow_id, tenant_id', TRUE) //
 
--- Version tracking columns (added by Phase 4)
 CALL try_add_column('workflow_definition', 'current_version_id',   'VARCHAR(64)') //
 CALL try_add_column('workflow_definition', 'published_version_id', 'VARCHAR(64)') //
 
@@ -198,42 +193,12 @@ CREATE TABLE IF NOT EXISTS export_file (
 CALL try_create_index('idx_export_file_tenant', 'export_file', 'tenant_id', FALSE) //
 CALL try_create_index('idx_export_file_expires', 'export_file', 'expires_at', FALSE) //
 
--- ============================================================
--- Phase 8: 工作流执行记录表
--- ============================================================
-CREATE TABLE IF NOT EXISTS workflow_run_log (
-    run_id          VARCHAR(64) PRIMARY KEY,
-    workflow_id     VARCHAR(64) NOT NULL,
-    version_id      VARCHAR(64),
-    tenant_id       VARCHAR(64) NOT NULL,
-    trigger_type    VARCHAR(16) NOT NULL,
-    status          VARCHAR(16) NOT NULL,
-    node_count      INT,
-    started_at      BIGINT NOT NULL,
-    finished_at     BIGINT,
-    elapsed_ms      BIGINT,
-    node_trace_json MEDIUMTEXT,
-    created_by      VARCHAR(64)
-) //
-
-CALL try_create_index('idx_run_log_workflow_started', 'workflow_run_log',
-    'workflow_id, started_at', FALSE) //
-CALL try_create_index('idx_run_log_tenant_status', 'workflow_run_log',
-    'tenant_id, status, started_at', FALSE) //
-
--- ============================================================
--- 迁移：存量环境列类型修复（幂等，不会丢失现有数据）
--- ============================================================
 ALTER TABLE workflow_definition
     MODIFY COLUMN definition_json MEDIUMTEXT NOT NULL //
 
--- 修复 task_result.result_json 存储上限不足问题（VARCHAR(2048) → MEDIUMTEXT）
 ALTER TABLE task_result
     MODIFY COLUMN result_json MEDIUMTEXT NOT NULL //
 
--- ============================================================
--- P0：AI 多轮对话会话记忆
--- ============================================================
 CREATE TABLE IF NOT EXISTS ai_conversation (
     conversation_id VARCHAR(64) PRIMARY KEY,
     tenant_id       VARCHAR(64) NOT NULL,
@@ -246,9 +211,6 @@ CREATE TABLE IF NOT EXISTS ai_conversation (
 
 CALL try_create_index('idx_ai_conv_tenant_updated', 'ai_conversation', 'tenant_id, updated_at', FALSE) //
 
--- ============================================================
--- P1：RAG 知识库（元数据存 MySQL，向量存 ES）
--- ============================================================
 CREATE TABLE IF NOT EXISTS knowledge_base (
     id          VARCHAR(64) PRIMARY KEY,
     tenant_id   VARCHAR(64) NOT NULL,
@@ -260,9 +222,6 @@ CREATE TABLE IF NOT EXISTS knowledge_base (
 
 CALL try_create_index('idx_knowledge_base_tenant', 'knowledge_base', 'tenant_id', FALSE) //
 
--- ============================================================
--- P2：工作流触发器（定时 + Webhook）
--- ============================================================
 CREATE TABLE IF NOT EXISTS workflow_trigger (
     id              VARCHAR(64) PRIMARY KEY,
     workflow_id     VARCHAR(64) NOT NULL,
@@ -285,6 +244,5 @@ CALL try_create_index('idx_trigger_type_status', 'workflow_trigger', 'trigger_ty
 CALL try_create_index('idx_trigger_webhook_token', 'workflow_trigger', 'webhook_token', FALSE) //
 CALL try_create_index('idx_trigger_workflow_id', 'workflow_trigger', 'workflow_id', FALSE) //
 
--- Clean up
 DROP PROCEDURE IF EXISTS try_create_index //
 DROP PROCEDURE IF EXISTS try_add_column //

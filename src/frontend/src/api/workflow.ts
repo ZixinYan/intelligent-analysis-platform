@@ -7,7 +7,6 @@ import type {
   TriggerStatus,
   WorkflowDefinitionDTO,
   WorkflowQueryRequestDTO,
-  WorkflowRunLogDTO,
   WorkflowRunRequestDTO,
   WorkflowSaveRequestDTO,
   WorkflowStreamEventDTO,
@@ -132,20 +131,6 @@ export function rollbackVersion(workflowId: string, versionNumber: number) {
 export function diffVersions(workflowId: string, from: number, to: number) {
   return unwrapResponse<WorkflowVersionDiffDTO>(
     client.get(`/api/v1/workflows/${workflowId}/versions/diff`, { params: { from, to } }),
-  )
-}
-
-// ── Run History API (Phase 8) ────────────────────────────────────────────────
-
-export function listRuns(workflowId: string, page = 1, pageSize = 20, status?: string) {
-  return unwrapResponse<PageResult<WorkflowRunLogDTO>>(
-    client.get(`/api/v1/workflows/${workflowId}/runs`, { params: { page, pageSize, status } }),
-  )
-}
-
-export function getRunDetail(workflowId: string, runId: string) {
-  return unwrapResponse<WorkflowRunLogDTO>(
-    client.get(`/api/v1/workflows/${workflowId}/runs/${runId}`),
   )
 }
 

@@ -2,36 +2,13 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <springProperty scope="context" name="APPLICATION_NAME" source="spring.application.name"
-                    defaultValue="intelligent-analysis-platform"/>
-
-    <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-            <includeMdcKeyName>traceId</includeMdcKeyName>
-            <includeMdcKeyName>tenantId</includeMdcKeyName>
-            <includeMdcKeyName>userId</includeMdcKeyName>
-            <includeMdcKeyName>requestUri</includeMdcKeyName>
-            <includeMdcKeyName>httpMethod</includeMdcKeyName>
-            <customFields>{"app":"${APPLICATION_NAME}"}</customFields>
-            <fieldNames>
-                <version>[ignore]</version>
-                <levelValue>[ignore]</levelValue>
-            </fieldNames>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <!-- Elasticsearch appender is configured programmatically in LoggingConfiguration.java -->
-    <!-- to avoid leaking ES config properties into every log event via context scope. -->
-
     <root level="INFO">
-        <appender-ref ref="CONSOLE_JSON"/>
+        <appender-ref ref="CONSOLE"/>
     </root>
-
-    <logger name="API_AUDIT" level="INFO" additivity="false">
-        <appender-ref ref="CONSOLE_JSON"/>
-    </logger>
-
-    <logger name="TASK_EXECUTION" level="INFO" additivity="false">
-        <appender-ref ref="CONSOLE_JSON"/>
-    </logger>
 </configuration>

@@ -1,6 +1,6 @@
 package com.kuaishou.intelligentanalysisplatform.interfaces.rest.v1;
 
-import com.kuaishou.intelligentanalysisplatform.application.AnalysisService;
+import com.kuaishou.intelligentanalysisplatform.application.QueryApplicationService;
 import com.kuaishou.intelligentanalysisplatform.common.error.BaseBusinessException;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,11 +15,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -34,29 +33,29 @@ class QueryControllerTest {
 
     @BeforeEach
     void setUp() {
-        AnalysisService analysisService = mock(AnalysisService.class);
-        when(analysisService.validate(any())).thenReturn(ValidateResultDTO.builder()
+        QueryApplicationService queryApplicationService = mock(QueryApplicationService.class);
+        when(queryApplicationService.validate(any())).thenReturn(ValidateResultDTO.builder()
                 .queryId("req-validate")
                 .valid(true)
                 .build());
-        when(analysisService.preview(any())).thenReturn(QueryResultDTO.builder()
+        when(queryApplicationService.preview(any())).thenReturn(QueryResultDTO.builder()
                 .queryId("req-1")
                 .status(ExecutionStatus.SUCCEEDED)
                 .build());
-        when(analysisService.run(any())).thenReturn(AsyncSubmitResponseDTO.builder()
+        when(queryApplicationService.runAsync(any())).thenReturn(AsyncSubmitResponseDTO.builder()
                 .taskId("task-req-2")
                 .status(ExecutionStatus.QUEUED)
                 .pollUrl("/api/v1/query/req-2/status")
                 .build());
-        when(analysisService.getStatus(eq("req-2"))).thenReturn(QueryResultDTO.builder()
+        when(queryApplicationService.getStatus(eq("req-2"))).thenReturn(QueryResultDTO.builder()
                 .queryId("req-2")
                 .status(ExecutionStatus.RUNNING)
                 .build());
-        doNothing().when(analysisService).cancel("req-2");
-        when(analysisService.preview(argThat(req -> req != null && req.getSql() != null && req.getSql().isBlank())))
+        doNothing().when(queryApplicationService).cancel("req-2");
+        when(queryApplicationService.preview(argThat(req -> req != null && req.getSql() != null && req.getSql().isBlank())))
                 .thenThrow(new BaseBusinessException(ErrorCode.SQL_PARSE_FAILED, "sql parse failed"));
 
-        mockMvc = MockMvcBuilders.standaloneSetup(new QueryController(analysisService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new QueryController(queryApplicationService))
                 .setControllerAdvice(new GlobalExceptionHandler(new ObjectMapper()))
                 .build();
     }

@@ -11,7 +11,6 @@ import type { Component } from 'vue'
 import AnalysisNodeShell from './AnalysisNodeShell.vue'
 import NodePalette from './NodePalette.vue'
 import NodeConfigPanel from './NodeConfigPanel.vue'
-import RunHistoryPanel from './RunHistoryPanel.vue'
 import VersionHistoryPanel from './VersionHistoryPanel.vue'
 import TriggerPanel from './TriggerPanel.vue'
 import AiWorkflowDialog from '@/components/ai/AiWorkflowDialog.vue'
@@ -21,7 +20,7 @@ import { storeToRefs } from 'pinia'
 const workflow = useWorkflowStore()
 const { nodes, edges, selectedNode, workflowName, workflowId, saving, workflowList, loading } = storeToRefs(workflow)
 
-type RightPanel = 'config' | 'versions' | 'triggers' | 'history'
+type RightPanel = 'config' | 'versions' | 'triggers'
 const rightPanel = ref<RightPanel>('config')
 const rightPanelVisible = ref(true)
 const showAiDialog = ref(false)
@@ -129,14 +128,6 @@ function handleAiDraftBuilt(draft: WorkflowDefinitionDTO) {
         触发器
       </button>
       <button
-        class="workflow-editor__button"
-        :class="{ 'workflow-editor__button--active': rightPanel === 'history' }"
-        :disabled="!workflowId"
-        @click="togglePanel('history')"
-      >
-        运行记录
-      </button>
-      <button
         class="workflow-editor__button workflow-editor__button--icon"
         :title="rightPanelVisible ? '隐藏右侧面板' : '显示右侧面板'"
         @click="rightPanelVisible = !rightPanelVisible"
@@ -176,7 +167,6 @@ function handleAiDraftBuilt(draft: WorkflowDefinitionDTO) {
       v-else-if="rightPanelVisible && rightPanel === 'triggers' && workflowId"
       :workflow-id="workflowId"
     />
-    <RunHistoryPanel v-else-if="rightPanelVisible && rightPanel === 'history' && workflowId" :workflow-id="workflowId" />
   </div>
 </template>
 

@@ -1,6 +1,6 @@
 package com.kuaishou.intelligentanalysisplatform.interfaces.rest.v1;
 
-import com.kuaishou.intelligentanalysisplatform.application.AnalysisService;
+import com.kuaishou.intelligentanalysisplatform.application.QueryApplicationService;
 import com.kuaishou.intelligentanalysisplatform.common.response.ApiResponse;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.AsyncSubmitResponseDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.QueryRequestDTO;
@@ -20,36 +20,36 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/query")
 @RequiredArgsConstructor
 public class QueryController {
-    private final AnalysisService analysisService;
+    private final QueryApplicationService queryApplicationService;
 
     @PostMapping("/validate")
     public ApiResponse<ValidateResultDTO> validate(@RequestBody QueryRequestDTO request) {
-        return ApiResponse.success(analysisService.validate(request));
+        return ApiResponse.success(queryApplicationService.validate(request));
     }
 
     @PostMapping("/preview")
     public ApiResponse<QueryResultDTO> preview(@RequestBody QueryRequestDTO request) {
-        return ApiResponse.success(analysisService.preview(request));
+        return ApiResponse.success(queryApplicationService.preview(request));
     }
 
     @PostMapping("/run-async")
     public ApiResponse<AsyncSubmitResponseDTO> runAsync(@RequestBody QueryRequestDTO request) {
-        return ApiResponse.success(analysisService.run(request));
+        return ApiResponse.success(queryApplicationService.runAsync(request));
     }
 
     @GetMapping("/{queryId}/status")
     public ApiResponse<QueryResultDTO> getStatus(@PathVariable String queryId) {
-        return ApiResponse.success(analysisService.getStatus(queryId));
+        return ApiResponse.success(queryApplicationService.getStatus(queryId));
     }
 
     @DeleteMapping("/{queryId}/cancel")
     public ApiResponse<Void> cancel(@PathVariable String queryId) {
-        analysisService.cancel(queryId);
+        queryApplicationService.cancel(queryId);
         return ApiResponse.success(null);
     }
 
     @PostMapping("/schema/infer")
     public ApiResponse<SchemaInferResultDTO> inferSchema(@RequestBody QueryRequestDTO request) {
-        return ApiResponse.success(analysisService.inferSchema(request));
+        return ApiResponse.success(queryApplicationService.inferSchema(request));
     }
 }

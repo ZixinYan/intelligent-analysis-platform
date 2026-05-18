@@ -2,7 +2,6 @@
 import { onMounted, reactive, ref } from 'vue'
 import type { SavedDatasetSummaryDTO } from '@/types/contract'
 import { deleteDataset, listDatasets } from '@/api/dataset'
-import { downloadExportFile, triggerExport, waitForExport } from '@/api/export'
 import DatasetDetail from './DatasetDetail.vue'
 
 const datasets = ref<SavedDatasetSummaryDTO[]>([])
@@ -11,8 +10,6 @@ const error = ref<string>()
 
 const selectedId = ref<string>()
 const deleteLoading = reactive<Record<string, boolean>>({})
-const exportLoading = reactive<Record<string, boolean>>({})
-const exportError = reactive<Record<string, string | undefined>>({})
 
 async function load() {
   loading.value = true
@@ -42,22 +39,6 @@ async function handleDelete(ds: SavedDatasetSummaryDTO) {
   }
   finally {
     deleteLoading[ds.datasetId] = false
-  }
-}
-
-async function handleExport(ds: SavedDatasetSummaryDTO) {
-  exportLoading[ds.datasetId] = true
-  exportError[ds.datasetId] = undefined
-  try {
-    const file = await triggerExport({ datasetId: ds.datasetId, format: 'csv', fileName: `${ds.name}.csv` })
-    const ready = await waitForExport(file.fileId)
-    await downloadExportFile(ready.fileId, ready.fileName)
-  }
-  catch (err) {
-    exportError[ds.datasetId] = err instanceof Error ? err.message : '导出失败'
-  }
-  finally {
-    exportLoading[ds.datasetId] = false
   }
 }
 
@@ -111,13 +92,6 @@ onMounted(load)
               <div class="action-row">
                 <button class="ghost-button" @click="selectedId = ds.datasetId">查看</button>
                 <button
-                  class="ghost-button"
-                  :disabled="exportLoading[ds.datasetId]"
-                  @click="handleExport(ds)"
-                >
-                  {{ exportLoading[ds.datasetId] ? '导出中...' : '导出 CSV' }}
-                </button>
-                <button
                   class="danger-button"
                   :disabled="deleteLoading[ds.datasetId]"
                   @click="handleDelete(ds)"
@@ -125,7 +99,6 @@ onMounted(load)
                   {{ deleteLoading[ds.datasetId] ? '删除中...' : '删除' }}
                 </button>
               </div>
-              <div v-if="exportError[ds.datasetId]" class="inline-error">{{ exportError[ds.datasetId] }}</div>
             </td>
           </tr>
         </tbody>

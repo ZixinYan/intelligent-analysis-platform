@@ -2,7 +2,6 @@
 import { computed, onMounted, ref } from 'vue'
 import type { SavedDatasetDetailDTO, StandardResultDTO } from '@/types/contract'
 import { getDataset, updateDatasetMeta } from '@/api/dataset'
-import { downloadExportFile, triggerExport, waitForExport } from '@/api/export'
 import OutputRenderer from '@/components/output/OutputRenderer.vue'
 
 const props = defineProps<{ datasetId: string }>()
@@ -16,9 +15,6 @@ const editingName = ref(false)
 const nameInput = ref('')
 const saveLoading = ref(false)
 const saveError = ref<string>()
-
-const exportLoading = ref(false)
-const exportError = ref<string>()
 
 async function load() {
   loading.value = true
@@ -50,28 +46,6 @@ async function handleSaveName() {
   }
   finally {
     saveLoading.value = false
-  }
-}
-
-async function handleExport() {
-  if (!detail.value)
-    return
-  exportLoading.value = true
-  exportError.value = undefined
-  try {
-    const file = await triggerExport({
-      datasetId: props.datasetId,
-      format: 'csv',
-      fileName: `${detail.value.name}.csv`,
-    })
-    const ready = await waitForExport(file.fileId)
-    await downloadExportFile(ready.fileId, ready.fileName)
-  }
-  catch (err) {
-    exportError.value = err instanceof Error ? err.message : '导出失败'
-  }
-  finally {
-    exportLoading.value = false
   }
 }
 
@@ -114,13 +88,8 @@ onMounted(load)
 
       <div class="header-actions">
         <span v-if="detail" class="row-count">{{ detail.rowCount?.toLocaleString() ?? '—' }} 行</span>
-        <button class="ghost-button" :disabled="exportLoading || !detail" @click="handleExport">
-          {{ exportLoading ? '导出中...' : '导出 CSV' }}
-        </button>
       </div>
     </header>
-
-    <div v-if="exportError" class="export-error">{{ exportError }}</div>
 
     <div class="detail-body">
       <div v-if="loading" class="page-state">加载中...</div>
