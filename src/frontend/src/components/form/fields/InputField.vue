@@ -35,11 +35,25 @@ const emit = defineEmits<{
 <style scoped>
 .field-input {
   width: 100%;
-  border: 1px solid #334155;
+  border: 1px solid var(--iap-input-border);
   border-radius: 12px;
-  background: #020617;
-  color: inherit;
+  background: var(--iap-input-bg);
+  color: var(--iap-text-primary);
   padding: 10px 12px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.field-input:hover:not(:disabled) {
+  background: var(--iap-input-bg-hover);
+}
+.field-input:focus {
+  border-color: var(--iap-input-border-focus);
+  background: var(--iap-input-bg-focus);
+  box-shadow: 0 0 0 3px var(--iap-accent-ring);
+}
+.field-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .field-input--textarea {
   resize: vertical;

@@ -32,7 +32,6 @@ const categoryColor: Record<string, string> = {
 const nodeCategoryLabel = computed(() => categoryLabel[meta.value?.category ?? ''] ?? meta.value?.category ?? '')
 const nodeCategoryColor = computed(() => categoryColor[meta.value?.category ?? ''] ?? '#64748b')
 
-// ── Mock input editor ─────────────────────────────────────────
 const mockInputRaw = ref('{}')
 const mockInputError = ref<string>()
 
@@ -49,7 +48,8 @@ function onMockInputChange(e: Event) {
     if (activeNode.value) {
       workflow.setNodeMockInputs(activeNode.value.id, parsed)
     }
-  } catch {
+  }
+  catch {
     mockInputError.value = 'JSON 格式错误'
   }
 }
@@ -64,12 +64,8 @@ function handleRunNode() {
   }
 }
 
-// ── SQL Query 节点：查询操作栏 ─────────────────────
 const SQL_QUERY_TYPES = new Set(['analysis-sql-query', 'sql_query'])
-
-const isSqlQueryNode = computed(() =>
-  SQL_QUERY_TYPES.has(activeNode.value?.data.nodeType ?? ''),
-)
+const isSqlQueryNode = computed(() => SQL_QUERY_TYPES.has(activeNode.value?.data.nodeType ?? ''))
 
 function handleSqlUpdate(sql: string) {
   const cleaned = Object.fromEntries(
@@ -78,12 +74,8 @@ function handleSqlUpdate(sql: string) {
   handleUpdate({ ...cleaned, sqlTemplate: sql })
 }
 
-// ── Chart Output 节点：AI 图表推荐 ─────────────────
 const CHART_OUTPUT_TYPES = new Set(['analysis-chart-output', 'chart_output'])
-
-const isChartOutputNode = computed(() =>
-  CHART_OUTPUT_TYPES.has(activeNode.value?.data.nodeType ?? ''),
-)
+const isChartOutputNode = computed(() => CHART_OUTPUT_TYPES.has(activeNode.value?.data.nodeType ?? ''))
 
 const chartRecommendations = ref<ChartRecommendationDTO[]>([])
 const chartRecommendLoading = ref(false)
@@ -127,7 +119,6 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
 <template>
   <aside class="ncp" :style="{ '--cat': nodeCategoryColor }">
     <template v-if="activeNode && nodeData">
-      <!-- ── 固定头部 ─────────────────────────────────── -->
       <header class="ncp__header">
         <div class="ncp__header-left">
           <div class="ncp__cat-bar" />
@@ -151,7 +142,6 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
         </button>
       </header>
 
-      <!-- ── Tab 切换栏 ─────────────────────────────── -->
       <nav class="ncp__tabs">
         <button
           v-for="tab in ([
@@ -166,10 +156,7 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
         >{{ tab.label }}</button>
       </nav>
 
-      <!-- ── Tab 内容 ───────────────────────────────── -->
       <div class="ncp__body">
-
-        <!-- 配置 Tab -->
         <template v-if="debugActiveTab === 'config'">
           <div v-if="schemaLoading" class="ncp__state">
             <span class="ncp__spinner" />配置加载中…
@@ -193,7 +180,6 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
             @sql-update="handleSqlUpdate"
           />
 
-          <!-- AI 图表推荐 -->
           <div v-if="isChartOutputNode" class="ncp__ai-recommend">
             <button
               class="ncp__ai-btn"
@@ -219,7 +205,6 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
           </div>
         </template>
 
-        <!-- 输入 Tab (Mock 上游数据) -->
         <template v-if="debugActiveTab === 'input'">
           <div class="ncp__mock">
             <div class="ncp__section-label">上游 Mock 输入</div>
@@ -238,18 +223,15 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
           </div>
         </template>
 
-        <!-- 输出 Tab -->
         <template v-if="debugActiveTab === 'output'">
           <NodeRunPanel
             :result="nodeData.debugResult"
             :loading="isDebugLoading"
           />
         </template>
-
       </div>
     </template>
 
-    <!-- 空态 -->
     <div v-else class="ncp__empty">
       <div class="ncp__empty-icon">↗</div>
       <div>选择节点以查看配置</div>
@@ -262,21 +244,20 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  border-left: 1px solid #1e293b;
-  background: #020617;
+  border-left: 1px solid var(--iap-divider);
+  background: var(--iap-panel-bg);
   overflow: hidden;
 }
 
-/* ── 固定头部 ────────────────────────────────── */
 .ncp__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px 12px;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--iap-divider);
   flex-shrink: 0;
-  background: #020617;
+  background: var(--iap-panel-bg);
 }
 .ncp__header-left {
   display: flex;
@@ -295,7 +276,7 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
 .ncp__title {
   font-size: 14px;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--iap-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -320,14 +301,13 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
 }
 .ncp__type {
   font-size: 11px;
-  color: #475569;
+  color: var(--iap-text-tertiary);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* ── 运行按钮 ─────────────────────────────────── */
 .ncp__run-btn {
   display: flex;
   align-items: center;
@@ -361,19 +341,18 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Tab 切换栏 ─────────────────────────────── */
 .ncp__tabs {
   display: flex;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--iap-divider);
   flex-shrink: 0;
-  background: #020617;
+  background: var(--iap-panel-bg);
 }
 .ncp__tab {
   flex: 1;
   padding: 9px 0;
   font-size: 12px;
   font-weight: 500;
-  color: #475569;
+  color: var(--iap-text-tertiary);
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -381,14 +360,13 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
   transition: color 0.15s, border-color 0.15s;
   letter-spacing: 0.02em;
 }
-.ncp__tab:hover { color: #94a3b8; }
+.ncp__tab:hover { color: var(--iap-text-secondary); }
 .ncp__tab--active {
   color: var(--cat, #3b82f6);
   border-bottom-color: var(--cat, #3b82f6);
   font-weight: 600;
 }
 
-/* ── Tab 内容区域 ─────────────────────────────── */
 .ncp__body {
   flex: 1;
   overflow-y: auto;
@@ -398,45 +376,43 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
   gap: 14px;
 }
 
-/* ── 状态 ────────────────────────────────────── */
 .ncp__state {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #64748b;
+  color: var(--iap-text-tertiary);
   font-size: 13px;
   padding: 8px 0;
 }
-.ncp__state--error { color: #fca5a5; }
+.ncp__state--error { color: var(--iap-error-text); }
 .ncp__spinner {
   display: inline-block;
   width: 12px;
   height: 12px;
-  border: 2px solid #1e293b;
-  border-top-color: #3b82f6;
+  border: 2px solid var(--iap-divider-strong);
+  border-top-color: var(--iap-text-accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
 
-/* ── Mock 输入 ───────────────────────────────── */
 .ncp__mock { display: flex; flex-direction: column; gap: 8px; }
 .ncp__section-label {
   font-size: 10px;
   font-weight: 700;
-  color: #475569;
+  color: var(--iap-text-tertiary);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 .ncp__mock-hint {
   font-size: 11px;
-  color: #475569;
+  color: var(--iap-text-tertiary);
   line-height: 1.6;
   margin: 0;
 }
 .ncp__mock-hint code {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  color: #7dd3fc;
-  background: rgba(125, 211, 252, 0.08);
+  color: var(--iap-text-accent);
+  background: color-mix(in srgb, var(--iap-text-accent) 10%, transparent);
   border-radius: 3px;
   padding: 1px 4px;
 }
@@ -444,25 +420,27 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
   width: 100%;
   min-height: 160px;
   resize: vertical;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid #1e293b;
+  background: var(--iap-code-bg);
+  border: 1px solid var(--iap-input-border);
   border-radius: 8px;
   padding: 10px 12px;
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--iap-text-secondary);
   line-height: 1.6;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
   box-sizing: border-box;
 }
-.ncp__mock-textarea:focus { border-color: color-mix(in srgb, var(--cat, #3b82f6) 50%, transparent); }
+.ncp__mock-textarea:focus {
+  border-color: var(--iap-input-border-focus);
+  box-shadow: 0 0 0 3px var(--iap-accent-ring);
+}
 .ncp__mock-error {
   font-size: 11px;
-  color: #fca5a5;
+  color: var(--iap-error-text);
 }
 
-/* ── 空态 ────────────────────────────────────── */
 .ncp__empty {
   flex: 1;
   display: flex;
@@ -470,12 +448,11 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: #334155;
+  color: var(--iap-text-placeholder);
   font-size: 13px;
 }
-.ncp__empty-icon { font-size: 28px; color: #1e293b; }
+.ncp__empty-icon { font-size: 28px; color: var(--iap-text-disabled); }
 
-/* ── AI 图表推荐 ────────────────────────────── */
 .ncp__ai-recommend { display: flex; flex-direction: column; gap: 8px; }
 .ncp__ai-btn {
   display: inline-flex;
@@ -483,16 +460,16 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
   gap: 6px;
   padding: 7px 14px;
   border-radius: 8px;
-  border: 1px solid rgba(99, 102, 241, 0.5);
-  background: rgba(99, 102, 241, 0.12);
-  color: #a5b4fc;
+  border: 1px solid var(--iap-ai-btn-border);
+  background: var(--iap-ai-btn-bg);
+  color: var(--iap-ai-btn-text);
   font-size: 12px;
   cursor: pointer;
   transition: background 0.15s;
 }
-.ncp__ai-btn:hover:not(:disabled) { background: rgba(99, 102, 241, 0.25); }
+.ncp__ai-btn:hover:not(:disabled) { background: var(--iap-ai-btn-hover); }
 .ncp__ai-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.ncp__ai-error { font-size: 11px; color: #fca5a5; }
-.ncp__ai-hint { font-size: 11px; color: #475569; }
+.ncp__ai-error { font-size: 11px; color: var(--iap-error-text); }
+.ncp__ai-hint { font-size: 11px; color: var(--iap-text-tertiary); }
 .ncp__ai-results { display: flex; flex-direction: column; gap: 6px; }
 </style>

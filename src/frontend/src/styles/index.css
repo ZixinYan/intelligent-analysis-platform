@@ -1,16 +1,173 @@
 :root {
-  color: #e5e7eb;
-  background: #0f172a;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
   line-height: 1.5;
   font-weight: 400;
-  /* Inter 字形优化 */
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   font-variation-settings: normal;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+
+  --iap-radius-sm: 6px;
+  --iap-radius-md: 8px;
+  --iap-radius-lg: 12px;
+  --iap-radius-xl: 16px;
+  --iap-radius-node: 12px;
+}
+
+html[data-theme='light'] {
+  color-scheme: light;
+  --iap-body-bg: #f2f4f7;
+  --iap-body-gradient: radial-gradient(circle at top, rgba(21, 90, 239, 0.08), transparent 42%), linear-gradient(180deg, #f8fafc 0%, #f2f4f7 100%);
+  --iap-nav-bg: rgba(255, 255, 255, 0.9);
+  --iap-toolbar-bg: rgba(242, 244, 247, 0.92);
+  --iap-sidebar-bg: #f9fafb;
+  --iap-panel-bg: #ffffff;
+  --iap-card-bg: #fcfcfd;
+  --iap-surface-secondary: #ffffff;
+  --iap-surface-hover: #f3f5f8;
+  --iap-canvas-bg: #f2f4f7;
+  --iap-canvas-overlay: radial-gradient(circle at top, rgba(21, 90, 239, 0.08), transparent 38%);
+  --iap-code-bg: rgba(248, 250, 252, 0.88);
+  --iap-node-bg: #fcfcfd;
+  --iap-node-border: rgba(16, 24, 40, 0.08);
+  --iap-node-border-highlight: rgba(21, 90, 239, 0.18);
+  --iap-canvas-dot-color: rgba(103, 111, 131, 0.18);
+  --iap-workflow-link-active: #296dff;
+
+  --iap-text-primary: #101828;
+  --iap-text-secondary: #354052;
+  --iap-text-tertiary: #676f83;
+  --iap-text-placeholder: #98a2b2;
+  --iap-text-disabled: #b3bac5;
+  --iap-text-accent: #155aef;
+  --iap-text-accent-strong: #004aeb;
+  --iap-text-inverse: #ffffff;
+
+  --iap-divider: rgba(16, 24, 40, 0.08);
+  --iap-divider-strong: rgba(16, 24, 40, 0.14);
+  --iap-card-border: rgba(16, 24, 40, 0.08);
+
+  --iap-btn-primary-bg: #155aef;
+  --iap-btn-primary-hover: #004aeb;
+  --iap-btn-primary-text: #ffffff;
+  --iap-btn-secondary-bg: rgba(255, 255, 255, 0.78);
+  --iap-btn-secondary-hover: #ffffff;
+  --iap-btn-secondary-border: rgba(16, 24, 40, 0.14);
+  --iap-btn-secondary-text: #354052;
+  --iap-btn-secondary-text-strong: #101828;
+  --iap-btn-danger-bg: rgba(240, 68, 56, 0.08);
+  --iap-btn-danger-hover: rgba(240, 68, 56, 0.14);
+  --iap-btn-danger-border: rgba(240, 68, 56, 0.25);
+  --iap-btn-danger-text: #d92d20;
+  --iap-ai-btn-bg: rgba(68, 76, 231, 0.12);
+  --iap-ai-btn-hover: rgba(68, 76, 231, 0.18);
+  --iap-ai-btn-border: rgba(68, 76, 231, 0.24);
+  --iap-ai-btn-text: #444ce7;
+
+  --iap-input-bg: rgba(200, 206, 218, 0.25);
+  --iap-input-bg-hover: rgba(200, 206, 218, 0.34);
+  --iap-input-bg-focus: #f9fafb;
+  --iap-input-border: #d0d5dc;
+  --iap-input-border-focus: #155aef;
+  --iap-accent-ring: rgba(21, 90, 239, 0.14);
+
+  --iap-success-bg: rgba(23, 178, 106, 0.1);
+  --iap-success-border: rgba(23, 178, 106, 0.28);
+  --iap-success-text: #079455;
+  --iap-error-bg: rgba(240, 68, 56, 0.1);
+  --iap-error-border: rgba(240, 68, 56, 0.28);
+  --iap-error-text: #d92d20;
+  --iap-warning-bg: rgba(247, 144, 9, 0.1);
+  --iap-warning-border: rgba(247, 144, 9, 0.26);
+  --iap-warning-text: #dc6803;
+
+  --iap-user-bubble-bg: rgba(68, 76, 231, 0.12);
+  --iap-user-bubble-border: rgba(68, 76, 231, 0.24);
+  --iap-assistant-bubble-bg: #ffffff;
+  --iap-assistant-bubble-border: rgba(16, 24, 40, 0.08);
+
+  --iap-shadow-panel: 0 8px 24px rgba(16, 24, 40, 0.06);
+  --iap-shadow-node: 0 1px 2px rgba(16, 24, 40, 0.05), 0 8px 24px rgba(16, 24, 40, 0.08);
+  --iap-shadow-heavy: rgba(16, 24, 40, 0.08);
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --iap-body-bg: #1d1d20;
+  --iap-body-gradient: radial-gradient(circle at top, rgba(82, 137, 255, 0.14), transparent 40%), linear-gradient(180deg, #1f1f24 0%, #1d1d20 100%);
+  --iap-nav-bg: rgba(34, 34, 37, 0.92);
+  --iap-toolbar-bg: rgba(29, 29, 32, 0.92);
+  --iap-sidebar-bg: #1d1d20;
+  --iap-panel-bg: #222225;
+  --iap-card-bg: #222225;
+  --iap-surface-secondary: #27272b;
+  --iap-surface-hover: #31313a;
+  --iap-canvas-bg: #1d1d20;
+  --iap-canvas-overlay: radial-gradient(circle at top, rgba(82, 137, 255, 0.16), transparent 36%);
+  --iap-code-bg: rgba(31, 31, 36, 0.9);
+  --iap-node-bg: #27272b;
+  --iap-node-border: rgba(255, 255, 255, 0.08);
+  --iap-node-border-highlight: rgba(82, 137, 255, 0.24);
+  --iap-canvas-dot-color: rgba(133, 133, 173, 0.12);
+  --iap-workflow-link-active: #5289ff;
+
+  --iap-text-primary: #fbfbfc;
+  --iap-text-secondary: rgba(255, 255, 255, 0.82);
+  --iap-text-tertiary: rgba(200, 206, 218, 0.62);
+  --iap-text-placeholder: rgba(200, 206, 218, 0.38);
+  --iap-text-disabled: rgba(200, 206, 218, 0.32);
+  --iap-text-accent: #5289ff;
+  --iap-text-accent-strong: #8ab0ff;
+  --iap-text-inverse: #101828;
+
+  --iap-divider: rgba(200, 206, 218, 0.14);
+  --iap-divider-strong: rgba(200, 206, 218, 0.2);
+  --iap-card-border: rgba(255, 255, 255, 0.04);
+
+  --iap-btn-primary-bg: #155aef;
+  --iap-btn-primary-hover: #296dff;
+  --iap-btn-primary-text: rgba(255, 255, 255, 0.96);
+  --iap-btn-secondary-bg: rgba(255, 255, 255, 0.08);
+  --iap-btn-secondary-hover: rgba(255, 255, 255, 0.14);
+  --iap-btn-secondary-border: rgba(255, 255, 255, 0.1);
+  --iap-btn-secondary-text: rgba(255, 255, 255, 0.82);
+  --iap-btn-secondary-text-strong: #fbfbfc;
+  --iap-btn-danger-bg: rgba(240, 68, 56, 0.12);
+  --iap-btn-danger-hover: rgba(240, 68, 56, 0.18);
+  --iap-btn-danger-border: rgba(240, 68, 56, 0.3);
+  --iap-btn-danger-text: #f97066;
+  --iap-ai-btn-bg: rgba(68, 76, 231, 0.18);
+  --iap-ai-btn-hover: rgba(68, 76, 231, 0.24);
+  --iap-ai-btn-border: rgba(99, 102, 241, 0.34);
+  --iap-ai-btn-text: #a5b4fc;
+
+  --iap-input-bg: rgba(255, 255, 255, 0.08);
+  --iap-input-bg-hover: rgba(255, 255, 255, 0.1);
+  --iap-input-bg-focus: rgba(255, 255, 255, 0.06);
+  --iap-input-border: #3a3a40;
+  --iap-input-border-focus: #5289ff;
+  --iap-accent-ring: rgba(82, 137, 255, 0.2);
+
+  --iap-success-bg: rgba(23, 178, 106, 0.14);
+  --iap-success-border: rgba(23, 178, 106, 0.3);
+  --iap-success-text: #17b26a;
+  --iap-error-bg: rgba(240, 68, 56, 0.14);
+  --iap-error-border: rgba(240, 68, 56, 0.3);
+  --iap-error-text: #f97066;
+  --iap-warning-bg: rgba(247, 144, 9, 0.14);
+  --iap-warning-border: rgba(247, 144, 9, 0.3);
+  --iap-warning-text: #fdb022;
+
+  --iap-user-bubble-bg: rgba(68, 76, 231, 0.22);
+  --iap-user-bubble-border: rgba(99, 102, 241, 0.34);
+  --iap-assistant-bubble-bg: rgba(255, 255, 255, 0.05);
+  --iap-assistant-bubble-border: rgba(255, 255, 255, 0.08);
+
+  --iap-shadow-panel: 0 12px 32px rgba(0, 0, 0, 0.28);
+  --iap-shadow-node: 0 2px 4px rgba(0, 0, 0, 0.22), 0 12px 32px rgba(0, 0, 0, 0.32);
+  --iap-shadow-heavy: rgba(0, 0, 0, 0.42);
 }
 
 * {
@@ -24,13 +181,48 @@ body,
   min-height: 100%;
 }
 
+html,
 body {
-  background: #020617;
+  background: var(--iap-body-bg);
+}
+
+body {
+  color: var(--iap-text-primary);
+  background-image: var(--iap-body-gradient);
+  background-attachment: fixed;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 button,
 input,
 select,
 textarea {
-  font: inherit;
+  color: inherit;
+}
+
+button {
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+html:not([data-changing-theme]) *,
+html:not([data-changing-theme]) *::before,
+html:not([data-changing-theme]) *::after {
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+html[data-changing-theme] *,
+html[data-changing-theme] *::before,
+html[data-changing-theme] *::after {
+  transition: none !important;
+}
+
+::selection {
+  background: var(--iap-accent-ring);
 }

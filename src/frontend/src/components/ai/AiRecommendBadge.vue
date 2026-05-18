@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ChartRecommendationDTO } from '@/types/contract'
 
-const props = defineProps<{
+defineProps<{
   recommendation: ChartRecommendationDTO
 }>()
 

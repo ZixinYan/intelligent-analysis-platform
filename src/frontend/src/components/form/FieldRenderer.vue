@@ -48,20 +48,20 @@ const { visible, disabled } = useFieldState(props.field, () => props.model)
 }
 .field-renderer__label {
   font-size: 13px;
-  color: #cbd5e1;
+  color: var(--iap-text-primary);
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 .field-renderer__required {
-  color: #f87171;
+  color: var(--iap-error-text);
 }
 .field-renderer__description {
   font-size: 12px;
-  color: #64748b;
+  color: var(--iap-text-tertiary);
 }
 .field-renderer__error {
   font-size: 12px;
-  color: #fca5a5;
+  color: var(--iap-error-text);
 }
 </style>

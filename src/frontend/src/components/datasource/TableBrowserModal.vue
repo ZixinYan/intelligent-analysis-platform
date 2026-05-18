@@ -8,10 +8,6 @@ const props = defineProps<{
   datasourceName: string
 }>()
 
-const emit = defineEmits<{
-  close: []
-}>()
-
 const tables = ref<string[]>([])
 const loading = ref(false)
 const error = ref<string>()
@@ -91,7 +87,7 @@ const filteredTables = () =>
 .dialog-mask {
   position: fixed;
   inset: 0;
-  background: rgba(2, 6, 23, 0.72);
+  background: color-mix(in srgb, var(--iap-body-bg) 35%, rgba(15, 23, 42, 0.72));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -100,10 +96,10 @@ const filteredTables = () =>
 }
 .dialog {
   width: min(520px, 100%);
-  border: 1px solid #1e293b;
+  border: 1px solid var(--iap-divider);
   border-radius: 20px;
-  background: #0f172a;
-  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.5);
+  background: var(--iap-panel-bg);
+  box-shadow: var(--iap-shadow-panel);
   display: flex;
   flex-direction: column;
   max-height: 80vh;
@@ -113,16 +109,17 @@ const filteredTables = () =>
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--iap-divider);
   flex-shrink: 0;
 }
 .dialog__header h3 {
   margin: 0;
   font-size: 20px;
+  color: var(--iap-text-primary);
 }
 .dialog__header p {
   margin: 4px 0 0;
-  color: #94a3b8;
+  color: var(--iap-text-tertiary);
   font-size: 14px;
 }
 .dialog__body {
@@ -138,21 +135,22 @@ const filteredTables = () =>
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  border-top: 1px solid #1e293b;
+  border-top: 1px solid var(--iap-divider);
   flex-shrink: 0;
 }
 .search-input {
   width: 100%;
-  border: 1px solid #334155;
+  border: 1px solid var(--iap-input-border);
   border-radius: 12px;
-  background: #020617;
-  color: #e2e8f0;
+  background: var(--iap-input-bg);
+  color: var(--iap-text-primary);
   padding: 10px 12px;
   box-sizing: border-box;
+  outline: none;
 }
 .search-input:focus {
-  outline: none;
-  border-color: #2563eb;
+  border-color: var(--iap-input-border-focus);
+  box-shadow: 0 0 0 3px var(--iap-accent-ring);
 }
 .table-list {
   margin: 0;
@@ -167,41 +165,45 @@ const filteredTables = () =>
   gap: 10px;
   padding: 10px 12px;
   border-radius: 10px;
-  color: #cbd5e1;
+  color: var(--iap-text-secondary);
   font-size: 14px;
-  font-family: 'Fira Code', 'Cascadia Code', monospace;
-  transition: background 0.1s;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  transition: background 0.1s, color 0.1s;
 }
 .table-list__item:hover {
-  background: rgba(37, 99, 235, 0.12);
-  color: #93c5fd;
+  background: color-mix(in srgb, var(--iap-text-accent) 12%, var(--iap-surface-hover));
+  color: var(--iap-text-accent);
 }
 .table-icon {
-  color: #475569;
+  color: var(--iap-text-placeholder);
   font-size: 12px;
 }
 .state-msg {
   padding: 24px;
   text-align: center;
-  color: #64748b;
+  color: var(--iap-text-tertiary);
   font-size: 14px;
 }
 .state-msg--error {
-  color: #fca5a5;
+  color: var(--iap-error-text);
 }
 .state-msg--inner {
   list-style: none;
 }
 .table-count {
-  color: #64748b;
+  color: var(--iap-text-tertiary);
   font-size: 13px;
 }
 .ghost-button {
-  border: 1px solid #334155;
+  border: 1px solid var(--iap-btn-secondary-border);
   border-radius: 12px;
-  background: transparent;
-  color: #cbd5e1;
+  background: var(--iap-btn-secondary-bg);
+  color: var(--iap-btn-secondary-text);
   padding: 10px 16px;
   cursor: pointer;
+}
+.ghost-button:hover {
+  background: var(--iap-btn-secondary-hover);
+  color: var(--iap-btn-secondary-text-strong);
 }
 </style>

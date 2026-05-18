@@ -49,7 +49,6 @@ const statusConfig = computed(() => ({
 interface UsageHint { label: string; icon: string }
 
 const usageHints = computed<UsageHint[]>(() => {
-  // 统一规范化：analysis-sql-query → sql_query，兼容新旧命名
   const nodeType = normalizeNodeType(props.data.meta?.nodeType ?? '')
   const hintMap: Record<string, UsageHint[]> = {
     sql_query: [
@@ -113,12 +112,9 @@ const usageHints = computed<UsageHint[]>(() => {
 
 const inputPorts  = computed(() => props.data.meta?.inputPorts  ?? [])
 const outputPorts = computed(() => props.data.meta?.outputPorts ?? [])
-
 const visibleTags = computed(() => (props.data.meta?.tags ?? []).slice(0, 3))
-
 const showTooltip = ref(false)
 
-// 结果摘要（OUTPUT 节点成功执行后展示）
 const isOutputNode = computed(() => props.data.meta?.category === 'OUTPUT')
 const resultSummary = computed(() => {
   if (!isOutputNode.value || props.data.status !== 'success') return null
@@ -132,9 +128,7 @@ const resultSummary = computed(() => {
 </script>
 
 <template>
-  <!-- 外层 wrapper：overflow:visible，允许 tooltip 溢出 -->
   <div class="ans-outer">
-    <!-- Tooltip：位于节点右侧，不受 .ans overflow:hidden 约束 -->
     <Transition name="tooltip-fade">
       <div
         v-if="showTooltip && usageHints.length"
@@ -161,8 +155,7 @@ const resultSummary = computed(() => {
       </div>
     </Transition>
 
-    <Handle id="input"  type="target" :position="Position.Left"  class="ans__handle ans__handle--in" />
-    <!-- CONDITION 节点：渲染 true（绿色）和 false（红色）两个出口；其余节点渲染单一出口 -->
+    <Handle id="input" type="target" :position="Position.Left" class="ans__handle ans__handle--in" />
     <template v-if="isConditionNode">
       <Handle
         id="true"
@@ -181,12 +174,10 @@ const resultSummary = computed(() => {
     </template>
     <Handle v-else id="output" type="source" :position="Position.Right" class="ans__handle ans__handle--out" />
 
-    <!-- 节点主体 -->
     <div class="ans" :style="{ '--cat': categoryColor }">
       <div class="ans__top-line" />
       <div class="ans__accent" />
 
-      <!-- 头部 -->
       <div class="ans__header">
         <div class="ans__icon">{{ resolveNodeIcon(data.meta) }}</div>
         <div class="ans__title-group">
@@ -202,13 +193,11 @@ const resultSummary = computed(() => {
             {{ statusConfig.label }}
           </div>
           <div class="ans__header-actions">
-            <!-- 运行按钮 -->
             <button
               class="ans__run-btn"
               title="运行此节点"
               @click.stop="handleRun"
             >▷</button>
-            <!-- 用法提示触发按钮 -->
             <button
               v-if="usageHints.length"
               class="ans__info-btn"
@@ -221,7 +210,6 @@ const resultSummary = computed(() => {
 
       <div class="ans__divider" />
 
-      <!-- 当前配置预览 -->
       <div v-if="data.preview?.length" class="ans__preview">
         <div class="ans__section-label">当前配置</div>
         <div class="ans__preview-body">
@@ -231,7 +219,6 @@ const resultSummary = computed(() => {
         </div>
       </div>
 
-      <!-- 数据流：输入端口 → 输出端口 -->
       <div v-if="inputPorts.length || outputPorts.length" class="ans__flow">
         <div v-if="inputPorts[0]" class="ans__flow-port ans__flow-port--in">
           <span class="ans__flow-badge ans__flow-badge--in">IN</span>
@@ -246,14 +233,12 @@ const resultSummary = computed(() => {
         </div>
       </div>
 
-      <!-- 底部标签 -->
       <div v-if="visibleTags.length" class="ans__footer">
         <div class="ans__tags">
           <span v-for="tag in visibleTags" :key="tag" class="ans__tag">{{ tag }}</span>
         </div>
       </div>
 
-      <!-- 结果摘要（OUTPUT 节点成功后显示） -->
       <div v-if="resultSummary" class="ans__result-badge">
         <span class="ans__result-badge-icon">{{ resultSummary.icon }}</span>
         <span class="ans__result-badge-text">{{ resultSummary.text }}</span>
@@ -263,26 +248,21 @@ const resultSummary = computed(() => {
 </template>
 
 <style scoped>
-/* ── 外层容器（允许 tooltip 溢出） ─────────── */
 .ans-outer {
   position: relative;
   display: inline-block;
 }
 
-/* ── Tooltip ──────────────────────────────── */
 .ans__tooltip {
   position: absolute;
   left: calc(100% + 14px);
   top: 0;
   width: 240px;
-  background: linear-gradient(160deg, #131c2e 0%, #0d1420 100%);
-  border: 1px solid color-mix(in srgb, var(--cat) 30%, #1e293b);
-  border-radius: 12px;
+  background: var(--iap-panel-bg);
+  border: 1px solid color-mix(in srgb, var(--cat) 24%, var(--iap-divider));
+  border-radius: var(--iap-radius-lg);
   padding: 14px 15px;
-  box-shadow:
-    0 0 0 1px rgba(0,0,0,0.4),
-    0 12px 40px rgba(0,0,0,0.55),
-    0 0 28px -10px var(--cat);
+  box-shadow: var(--iap-shadow-panel), 0 0 28px -14px var(--cat);
   z-index: 9999;
   pointer-events: none;
 }
@@ -300,8 +280,8 @@ const resultSummary = computed(() => {
   width: 36px;
   height: 36px;
   border-radius: 9px;
-  background: color-mix(in srgb, var(--cat) 15%, #1e293b);
-  border: 1px solid color-mix(in srgb, var(--cat) 28%, transparent);
+  background: color-mix(in srgb, var(--cat) 15%, var(--iap-surface-secondary));
+  border: 1px solid color-mix(in srgb, var(--cat) 28%, var(--iap-divider));
   font-size: 17px;
   flex-shrink: 0;
 }
@@ -309,7 +289,7 @@ const resultSummary = computed(() => {
 .ans__tooltip-name {
   font-size: 13px;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--iap-text-primary);
   letter-spacing: 0.01em;
 }
 
@@ -322,14 +302,14 @@ const resultSummary = computed(() => {
 
 .ans__tooltip-desc {
   font-size: 12px;
-  color: #64748b;
+  color: var(--iap-text-tertiary);
   line-height: 1.6;
   margin-bottom: 10px;
 }
 
 .ans__tooltip-divider {
   height: 1px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--cat) 30%, transparent), transparent 70%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cat) 30%, var(--iap-divider)), transparent 70%);
   margin-bottom: 10px;
 }
 
@@ -344,7 +324,7 @@ const resultSummary = computed(() => {
   align-items: flex-start;
   gap: 8px;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--iap-text-secondary);
   line-height: 1.4;
 }
 
@@ -360,7 +340,6 @@ const resultSummary = computed(() => {
   flex: 1;
 }
 
-/* Tooltip 进入/离开动画 */
 .tooltip-fade-enter-active,
 .tooltip-fade-leave-active {
   transition: opacity 0.15s ease, transform 0.15s ease;
@@ -371,58 +350,54 @@ const resultSummary = computed(() => {
   transform: translateX(-4px);
 }
 
-/* ── 节点主体 ─────────────────────────────── */
 .ans {
   position: relative;
   min-width: 280px;
   max-width: 340px;
-  background: linear-gradient(160deg, #131c2e 0%, #0d1420 100%);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cat) 3%, var(--iap-node-bg)), var(--iap-node-bg));
+  border: 1px solid var(--iap-node-border);
   border-left: none;
-  border-radius: 14px;
-  box-shadow:
-    0 0 0 1px rgba(0,0,0,0.4),
-    0 8px 32px rgba(0,0,0,0.5),
-    0 0 24px -8px var(--cat);
+  border-radius: var(--iap-radius-node);
+  box-shadow: var(--iap-shadow-node), 0 0 22px -14px var(--cat);
   overflow: hidden;
   font-family: inherit;
 }
 
-/* ── 顶部高亮线 ───────────────────────────── */
 .ans__top-line {
   position: absolute;
-  top: 0; left: 4px; right: 0;
+  top: 0;
+  left: 4px;
+  right: 0;
   height: 1.5px;
   background: linear-gradient(90deg, color-mix(in srgb, var(--cat) 70%, transparent), transparent 80%);
-  border-radius: 0 14px 0 0;
+  border-radius: 0 var(--iap-radius-node) 0 0;
 }
 
-/* ── 左侧色条 ─────────────────────────────── */
 .ans__accent {
   position: absolute;
-  left: 0; top: 0; bottom: 0;
+  left: 0;
+  top: 0;
+  bottom: 0;
   width: 4px;
-  background: linear-gradient(180deg, var(--cat), color-mix(in srgb, var(--cat) 40%, #0d1420));
-  border-radius: 14px 0 0 14px;
+  background: linear-gradient(180deg, var(--cat), color-mix(in srgb, var(--cat) 40%, var(--iap-node-bg)));
+  border-radius: var(--iap-radius-node) 0 0 var(--iap-radius-node);
 }
 
-/* ── Vue-Flow handles ─────────────────────── */
 .ans__handle {
   width: 20px !important;
   height: 20px !important;
   border: 2.5px solid var(--cat) !important;
-  background: #f1f5f9 !important;
+  background: var(--iap-panel-bg) !important;
   border-radius: 50% !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   cursor: crosshair !important;
   transition: all 0.2s ease !important;
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.5), 0 0 12px -2px var(--cat) !important;
+  box-shadow: 0 0 0 3px var(--iap-shadow-heavy), 0 0 12px -2px var(--cat) !important;
   z-index: 10 !important;
 }
 
-/* + 号图标 */
 .ans__handle::after {
   content: '+' !important;
   font-size: 14px !important;
@@ -436,9 +411,9 @@ const resultSummary = computed(() => {
   width: 26px !important;
   height: 26px !important;
   border-width: 3px !important;
-  background: #fff !important;
+  background: var(--iap-panel-bg) !important;
   box-shadow:
-    0 0 0 4px rgba(0, 0, 0, 0.5),
+    0 0 0 4px var(--iap-shadow-heavy),
     0 0 0 8px color-mix(in srgb, var(--cat) 25%, transparent),
     0 0 20px -2px var(--cat) !important;
   transform: translate(-3px, -3px) !important;
@@ -448,7 +423,6 @@ const resultSummary = computed(() => {
   font-size: 18px !important;
 }
 
-/* 输入/输出位置微调 */
 .ans__handle--in {
   left: -12px !important;
   top: calc(50% - 10px) !important;
@@ -459,7 +433,6 @@ const resultSummary = computed(() => {
   top: calc(50% - 10px) !important;
 }
 
-/* hover 时位置补偿 */
 .ans__handle--in:hover {
   left: -15px !important;
   top: calc(50% - 13px) !important;
@@ -470,20 +443,18 @@ const resultSummary = computed(() => {
   top: calc(50% - 13px) !important;
 }
 
-/* CONDITION 节点：true 分支绿色，false 分支红色 */
 .ans__handle--true {
   border-color: #22c55e !important;
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.5), 0 0 12px -2px #22c55e !important;
+  box-shadow: 0 0 0 3px var(--iap-shadow-heavy), 0 0 12px -2px #22c55e !important;
 }
 .ans__handle--true::after { color: #22c55e !important; }
 
 .ans__handle--false {
   border-color: #ef4444 !important;
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.5), 0 0 12px -2px #ef4444 !important;
+  box-shadow: 0 0 0 3px var(--iap-shadow-heavy), 0 0 12px -2px #ef4444 !important;
 }
 .ans__handle--false::after { color: #ef4444 !important; }
 
-/* ── 头部 ─────────────────────────────────── */
 .ans__header {
   display: grid;
   grid-template-columns: 44px 1fr auto;
@@ -498,8 +469,8 @@ const resultSummary = computed(() => {
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--cat) 15%, #1e293b);
-  border: 1px solid color-mix(in srgb, var(--cat) 30%, transparent);
+  background: color-mix(in srgb, var(--cat) 14%, var(--iap-surface-secondary));
+  border: 1px solid color-mix(in srgb, var(--cat) 28%, var(--iap-divider));
   font-size: 20px;
   line-height: 1;
   flex-shrink: 0;
@@ -510,7 +481,7 @@ const resultSummary = computed(() => {
 .ans__title {
   font-size: 13px;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--iap-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -540,14 +511,13 @@ const resultSummary = computed(() => {
 
 .ans__subtype {
   font-size: 11px;
-  color: #64748b;
+  color: var(--iap-text-tertiary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* ── 右侧：状态 + 信息按钮 ────────────────── */
 .ans__header-right {
   display: flex;
   flex-direction: column;
@@ -562,7 +532,6 @@ const resultSummary = computed(() => {
   gap: 4px;
 }
 
-/* ── 运行按钮 ─────────────────────────────── */
 .ans__run-btn {
   display: grid;
   place-items: center;
@@ -587,7 +556,6 @@ const resultSummary = computed(() => {
   box-shadow: 0 0 8px -2px var(--cat);
 }
 
-/* ── 状态徽章 ─────────────────────────────── */
 .ans__status {
   display: flex;
   align-items: center;
@@ -612,20 +580,19 @@ const resultSummary = computed(() => {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1;   transform: scale(1); }
-  50%       { opacity: 0.4; transform: scale(0.7); }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
 }
 
-/* ── 用法提示触发按钮 ─────────────────────── */
 .ans__info-btn {
   display: grid;
   place-items: center;
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
-  color: #475569;
+  border: 1px solid var(--iap-divider);
+  background: color-mix(in srgb, var(--iap-panel-bg) 92%, transparent);
+  color: var(--iap-text-placeholder);
   font-size: 11px;
   font-weight: 700;
   cursor: default;
@@ -641,163 +608,134 @@ const resultSummary = computed(() => {
   background: color-mix(in srgb, var(--cat) 10%, transparent);
 }
 
-/* ── 分割线 ───────────────────────────────── */
 .ans__divider {
   height: 1px;
   margin: 0 14px 0 18px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--cat) 30%, transparent), transparent 70%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cat) 26%, var(--iap-divider)), transparent 70%);
 }
 
-/* ── 公共 section label ───────────────────── */
 .ans__section-label {
   font-size: 10px;
   font-weight: 700;
-  color: #475569;
+  color: var(--iap-text-tertiary);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   margin-bottom: 6px;
 }
 
-/* ── 配置预览 ─────────────────────────────── */
 .ans__preview {
-  margin: 10px 14px 0 18px;
+  padding: 12px 14px 0 18px;
 }
 
 .ans__preview-body {
-  padding: 7px 10px;
-  border-radius: 8px;
-  background: rgba(15,23,42,0.8);
-  border: 1px solid #1e293b;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--iap-divider);
+  background: var(--iap-code-bg);
+  border-radius: 10px;
+  padding: 10px 12px;
 }
 
 .ans__preview-line {
-  font-size: 11px;
-  color: #94a3b8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
   display: flex;
-  align-items: center;
-  gap: 5px;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--iap-text-secondary);
 }
 
 .ans__preview-bullet {
-  color: color-mix(in srgb, var(--cat) 70%, transparent);
-  font-weight: 700;
-  flex-shrink: 0;
+  color: var(--cat);
 }
 
-/* ── 数据流指示器 ─────────────────────────── */
 .ans__flow {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 10px 14px 0 18px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
-  overflow: hidden;
+  gap: 8px;
+  padding: 14px 14px 0 18px;
 }
 
 .ans__flow-port {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
   flex: 1;
+  min-width: 0;
+  border: 1px solid var(--iap-divider);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--cat) 6%, var(--iap-surface-secondary));
+  padding: 8px 10px;
+}
+
+.ans__flow-arrow {
+  color: var(--iap-text-tertiary);
+  font-size: 13px;
 }
 
 .ans__flow-badge {
-  font-size: 9px;
-  font-weight: 800;
-  padding: 1px 5px;
-  border-radius: 3px;
-  letter-spacing: 0.06em;
-  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  margin-bottom: 6px;
 }
 
 .ans__flow-badge--in {
-  background: rgba(56,189,248,0.12);
-  color: #38bdf8;
-  border: 1px solid rgba(56,189,248,0.25);
+  color: var(--cat);
+  background: color-mix(in srgb, var(--cat) 12%, transparent);
 }
 
 .ans__flow-badge--out {
-  background: rgba(167,139,250,0.12);
-  color: #a78bfa;
-  border: 1px solid rgba(167,139,250,0.25);
+  color: var(--cat);
+  background: color-mix(in srgb, var(--cat) 16%, transparent);
 }
 
 .ans__flow-name {
-  font-size: 11px;
-  color: #94a3b8;
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--iap-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .ans__flow-type {
-  font-size: 10px;
-  color: #475569;
-  font-family: ui-monospace, monospace;
-  white-space: nowrap;
-  flex-shrink: 0;
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--iap-text-tertiary);
 }
 
-.ans__flow-arrow {
-  font-size: 12px;
-  color: #334155;
-  flex-shrink: 0;
-}
-
-/* ── 底部标签 ─────────────────────────────── */
 .ans__footer {
-  display: flex;
-  align-items: center;
-  padding: 10px 14px 12px 18px;
+  padding: 12px 14px 14px 18px;
 }
 
 .ans__tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
 }
 
 .ans__tag {
-  font-size: 10px;
-  padding: 2px 7px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.07);
-  color: #475569;
+  border: 1px solid var(--iap-divider);
+  background: var(--iap-surface-secondary);
+  color: var(--iap-text-secondary);
+  font-size: 11px;
+  padding: 3px 8px;
 }
 
-/* ── 结果摘要徽章 ─────────────────────────── */
 .ans__result-badge {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 8px 14px 10px 18px;
-  padding: 5px 10px;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--cat) 8%, rgba(15,23,42,0.8));
-  border: 1px solid color-mix(in srgb, var(--cat) 22%, transparent);
-}
-.ans__result-badge-icon {
-  font-size: 13px;
-  flex-shrink: 0;
-}
-.ans__result-badge-text {
-  font-size: 11px;
-  color: color-mix(in srgb, var(--cat) 80%, #e2e8f0);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  margin: 0 14px 14px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--iap-success-border);
+  background: var(--iap-success-bg);
+  color: var(--iap-success-text);
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
 }
 </style>

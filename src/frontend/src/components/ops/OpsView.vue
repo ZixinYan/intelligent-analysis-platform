@@ -37,7 +37,6 @@ onUnmounted(() => clearInterval(timer))
 
 <template>
   <section class="ops-page">
-    <!-- 页头 -->
     <header class="page-header">
       <div>
         <h2>运维监控</h2>
@@ -48,11 +47,9 @@ onUnmounted(() => clearInterval(timer))
       </div>
     </header>
 
-    <!-- 内容 -->
     <div v-if="loading && !metrics" class="page-state">加载中...</div>
     <div v-else-if="error" class="page-state page-state--error">{{ error }}</div>
     <div v-else-if="metrics" class="content">
-      <!-- 指标卡片 -->
       <div class="metric-grid">
         <div class="metric-card" :class="{ 'metric-card--accent': metrics.activeQueryCount > 10 }">
           <div class="metric-label">活跃查询</div>
@@ -80,7 +77,6 @@ onUnmounted(() => clearInterval(timer))
         </div>
       </div>
 
-      <!-- 慢查询 Top N -->
       <div v-if="metrics.slowQueryTop && metrics.slowQueryTop.length > 0" class="slow-queries">
         <div class="section-title">慢查询 Top {{ metrics.slowQueryTop.length }}</div>
         <div class="table-wrap">
@@ -103,7 +99,6 @@ onUnmounted(() => clearInterval(timer))
         </div>
       </div>
 
-      <!-- 扩展提示 -->
       <div class="ext-hint">后续可接入 Prometheus / Grafana 实时图表</div>
     </div>
   </section>
@@ -124,28 +119,30 @@ onUnmounted(() => clearInterval(timer))
 .page-header h2 {
   margin: 0;
   font-size: 24px;
+  color: var(--iap-text-primary);
 }
 .page-header p {
   margin: 6px 0 0;
-  color: #94a3b8;
+  color: var(--iap-text-tertiary);
   font-size: 13px;
 }
 .last-updated {
   font-size: 12px;
-  color: #475569;
+  color: var(--iap-text-tertiary);
   white-space: nowrap;
 }
 .page-state {
-  border: 1px dashed #334155;
+  border: 1px dashed var(--iap-divider-strong);
   border-radius: 16px;
   padding: 32px;
-  color: #94a3b8;
+  color: var(--iap-text-tertiary);
   text-align: center;
+  background: var(--iap-card-bg);
 }
 .page-state--error {
-  color: #fecaca;
-  border-color: rgba(248, 113, 113, 0.35);
-  background: rgba(127, 29, 29, 0.2);
+  color: var(--iap-error-text);
+  border-color: var(--iap-error-border);
+  background: var(--iap-error-bg);
 }
 .content {
   display: flex;
@@ -163,39 +160,40 @@ onUnmounted(() => clearInterval(timer))
   }
 }
 .metric-card {
-  border: 1px solid #1e293b;
+  border: 1px solid var(--iap-card-border);
   border-radius: 16px;
-  background: rgba(15, 23, 42, 0.7);
+  background: var(--iap-card-bg);
   padding: 20px;
+  box-shadow: var(--iap-shadow-panel);
 }
 .metric-label {
   font-size: 12px;
-  color: #64748b;
+  color: var(--iap-text-tertiary);
   margin-bottom: 10px;
 }
 .metric-value {
   font-size: 28px;
   font-weight: 700;
-  color: #e2e8f0;
+  color: var(--iap-text-primary);
 }
 .metric-card--accent .metric-value {
-  color: #fbbf24;
+  color: var(--iap-warning-text);
 }
 .metric-unit {
   font-size: 13px;
   font-weight: 400;
-  color: #64748b;
+  color: var(--iap-text-tertiary);
   margin-left: 4px;
 }
 .section-title {
   font-size: 13px;
   font-weight: 500;
-  color: #94a3b8;
+  color: var(--iap-text-secondary);
   margin-bottom: 12px;
 }
 .table-wrap {
   overflow: auto;
-  border: 1px solid #1e293b;
+  border: 1px solid var(--iap-divider);
   border-radius: 12px;
 }
 .slow-table {
@@ -207,22 +205,22 @@ onUnmounted(() => clearInterval(timer))
 .slow-table td {
   padding: 10px 16px;
   text-align: left;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--iap-divider);
 }
 .slow-table th {
-  color: #94a3b8;
-  background: rgba(15, 23, 42, 0.95);
+  color: var(--iap-text-secondary);
+  background: var(--iap-surface-secondary);
   font-weight: 500;
   white-space: nowrap;
 }
 .slow-table td {
-  color: #e2e8f0;
+  color: var(--iap-text-primary);
 }
 .slow-table tbody tr:last-child td {
   border-bottom: none;
 }
 .slow-table tbody tr:hover td {
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--iap-surface-hover);
 }
 .col-right {
   text-align: right !important;
@@ -243,18 +241,19 @@ onUnmounted(() => clearInterval(timer))
   text-overflow: ellipsis;
 }
 .cell-muted {
-  color: #64748b !important;
+  color: var(--iap-text-tertiary) !important;
 }
 .cell-warning {
-  color: #fbbf24 !important;
+  color: var(--iap-warning-text) !important;
   font-weight: 500;
 }
 .ext-hint {
-  border: 1px dashed #1e293b;
+  border: 1px dashed var(--iap-divider);
   border-radius: 12px;
   padding: 16px;
   font-size: 13px;
-  color: #475569;
+  color: var(--iap-text-tertiary);
   text-align: center;
+  background: var(--iap-card-bg);
 }
 </style>

@@ -19,8 +19,6 @@ const { options, loading, error } = useOptionsLoader(() => props.field, () => pr
 const multiple = computed(() => props.field.componentType === 'MULTI_SELECT' || Boolean(props.field.multiple))
 const selectedValues = computed(() => Array.isArray(props.modelValue) ? props.modelValue.map(item => String(item)) : [])
 
-// 当 options 加载完成后，若当前值不在新 options 中则自动清空（防止跨数据源残留值）
-// 同时监听 loading，确保在 loading=false 后再做判断（options 先于 loading 更新）
 watch([options, loading], ([newOptions, isLoading]) => {
   if (isLoading || !newOptions.length) return
   if (multiple.value) {
@@ -87,27 +85,29 @@ const placeholder = computed(() => {
 
 .field-input {
   width: 100%;
-  border: 1px solid #334155;
+  border: 1px solid var(--iap-input-border);
   border-radius: 12px;
-  background: #020617;
-  color: inherit;
+  background: var(--iap-input-bg);
+  color: var(--iap-text-primary);
   padding: 10px 36px 10px 12px;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2398a2b2' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  outline: none;
 }
 
 .field-input:hover:not(:disabled) {
-  border-color: #475569;
+  border-color: var(--iap-divider-strong);
+  background: var(--iap-input-bg-hover);
 }
 
 .field-input:focus {
-  outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  border-color: var(--iap-input-border-focus);
+  background: var(--iap-input-bg-focus);
+  box-shadow: 0 0 0 3px var(--iap-accent-ring);
 }
 
 .field-input:disabled {
@@ -116,13 +116,13 @@ const placeholder = computed(() => {
 }
 
 .is-loading .field-input {
-  border-color: #1e3a5f;
+  border-color: var(--iap-input-border-focus);
   background-image: none;
   padding-right: 40px;
 }
 
 .is-error .field-input {
-  border-color: #7f1d1d;
+  border-color: var(--iap-error-border);
 }
 
 .select-spinner {
@@ -132,8 +132,8 @@ const placeholder = computed(() => {
   transform: translateY(-50%);
   width: 14px;
   height: 14px;
-  border: 2px solid #334155;
-  border-top-color: #3b82f6;
+  border: 2px solid var(--iap-divider-strong);
+  border-top-color: var(--iap-text-accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   pointer-events: none;
@@ -145,12 +145,12 @@ const placeholder = computed(() => {
 
 .select-error {
   font-size: 12px;
-  color: #fca5a5;
+  color: var(--iap-error-text);
 }
 
 .select-empty {
   font-size: 12px;
-  color: #475569;
+  color: var(--iap-text-tertiary);
   padding: 4px 12px;
 }
 </style>

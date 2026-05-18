@@ -93,9 +93,9 @@ function updateField(field: PanelFieldDTO, value: unknown) {
 }
 .form-renderer__section {
   padding: 14px;
-  border: 1px solid #1e293b;
+  border: 1px solid var(--iap-divider);
   border-radius: 14px;
-  background: #0a0f1e;
+  background: var(--iap-surface-secondary);
   display: grid;
   gap: 14px;
 }
@@ -104,8 +104,8 @@ function updateField(field: PanelFieldDTO, value: unknown) {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #475569;
+  color: var(--iap-text-tertiary);
   padding-bottom: 10px;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--iap-divider);
 }
 </style>

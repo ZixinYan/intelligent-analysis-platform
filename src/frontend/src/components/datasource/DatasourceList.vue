@@ -132,22 +132,24 @@ onMounted(() => {
 .page-header h2 {
   margin: 0;
   font-size: 24px;
+  color: var(--iap-text-primary);
 }
 .page-header p {
   margin: 6px 0 0;
-  color: #94a3b8;
+  color: var(--iap-text-tertiary);
 }
 .page-state {
-  border: 1px dashed #334155;
+  border: 1px dashed var(--iap-divider-strong);
   border-radius: 16px;
   padding: 32px;
-  color: #94a3b8;
+  color: var(--iap-text-tertiary);
   text-align: center;
+  background: var(--iap-card-bg);
 }
 .page-state--error {
-  color: #fecaca;
-  border-color: rgba(248, 113, 113, 0.35);
-  background: rgba(127, 29, 29, 0.2);
+  color: var(--iap-error-text);
+  border-color: var(--iap-error-border);
+  background: var(--iap-error-bg);
 }
 .card-list {
   display: grid;
@@ -157,10 +159,11 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 16px;
-  border: 1px solid #1e293b;
+  border: 1px solid var(--iap-card-border);
   border-radius: 18px;
-  background: #0f172a;
+  background: var(--iap-card-bg);
   padding: 20px;
+  box-shadow: var(--iap-shadow-panel);
 }
 .datasource-card__title-row {
   display: flex;
@@ -170,10 +173,11 @@ onMounted(() => {
 .datasource-card__title-row h3 {
   margin: 0;
   font-size: 18px;
+  color: var(--iap-text-primary);
 }
 .datasource-card__meta {
   margin: 8px 0 0;
-  color: #94a3b8;
+  color: var(--iap-text-tertiary);
 }
 .datasource-card__actions {
   display: flex;
@@ -186,35 +190,36 @@ onMounted(() => {
   border-radius: 999px;
   padding: 4px 10px;
   font-size: 12px;
-  border: 1px solid #334155;
+  border: 1px solid var(--iap-divider);
 }
 .status-chip--active {
-  color: #86efac;
-  background: rgba(20, 83, 45, 0.25);
+  color: var(--iap-success-text);
+  background: var(--iap-success-bg);
 }
 .status-chip--unreachable {
-  color: #fca5a5;
-  background: rgba(127, 29, 29, 0.3);
+  color: var(--iap-error-text);
+  background: var(--iap-error-bg);
 }
 .status-chip--inactive {
-  color: #fde68a;
-  background: rgba(133, 77, 14, 0.3);
+  color: var(--iap-warning-text);
+  background: var(--iap-warning-bg);
 }
 .alert {
   margin-top: 12px;
   border-radius: 12px;
   padding: 10px 12px;
   font-size: 14px;
+  border: 1px solid transparent;
 }
 .alert--success {
-  background: rgba(20, 83, 45, 0.25);
-  border: 1px solid rgba(74, 222, 128, 0.25);
-  color: #bbf7d0;
+  background: var(--iap-success-bg);
+  border-color: var(--iap-success-border);
+  color: var(--iap-success-text);
 }
 .alert--error {
-  background: rgba(127, 29, 29, 0.28);
-  border: 1px solid rgba(248, 113, 113, 0.32);
-  color: #fecaca;
+  background: var(--iap-error-bg);
+  border-color: var(--iap-error-border);
+  color: var(--iap-error-text);
 }
 .primary-button,
 .ghost-button,
@@ -225,18 +230,18 @@ onMounted(() => {
 }
 .primary-button {
   border: none;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
-  color: #fff;
+  background: var(--iap-btn-primary-bg);
+  color: var(--iap-btn-primary-text);
 }
 .ghost-button {
-  border: 1px solid #334155;
-  background: transparent;
-  color: #cbd5e1;
+  border: 1px solid var(--iap-btn-secondary-border);
+  background: var(--iap-btn-secondary-bg);
+  color: var(--iap-btn-secondary-text);
 }
 .danger-button {
-  border: 1px solid rgba(248, 113, 113, 0.35);
-  background: rgba(127, 29, 29, 0.22);
-  color: #fecaca;
+  border: 1px solid var(--iap-btn-danger-border);
+  background: var(--iap-btn-danger-bg);
+  color: var(--iap-btn-danger-text);
 }
 @media (max-width: 900px) {
   .page-header,

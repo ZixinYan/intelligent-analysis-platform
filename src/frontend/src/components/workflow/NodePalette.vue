@@ -36,7 +36,6 @@ const groupedNodes = computed(() => {
 
 function shortDesc(desc?: string): string {
   if (!desc) return ''
-  // Take the first clause before ；or，
   const firstClause = desc.split(/[；，、]/)[0]
   return firstClause.length > 22 ? firstClause.slice(0, 22) + '…' : firstClause
 }
@@ -85,35 +84,33 @@ function shortDesc(desc?: string): string {
 <style scoped>
 .palette {
   padding: 14px 10px;
-  border-right: 1px solid #1e293b;
-  background: #020617;
+  border-right: 1px solid var(--iap-divider);
+  background: var(--iap-sidebar-bg);
   display: flex;
   flex-direction: column;
   gap: 4px;
   overflow-y: auto;
 }
 
-/* ── Header ──────────────────────────────── */
 .palette__header {
   padding: 2px 6px 12px;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--iap-divider);
   margin-bottom: 4px;
 }
 
 .palette__title {
   font-size: 14px;
   font-weight: 700;
-  color: #e2e8f0;
+  color: var(--iap-text-primary);
   letter-spacing: 0.03em;
 }
 
 .palette__subtitle {
   font-size: 11px;
-  color: #334155;
+  color: var(--iap-text-tertiary);
   margin-top: 3px;
 }
 
-/* ── Group ───────────────────────────────── */
 .palette__group {
   display: flex;
   flex-direction: column;
@@ -146,13 +143,12 @@ function shortDesc(desc?: string): string {
 
 .palette__category-desc {
   font-size: 10px;
-  color: #334155;
+  color: var(--iap-text-tertiary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* ── Item ────────────────────────────────── */
 .palette__item {
   display: flex;
   align-items: center;
@@ -160,7 +156,7 @@ function shortDesc(desc?: string): string {
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
-  color: #cbd5e1;
+  color: var(--iap-text-secondary);
   padding: 8px 10px;
   text-align: left;
   cursor: pointer;
@@ -169,8 +165,8 @@ function shortDesc(desc?: string): string {
 }
 
 .palette__item:hover {
-  background: color-mix(in srgb, var(--cat) 6%, #0f172a);
-  border-color: color-mix(in srgb, var(--cat) 25%, transparent);
+  background: color-mix(in srgb, var(--cat) 6%, var(--iap-surface-hover));
+  border-color: color-mix(in srgb, var(--cat) 24%, var(--iap-divider));
 }
 
 .palette__item:hover .palette__item-arrow {
@@ -183,8 +179,8 @@ function shortDesc(desc?: string): string {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--cat) 10%, #1e293b);
-  border: 1px solid color-mix(in srgb, var(--cat) 20%, transparent);
+  background: color-mix(in srgb, var(--cat) 10%, var(--iap-surface-secondary));
+  border: 1px solid color-mix(in srgb, var(--cat) 20%, var(--iap-divider));
   display: grid;
   place-items: center;
   font-size: 15px;
@@ -199,7 +195,7 @@ function shortDesc(desc?: string): string {
 .palette__item-name {
   font-size: 12.5px;
   font-weight: 600;
-  color: #cbd5e1;
+  color: var(--iap-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -208,49 +204,46 @@ function shortDesc(desc?: string): string {
 
 .palette__item-desc {
   font-size: 10.5px;
-  color: #475569;
+  color: var(--iap-text-tertiary);
   margin-top: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.palette__item:hover .palette__item-name {
-  color: #f1f5f9;
-}
-
 .palette__item:hover .palette__item-desc {
-  color: #64748b;
+  color: var(--iap-text-secondary);
 }
 
 .palette__item-arrow {
   font-size: 16px;
   font-weight: 300;
-  color: #334155;
+  color: var(--iap-text-placeholder);
   opacity: 0;
   flex-shrink: 0;
   transition: opacity 0.12s, color 0.12s;
   line-height: 1;
 }
 
-/* ── State ───────────────────────────────── */
 .palette__state {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #64748b;
+  color: var(--iap-text-tertiary);
   padding: 12px 8px;
 }
 
-.palette__state--error { color: #fca5a5; }
+.palette__state--error {
+  color: var(--iap-error-text);
+}
 
 .palette__spinner {
   display: inline-block;
   width: 12px;
   height: 12px;
-  border: 2px solid #1e293b;
-  border-top-color: #3b82f6;
+  border: 2px solid var(--iap-divider-strong);
+  border-top-color: var(--iap-text-accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
