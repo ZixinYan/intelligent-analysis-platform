@@ -1,3 +1,24 @@
+/**
+ * 前后端接口契约类型定义（Data Transfer Objects）。
+ *
+ * 本文件与后端 contract 模块的 DTO 类严格对应，字段变更需同步更新。
+ * 所有接口均为只读数据结构，不含业务逻辑。
+ *
+ * 模块划分：
+ *  - 基础响应结构（ApiResponse / PageResult）
+ *  - 节点元数据 & 配置 Schema（NodeMetaDTO / PanelFieldDTO 等）
+ *  - 查询相关（QueryRequestDTO / QueryResultDTO / ValidateResultDTO）
+ *  - 工作流定义 & 执行（WorkflowDefinitionDTO / WorkflowRunRequestDTO 等）
+ *  - 流式 SSE 事件（WorkflowStreamEventDTO 联合类型）
+ *  - 数据源管理（DatasourceDTO / DatasourceCreateRequestDTO 等）
+ *  - AI 辅助（AiSqlRequestDTO / AiWorkflowBuildRequestDTO 等）
+ *  - 触发器（TriggerDTO）
+ *  - 已保存数据集（SavedDatasetSummaryDTO）
+ *  - 导出（ExportFileDTO）
+ *  - 运维指标（OpsMetricsSummaryDTO）
+ */
+
+/** 统一 API 响应包装体，所有接口均以此格式返回 */
 export interface ApiResponse<T> {
   code: string
   message: string
@@ -5,6 +26,7 @@ export interface ApiResponse<T> {
   success: boolean
 }
 
+/** 分页结果包装体 */
 export interface PageResult<T> {
   items: T[]
   total: number
@@ -12,9 +34,13 @@ export interface PageResult<T> {
   pageSize: number
 }
 
+/** 节点所属功能分类：查询 / 计算 / 输出 / 治理 */
 export type NodeCategory = 'QUERY' | 'COMPUTE' | 'OUTPUT' | 'GOVERNANCE'
+/** 节点结果数据类型 */
 export type ResultKind = 'DATASET' | 'TABLE' | 'CHART' | 'VARIABLES' | 'EMPTY'
+/** 支持的图表类型 */
 export type ChartType = 'LINE' | 'BAR' | 'PIE' | 'SCATTER' | 'AREA' | 'MIXED'
+/** 字段值类型，涵盖基本类型和嵌套结构 */
 export type ValueType =
   | 'STRING'
   | 'INTEGER'
@@ -26,6 +52,7 @@ export type ValueType =
   | 'OBJECT'
   | 'DATASET'
   | 'CHART'
+/** 节点配置面板中，单个字段的 UI 组件类型（由后端 NodeMeta 声明） */
 export type FieldComponentType =
   | 'INPUT'
   | 'TEXTAREA'
@@ -84,6 +111,7 @@ export interface FieldEnableRuleDTO {
   enabled: boolean
 }
 
+/** 节点配置面板中单个表单字段的完整描述，由后端动态下发，驱动前端动态表单渲染 */
 export interface PanelFieldDTO {
   field: string
   label: string
@@ -149,6 +177,11 @@ export interface NodeCapabilityDTO {
   params?: Record<string, unknown>
 }
 
+/**
+ * 节点元数据，由后端 /api/v1/node-definitions 接口返回。
+ * 包含节点的显示信息、端口定义、配置 Schema 及能力标签，
+ * 前端据此渲染节点卡片、配置面板和端口连接点。
+ */
 export interface NodeMetaDTO {
   protocolVersion: string
   metadataVersion: string
@@ -172,6 +205,10 @@ export interface NodeMetaDTO {
   extensions?: Record<string, unknown>
 }
 
+/**
+ * 数据字段 Schema，描述数据集中单个列的结构信息。
+ * 用于字段选择器（FieldPicker）、图表字段映射、AI 推荐等场景。
+ */
 export interface FieldSchemaDTO {
   fieldId: string
   name: string
@@ -434,6 +471,12 @@ export interface StandardResultDTO {
   variables?: Record<string, unknown>
 }
 
+/**
+ * 数据集 DTO，承载节点执行结果的表格数据。
+ * sourceSql / sourceDatasourceId 在计算下推场景中使用：
+ * 当下游算子（如聚合、过滤）支持 SQL 下推时，将此 SQL 作为子查询合并到数据库执行，
+ * 避免将大量中间数据传至内存。
+ */
 export interface DatasetDTO {
   columns?: Array<Record<string, unknown>>
   rows?: Array<Record<string, unknown>>
@@ -476,6 +519,11 @@ export interface WorkflowNodeDTO {
   config?: BaseNodeConfigDTO
 }
 
+/**
+ * 工作流有向边，表示节点之间的数据流向。
+ * condition 字段仅在源节点为 ConditionNode 时有效，
+ * 取值 "true"/"false" 表示条件分支方向，null 表示无条件边。
+ */
 export interface WorkflowEdgeDTO {
   id: string
   source: string
@@ -490,6 +538,10 @@ export interface WorkflowPositionDTO {
   y?: number
 }
 
+/**
+ * 工作流完整定义，包含节点列表、有向边列表和节点位置信息（用于画布布局）。
+ * 保存时提交 {@link WorkflowSaveRequestDTO}，加载时服务端返回此结构。
+ */
 export interface WorkflowDefinitionDTO {
   workflowId: string
   workflowName: string

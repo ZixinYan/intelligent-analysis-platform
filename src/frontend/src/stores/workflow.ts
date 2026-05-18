@@ -19,11 +19,42 @@ import { buildNodePreview, createDefaultNodeConfig } from '@/utils/node-preview'
 import { createWorkflow, getWorkflow, listWorkflows, updateWorkflow } from '@/api/workflow'
 import { runNodeDebug as runNodeDebugApi } from '@/api/node-debug'
 
+/**
+ * 工作流编辑器核心 Pinia Store。
+ *
+ * 职责：
+ * - 管理画布节点（nodes）和边（edges）的响应式状态
+ * - 节点配置变更（updateNodeConfig）和状态流转（updateNodeSchema / updateNodeStatus）
+ * - Schema 沿边传播（propagateSchemaFrom）：节点执行后将输出 Schema 推送给下游节点，
+ *   驱动下游字段选择器自动填充候选字段
+ * - 持久化（save / load / loadList）：与后端 REST API 同步工作流定义
+ * - 单节点调试（runNodeDebug）：提交单节点执行请求，成功后更新 Schema 并传播
+ *
+ * 使用示例：
+ * ```ts
+ * const store = useWorkflowStore()
+ * store.addNode(meta, { x: 200, y: 300 })
+ * await store.save()
+ * ```
+ */
+
+/** 生成节点唯一 ID（格式：nodeType-随机6位字母数字） */
 function createNodeId(nodeType: string) {
   return `${nodeType}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-/** Derive a SchemaInferResultDTO from a debug-run dataset result. */
+/**
+ * 从调试运行的数据集结果推断 Schema。
+ *
+ * 优先级：
+ * 1. 使用后端返回的 dataset.schema.fields（最准确）
+ * 2. 从 dataset.columns 数组构造（兼容旧格式）
+ * 3. 从第一行数据的 key 列表构造（最后兜底）
+ *
+ * @param dataset 节点调试执行返回的数据集
+ * @param nodeId  节点 ID，用于生成唯一 schemaId
+ * @returns 推断出的 SchemaInferResultDTO，无法推断时返回 null
+ */
 function inferSchemaFromDataset(dataset: DatasetDTO, nodeId: string): SchemaInferResultDTO | null {
   // Use schema.fields provided by backend
   if (dataset.schema?.fields?.length) {
@@ -55,6 +86,7 @@ function inferSchemaFromDataset(dataset: DatasetDTO, nodeId: string): SchemaInfe
   return null
 }
 
+/** 将节点数组转换为 {nodeId → {x, y}} 的位置映射，用于序列化到后端 */
 function toPositionMap(nodes: WorkflowNode[]) {
   return Object.fromEntries(nodes.map(node => [node.id, { x: node.position.x, y: node.position.y } satisfies WorkflowPositionDTO]))
 }
@@ -75,6 +107,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   const selectedNode = computed(() => nodes.value.find(node => node.id === selectedNodeId.value))
 
+  /** 向画布添加新节点，并自动选中该节点，默认位置 (120, 120) */
   function addNode(meta: NodeMetaDTO, position: XYPosition = { x: 120, y: 120 }) {
     const id = createNodeId(meta.nodeType)
     const config = createDefaultNodeConfig(meta)
@@ -95,6 +128,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
     selectedNodeId.value = id
   }
 
+  /**
+   * 更新节点配置，同步刷新节点预览摘要文本。
+   * @param status 更新后的节点状态，默认置为 'draft'（配置未验证）
+   */
   function updateNodeConfig(nodeId: string, config: Record<string, unknown>, status: AnalysisNodeStatus = 'draft') {
     nodes.value = nodes.value.map((node) => {
       if (node.id !== nodeId) {
@@ -172,6 +209,15 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
     edges.value = [...edges.value, edge]
 
+    // If source has a debugResult but no schema yet, infer schema from it first
+    const sourceNode = nodes.value.find(n => n.id === connection.source)
+    if (sourceNode && !sourceNode.data.schema && sourceNode.data.debugResult?.result?.dataset) {
+      const schema = inferSchemaFromDataset(sourceNode.data.debugResult.result.dataset, connection.source)
+      if (schema) {
+        updateNodeSchema(connection.source, schema)
+      }
+    }
+
     // Auto-propagate schema from source to target
     propagateSchemaFrom(connection.source)
   }
@@ -209,6 +255,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
     return nodes.value.find(item => item.id === edge.source)
   }
 
+  /**
+   * 将当前画布状态序列化为 API 请求体。
+   * 丢弃前端运行时状态（status、schema、debugResult），只保留节点定义和位置。
+   */
   function serialize(): WorkflowSaveRequestDTO {
     return {
       workflowName: workflowName.value.trim() || '未命名工作流',
@@ -231,6 +281,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
   }
 
+  /**
+   * 从后端返回的工作流定义重建画布状态（反序列化）。
+   * 节点位置从 definition.positions 映射中读取，缺省值为 (120, 120)。
+   * 调用后节点状态统一重置为 'idle'，Schema 等运行时状态清空。
+   */
   function hydrate(definition: WorkflowDefinitionDTO) {
     workflowId.value = definition.workflowId
     workflowName.value = definition.workflowName || '未命名工作流'
@@ -263,6 +318,11 @@ export const useWorkflowStore = defineStore('workflow', () => {
     selectedNodeId.value = undefined
   }
 
+  /**
+   * 保存当前工作流到后端。
+   * 若 workflowId 已存在则更新，否则创建新工作流。
+   * 保存成功后以服务端返回值重新 hydrate（获取服务端分配的 workflowId 等字段）。
+   */
   async function save() {
     if (saving.value) {
       return
@@ -319,6 +379,34 @@ export const useWorkflowStore = defineStore('workflow', () => {
     )
   }
 
+  /**
+   * 收集当前节点所有上游节点的实际执行结果，作为 upstreamMockInputs 传给后端。
+   * 手动配置的 mockInputs 优先级更高，会覆盖自动收集的上游结果。
+   */
+  function buildUpstreamInputs(nodeId: string): Record<string, unknown> {
+    const collected: Record<string, unknown> = {}
+    // Collect actual debug results from all upstream nodes
+    for (const edge of edges.value) {
+      if (edge.target !== nodeId) continue
+      const upstreamNode = nodes.value.find(n => n.id === edge.source)
+      if (!upstreamNode) continue
+      const result = upstreamNode.data.debugResult?.result
+      if (result) {
+        collected[edge.source] = result
+      }
+    }
+    // Manual mockInputs override auto-collected results
+    return { ...collected, ...(nodes.value.find(n => n.id === nodeId)?.data.mockInputs ?? {}) }
+  }
+
+  /**
+   * 单节点调试执行。
+   *
+   * 执行完成后：
+   * 1. 更新节点 debugResult 和 status（success / error）
+   * 2. 若成功且结果含 dataset，从 dataset 推断 Schema 并沿边向下游传播（force=true）
+   *    → 下游字段选择器可立即感知最新字段列表
+   */
   async function runNodeDebug(nodeId: string) {
     const node = nodes.value.find(n => n.id === nodeId)
     if (!node) return
@@ -334,7 +422,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
           nodeType: node.data.nodeType,
           config: node.data.config,
         },
-        upstreamMockInputs: node.data.mockInputs ?? {},
+        upstreamMockInputs: buildUpstreamInputs(nodeId),
       }
       const result: NodeResultDTO = await runNodeDebugApi(payload)
       nodes.value = nodes.value.map(n =>
@@ -391,6 +479,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     onNodeClick,
     getUpstreamNode,
     propagateSchemaFrom,
+    buildUpstreamInputs,
     serialize,
     hydrate,
     save,

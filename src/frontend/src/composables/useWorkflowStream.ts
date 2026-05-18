@@ -7,6 +7,12 @@ import type {
   WorkflowRunRequestDTO,
 } from '@/types/contract'
 
+/**
+ * 单个节点的实时流式状态，在 SSE 事件驱动下持续更新。
+ *
+ * chunks 字段用于大数据集场景：后端将结果分批推送（node_progress 事件），
+ * 每批对应 chunks[chunkIndex]，全部推送完成后通过 flattenChunks() 合并。
+ */
 export interface StreamNodeState {
   /** 节点执行状态 */
   status: 'pending' | 'running' | 'success' | 'error' | 'skipped'

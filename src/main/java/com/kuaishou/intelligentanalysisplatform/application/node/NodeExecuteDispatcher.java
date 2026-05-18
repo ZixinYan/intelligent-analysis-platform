@@ -91,8 +91,15 @@ public class NodeExecuteDispatcher {
         inputs.forEach((key, value) -> {
             if (value instanceof StandardResultDTO standardResult) {
                 results.put(key, standardResult);
-            } else if (value instanceof Map<?, ?> map) {
-                results.put(key, StandardResultDTO.builder().variables((Map<String, Object>) map).build());
+            } else if (value instanceof Map<?, ?>) {
+                try {
+                    StandardResultDTO converted = objectMapper.convertValue(value, StandardResultDTO.class);
+                    results.put(key, converted);
+                } catch (Exception e) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> map = (Map<String, Object>) value;
+                    results.put(key, StandardResultDTO.builder().variables(map).build());
+                }
             } else {
                 results.put(key, StandardResultDTO.builder().variables(Map.of("value", value)).build());
             }

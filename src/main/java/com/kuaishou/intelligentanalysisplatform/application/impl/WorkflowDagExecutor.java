@@ -32,11 +32,34 @@ import com.kuaishou.intelligentanalysisplatform.contract.spi.NodeExecuteContextD
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Component;
 
+/**
+ * 工作流 DAG 并行执行引擎。
+ *
+ * <p>核心算法：
+ * <ol>
+ *   <li><b>依赖图构建</b>：解析边（edges）计算每个节点的前驱集合（dependsOn），
+ *       支持普通边和带条件标签（true/false）的条件边。</li>
+ *   <li><b>基于 CompletableFuture 的并行执行</b>：每个节点对应一个 Future，
+ *       节点就绪（所有前驱完成）后，投入 ForkJoinPool 公共线程池异步执行。
+ *       无前驱节点（起始节点）立即触发。</li>
+ *   <li><b>条件分支剪枝</b>：ConditionNode 执行后从结果变量 {@code _branch}
+ *       读取走向（"true"/"false"），将不满足条件的边的目标节点直接置为 SKIPPED。</li>
+ *   <li><b>异常传播</b>：上游节点 FAILED / SKIPPED 时，下游节点联动 SKIPPED，
+ *       ErrorHandler 节点除外（可捕获指定被守护节点的失败）。</li>
+ *   <li><b>整体超时</b>：所有节点 10 分钟内未完成则强制取消并抛出异常。</li>
+ * </ol>
+ *
+ * <p>执行完成后向 Micrometer 上报 workflow.run.count 计数器和 workflow.run.duration 耗时，
+ * 标签包含 workflowId 和最终 status，便于接入 Prometheus + Grafana 监控。
+ */
 @Component
 public class WorkflowDagExecutor {
 
+    /** 工作流整体执行超时时间（分钟）。超过此时间所有未完成节点 Future 被取消 */
     private static final int WORKFLOW_TIMEOUT_MINUTES = 10;
+    /** 条件节点的 nodeType 标识，用于识别需要进行分支剪枝的节点 */
     private static final String CONDITION_NODE_TYPE = "condition";
+    /** 错误处理节点的 nodeType 标识，允许捕获指定上游节点的失败状态 */
     private static final String ERROR_HANDLER_NODE_TYPE = "error_handler";
 
     private final NodeExecuteDispatcher nodeExecuteDispatcher;
@@ -49,8 +72,21 @@ public class WorkflowDagExecutor {
         this.meterRegistry = meterRegistry;
     }
 
+    /** 有条件边的元数据：记录边的源节点、目标节点和条件标签（"true"/"false"）*/
     record ConditionalEdge(String source, String target, String condition) {}
 
+    /**
+     * 执行工作流 DAG。
+     *
+     * <p>此方法是阻塞的：在所有节点完成（或超时/中断）后才返回。
+     * 节点之间的并行度由 ForkJoinPool 公共线程池决定，
+     * 适合 CPU 密集度低、以 IO 等待为主的节点类型（SQL 查询、外部 API 调用等）。
+     *
+     * @param request 工作流运行请求，包含节点定义、边定义和输入参数
+     * @param runId   本次运行的唯一 ID，用于 SSE 推送和日志追踪
+     * @return 包含所有节点结果、最终数据集及工作流整体状态的运行结果
+     * @throws BaseBusinessException 执行超时时抛出，错误码 INTERNAL_ERROR
+     */
     public WorkflowRunResultDTO execute(WorkflowRunRequestDTO request, String runId) {
         List<WorkflowNodeDTO> nodes = request.getNodes();
         List<WorkflowEdgeDTO> edges = request.getEdges() != null ? request.getEdges() : List.of();
@@ -135,6 +171,28 @@ public class WorkflowDagExecutor {
         return result;
     }
 
+    /**
+     * 在异步线程中执行单个节点。
+     *
+     * <p>执行前先检查所有上游节点的结果：
+     * <ul>
+     *   <li>上游 FAILED / SKIPPED → 当前节点置为 SKIPPED（级联跳过）</li>
+     *   <li>上游是被当前 ErrorHandler 守护的节点且状态为 FAILED → 允许继续执行</li>
+     *   <li>所有上游正常 → 调用 {@link NodeExecuteDispatcher#dispatch} 实际执行</li>
+     * </ul>
+     *
+     * <p>ConditionNode 执行成功后，额外触发 {@link #activateConditionalEdges} 进行分支剪枝。
+     *
+     * @param node              当前要执行的节点
+     * @param deps              该节点的上游节点 ID 集合
+     * @param futures           全局 Future 注册表
+     * @param completedResults  已完成节点的结果快照（传递给下游作为上下文）
+     * @param nodeResultsMap    节点执行结果注册表
+     * @param request           原始工作流运行请求
+     * @param runId             本次运行 ID
+     * @param allNodes          全部节点列表（传给 NodeExecuteContext）
+     * @param conditionalEdgesMap 条件边索引（key=sourceNodeId）
+     */
     private void executeNode(WorkflowNodeDTO node,
                              Set<String> deps,
                              ConcurrentHashMap<String, CompletableFuture<NodeResultDTO>> futures,
@@ -205,6 +263,18 @@ public class WorkflowDagExecutor {
         }
     }
 
+    /**
+     * 根据条件节点的执行结果激活/剪枝条件边。
+     *
+     * <p>从节点结果的变量字典中读取 {@code _branch} 字段（值为 "true" 或 "false"），
+     * 将条件标签不匹配的目标节点直接预置为 SKIPPED，使其不会再被 ForkJoinPool 触发执行。
+     *
+     * @param conditionNodeId     条件节点 ID
+     * @param result              条件节点的执行结果
+     * @param conditionalEdgesMap 条件边索引
+     * @param futures             全局 Future 注册表
+     * @param nodeResultsMap      节点结果注册表
+     */
     private void activateConditionalEdges(String conditionNodeId,
                                           NodeResultDTO result,
                                           Map<String, List<ConditionalEdge>> conditionalEdgesMap,
@@ -229,6 +299,10 @@ public class WorkflowDagExecutor {
         }
     }
 
+    /**
+     * 从条件节点结果的变量字典中提取分支方向（"true" 或 "false"）。
+     * 返回 null 表示结果不含 _branch，分支剪枝不生效。
+     */
     private String extractBranch(NodeResultDTO result) {
         if (result == null || result.getResult() == null) {
             return null;
@@ -300,6 +374,12 @@ public class WorkflowDagExecutor {
         futures.get(node.getNodeId()).complete(failed);
     }
 
+    /**
+     * 按节点定义顺序整合所有节点结果，确定工作流整体状态。
+     *
+     * <p>只要有一个节点 FAILED，工作流状态就为 FAILED。
+     * {@code finalResult} 取最后一个有非空结果的节点（通常是输出节点）。
+     */
     private WorkflowRunResultDTO buildResult(String workflowId,
                                              List<WorkflowNodeDTO> nodes,
                                              ConcurrentHashMap<String, NodeResultDTO> nodeResultsMap) {

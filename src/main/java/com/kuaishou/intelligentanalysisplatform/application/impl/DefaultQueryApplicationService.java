@@ -52,9 +52,34 @@ import com.kuaishou.intelligentanalysisplatform.infra.query.executor.AsyncQueryE
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+/**
+ * 查询应用服务的默认实现。
+ *
+ * <p>职责链：
+ * <ol>
+ *   <li><b>SQL 安全卫兵（guard）</b>：通过 {@link SqlGuard} 对 SQL 进行解析、标准化和安全规则校验，
+ *       阻断多语句、写操作、危险子句等风险 SQL。</li>
+ *   <li><b>流量治理</b>：通过 {@link QueryGovernanceLimiter} 在租户 QPS 和数据源并发两个维度限流，
+ *       保护下游数据库不被打爆。</li>
+ *   <li><b>缓存命中</b>：预览模式下按 tenantId + datasourceId + 标准化 SQL 构建缓存键，
+ *       命中则直接返回，不消耗数据库连接。</li>
+ *   <li><b>连接器执行</b>：通过 {@link ConnectorFactory} 获取对应数据库方言的 Connector，
+ *       执行分页查询并截断超限行。</li>
+ *   <li><b>可观测性</b>：执行后写入审计日志 & 指标（慢查询判定、超时计数、并发量）。</li>
+ * </ol>
+ *
+ * <p>支持三种执行模式：
+ * <ul>
+ *   <li>{@code PREVIEW}（{@link #preview}）：同步执行，返回有限行数，超时短，适合实时预览。</li>
+ *   <li>{@code RUN_ASYNC}（{@link #runAsync}）：异步提交，返回 taskId 供轮询，适合大数据量全量查询。</li>
+ *   <li>{@code VALIDATE}（{@link #validate}）：只做 SQL 合法性校验，不实际执行查询。</li>
+ * </ul>
+ */
 @Service
 public class DefaultQueryApplicationService implements QueryApplicationService {
+    /** 预览模式标识，写入执行记录的 mode 字段 */
     private static final String MODE_PREVIEW = "PREVIEW";
+    /** 全量运行模式标识 */
     private static final String MODE_RUN = "RUN";
 
     private final SqlGuard sqlGuard;
@@ -114,6 +139,12 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         this.datasourceConcurrencyLimit = datasourceConcurrencyLimit;
     }
 
+    /**
+     * SQL 合法性预校验。仅通过 SqlGuard 验证 SQL 语法和安全规则，不执行实际查询。
+     *
+     * @param request 查询请求，包含 datasourceId、sql 及可选的 requestId
+     * @return 校验结果，包含标准化 SQL、SQL 指纹及违规码列表
+     */
     @Override
     public ValidateResultDTO validate(QueryRequestDTO request) {
         GuardedRequest guardedRequest = guard(request, false, false);
@@ -128,6 +159,22 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
                 .build();
     }
 
+    /**
+     * 同步预览查询。适合用户在编辑 SQL 时实时预览结果，超时时间短（默认 10s）。
+     *
+     * <p>执行流程：
+     * <ol>
+     *   <li>guard：SQL 安全卫兵校验 + 数据源有效性检查</li>
+     *   <li>acquire：获取治理令牌（租户 QPS / 数据源并发双重限流）</li>
+     *   <li>cache：检查查询结果缓存，命中则直接返回</li>
+     *   <li>execute：通过 Connector 执行分页 SQL，写入缓存</li>
+     *   <li>record：记录执行日志 + 指标（慢查询、错误率）</li>
+     * </ol>
+     *
+     * @param request 查询请求（option.useCache=true 时启用缓存）
+     * @return 含数据集、执行元数据的查询结果
+     * @throws BaseBusinessException SQL 校验失败、数据源不可用或超时时抛出
+     */
     @Override
     public QueryResultDTO preview(QueryRequestDTO request) {
         GuardedRequest guardedRequest = guard(request, true, false);
@@ -178,6 +225,20 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         }
     }
 
+    /**
+     * 异步提交全量查询任务。适合大数据量、长时查询场景。
+     *
+     * <p>设计要点：
+     * <ul>
+     *   <li>限流令牌在提交时 acquire，任务完成后由 {@link AsyncQueryExecutor} 释放，
+     *       保证下游数据库并发在全生命周期内受控。</li>
+     *   <li>queryId 和 taskId 通过 {@link #toTaskId} 建立关联，前端通过 taskId 轮询状态。</li>
+     *   <li>执行状态初始为 {@code QUEUED}，由异步线程更新为 RUNNING / SUCCEEDED / FAILED。</li>
+     * </ul>
+     *
+     * @param request 查询请求
+     * @return 包含 taskId 和初始状态 QUEUED 的提交响应
+     */
     @Override
     public AsyncSubmitResponseDTO runAsync(QueryRequestDTO request) {
         GuardedRequest guardedRequest = guard(request, false, false);
@@ -227,6 +288,18 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
                 .build();
     }
 
+    /**
+     * 取消正在运行的查询。
+     *
+     * <p>取消机制：
+     * <ul>
+     *   <li>通过 {@link QueryCancellationRegistry} 调用底层 JDBC Statement.cancel()。</li>
+     *   <li>若 Statement 尚未注册（任务刚提交还未到执行阶段），直接将状态置为 CANCELLED。</li>
+     * </ul>
+     *
+     * @param queryId 要取消的查询 ID
+     * @throws BaseBusinessException 查询不存在、已取消或非运行态时抛出
+     */
     @Override
     public void cancel(String queryId) {
         QueryExecution execution = queryExecutionRepository.findById(queryId)
@@ -272,6 +345,15 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         return schemaInferService.infer(guardedRequest.datasource(), guardedRequest.decision().getNormalizedSql(), guardedRequest.queryId());
     }
 
+    /**
+     * 查询前置卫兵：SQL 校验 + 数据源校验。
+     *
+     * @param request                 查询请求
+     * @param preview                 是否预览模式（影响 SQL 校验策略）
+     * @param tolerateValidationFailure 是否允许 SQL 校验失败继续（用于仅语法检查场景）
+     * @return 封装了 queryId、tenantId、数据源、卫兵决策的不可变记录
+     * @throws BaseBusinessException 数据源不存在、状态异常或 SQL 被拦截时抛出
+     */
     private GuardedRequest guard(QueryRequestDTO request, boolean preview, boolean tolerateValidationFailure) {
         String queryId = resolveQueryId(request);
         QueryGuardContext context = buildContext(request, preview, queryId);
@@ -289,6 +371,12 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         return new GuardedRequest(queryId, tenantId, requestContext == null ? null : requestContext.getUserId(), datasource, decision);
     }
 
+    /**
+     * 根据请求参数和卫兵决策构建 {@link QueryCommand}。
+     *
+     * <p>分页策略（pageSize / offset / cursor）和超时时间在此统一解析，
+     * 由治理策略上限和请求参数取最小值，防止请求方绕过治理阈值。
+     */
     private QueryCommand buildCommand(QueryRequestDTO request, SqlGuardDecision decision, String queryId, boolean preview) {
         QueryOptionDTO option = request == null ? null : request.getOption();
         QueryGovernancePolicy policy = QueryGovernancePolicy.defaultPolicy();
@@ -357,6 +445,12 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
                 .build();
     }
 
+    /**
+     * 将执行结果写入审计日志并更新查询指标。
+     *
+     * <p>慢查询判定：elapsedMs &ge; slowQueryThresholdMs（默认 5000ms）时标记为慢查询，
+     * 同时触发 metrics 计数器，便于告警和排查。
+     */
     private void recordExecution(QueryExecution execution) {
         boolean slowQuery = execution.getElapsedMs() != null && execution.getElapsedMs() >= slowQueryThresholdMs;
         queryAuditLogService.logQuery(execution, slowQuery);
@@ -501,6 +595,12 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         return "task-" + queryId;
     }
 
+    /**
+     * 将 JDBC 层抛出的 {@link IllegalStateException} 映射为业务异常。
+     *
+     * <p>JDBC 驱动在超时、取消时均以 IllegalStateException 包装，
+     * 通过 cause 类型和错误信息关键词进行区分，映射为对应错误码。
+     */
     private BaseBusinessException mapExecutionException(IllegalStateException e) {
         if (e.getCause() instanceof SQLTimeoutException) {
             return new BaseBusinessException(ErrorCode.QUERY_TIMEOUT, "query timeout", e.getMessage(), null, false);
@@ -511,6 +611,10 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         return new BaseBusinessException(ErrorCode.DOWNSTREAM_ERROR, "query execution failed", e.getMessage(), null, false);
     }
 
+    /**
+     * 将 SQL 卫兵违规码列表映射为精确的业务错误码，方便前端展示具体原因。
+     * 优先级：解析失败 > 多语句 > 禁止语句 > 加锁子句 > 非只读 > 行数超限 > 通用校验失败。
+     */
     private ErrorCode mapErrorCode(List<GuardViolationCode> violations) {
         if (violations == null || violations.isEmpty()) {
             return ErrorCode.SQL_SECURITY_REJECTED;
@@ -536,6 +640,15 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         return ErrorCode.QUERY_VALIDATION_FAILED;
     }
 
+    /**
+     * 卫兵检查通过后的不可变上下文，贯穿整个查询生命周期（preview / runAsync / cancel）。
+     *
+     * @param queryId    本次查询唯一 ID（来自请求或随机生成）
+     * @param tenantId   租户 ID，用于限流隔离和缓存键
+     * @param operatorId 操作人 ID，写入审计日志
+     * @param datasource 已验证的数据源实体
+     * @param decision   SQL 卫兵的校验决策（含标准化 SQL 和指纹）
+     */
     private record GuardedRequest(String queryId, String tenantId, String operatorId, AnalysisDatasource datasource,
                                   SqlGuardDecision decision) {
     }

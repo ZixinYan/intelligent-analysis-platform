@@ -20,12 +20,46 @@ import com.kuaishou.intelligentanalysisplatform.contract.schema.FieldSchemaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.JoinCondition;
 import org.springframework.stereotype.Service;
 
+/**
+ * 内存 Hash Join 服务，支持 INNER / LEFT / RIGHT / FULL 四种连接类型。
+ *
+ * <p>适用场景：两个数据集已加载至内存（来自上游节点的 DatasetDTO），
+ * 无法或不需要下推到数据库时，由应用层完成 JOIN 计算。
+ *
+ * <p>算法（经典两阶段 Hash Join）：
+ * <ol>
+ *   <li><b>Build 阶段</b>：以左表为 Build Side，按 Join Key 构建 HashMap，
+ *       Key 为多字段组合的 List&lt;Object&gt;，Value 为匹配的左表行列表。</li>
+ *   <li><b>Probe 阶段</b>：遍历右表每行，从 HashMap 中查找匹配的左表行并合并输出。</li>
+ *   <li><b>补充阶段</b>：LEFT / FULL JOIN 补充左表未匹配行；RIGHT / FULL JOIN 补充右表无匹配行。</li>
+ * </ol>
+ *
+ * <p>安全保护：执行前通过 {@link #estimateResultRows} 估算结果行数，
+ * 超过 rowLimit 时直接拒绝，防止内存溢出（默认上限 500,000 行）。
+ *
+ * <p>字段冲突处理：左右表字段同名时，右表字段以 {@code "right_"} 为前缀，
+ * Schema 同步添加别名，保证列名唯一性。
+ */
 @Service
 public class InMemoryHashJoinService {
 
+    /** 默认最大行数上限（50 万行）；调用方可通过 rowLimit 参数覆盖 */
     private static final int DEFAULT_ROW_LIMIT = 500_000;
+    /** INNER JOIN 选择率经验值（0.3 = 30%），用于估算 JOIN 结果行数，非精确值 */
     private static final double SELECTIVITY = 0.3;
 
+    /**
+     * 执行内存 Hash JOIN。
+     *
+     * @param left          左表数据集
+     * @param right         右表数据集
+     * @param joinType      JOIN 类型（INNER / LEFT / RIGHT / FULL）
+     * @param conditions    JOIN 条件列表，支持多字段联合键
+     * @param selectColumns 输出字段白名单，null 或空则输出全部字段
+     * @param rowLimit      结果行数上限，超过则抛出异常（传 0 或负数使用默认值 500,000）
+     * @return 合并后的数据集，包含完整的 Schema 信息和统计信息
+     * @throws BaseBusinessException joinType 或 conditions 为 null，或估算行数超限时抛出
+     */
     public DatasetDTO join(DatasetDTO left, DatasetDTO right,
                            JoinType joinType, List<JoinCondition> conditions,
                            List<String> selectColumns, int rowLimit) {
@@ -84,6 +118,12 @@ public class InMemoryHashJoinService {
         return buildResultDataset(resultRows, left, right, selectColumns);
     }
 
+    /**
+     * 估算 JOIN 结果行数，用于提前拒绝可能导致 OOM 的操作。
+     *
+     * <p>INNER JOIN：left × right × SELECTIVITY（启发式选择率 0.3）。
+     * 外连接：至少保留较大一侧的行数（因未匹配行也会输出）。
+     */
     private long estimateResultRows(int leftSize, int rightSize, JoinType joinType) {
         if (joinType == JoinType.INNER) {
             return (long) ((long) leftSize * rightSize * SELECTIVITY);
@@ -115,6 +155,16 @@ public class InMemoryHashJoinService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 合并左右行为一行输出，并按 selectColumns 过滤字段。
+     *
+     * <p>字段冲突：右表与左表同名字段添加 "right_" 前缀，保证合并后列名唯一。
+     * 外连接的空侧（leftRow=null 或 rightRow=null）跳过对应字段填充（自动为 null）。
+     *
+     * @param leftRow       左表行（RIGHT JOIN 右侧无匹配时为 null）
+     * @param rightRow      右表行（LEFT JOIN 左侧无匹配时为 null）
+     * @param selectColumns 输出字段白名单（null 则输出所有字段）
+     */
     private Map<String, Object> mergeRow(Map<String, Object> leftRow,
                                          Map<String, Object> rightRow,
                                          List<String> selectColumns) {
