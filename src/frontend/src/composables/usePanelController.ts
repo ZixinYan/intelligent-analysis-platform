@@ -7,6 +7,7 @@ import { useWorkflowStore } from '@/stores/workflow'
 import type { NodeConfigSchemaDTO, NodeMetaDTO } from '@/types/contract'
 import type { WorkflowNode } from '@/types/workflow'
 import { debounce } from '@/utils/debounce'
+import { getBusinessNodeType } from '@/adapters/workflow-graph'
 
 function applyDefaults(config: Record<string, unknown>, schema?: NodeConfigSchemaDTO) {
   const nextConfig = { ...config }
@@ -53,7 +54,7 @@ export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | unde
     schemaLoading.value = true
     schemaError.value = undefined
     try {
-      meta.value = await getNodeDefinition(node.data.nodeType)
+      meta.value = await getNodeDefinition(getBusinessNodeType(node))
       schema.value = meta.value.configSchema
     }
     catch (error) {
@@ -66,13 +67,10 @@ export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | unde
     }
   }
 
-  /** Auto-infer SQL node schema when datasourceId and sqlTemplate are both filled */
   async function tryAutoInferSchema(node: WorkflowNode) {
-    if (node.data.nodeType !== 'sql_query') return
+    if (getBusinessNodeType(node) !== 'sql_query') return
     if (!node.data.config.datasourceId || !node.data.config.sqlTemplate) return
-    // Don't re-infer if we already have a schema
     if (node.data.schema?.fields?.length) return
-
     try {
       const result = await inferQuerySchema(buildQueryRequest(node))
       if (result?.fields?.length) {
@@ -82,7 +80,6 @@ export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | unde
       }
     }
     catch {
-      // Silently ignore auto-inference failures
     }
   }
 
@@ -100,8 +97,6 @@ export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | unde
     currentStatus.value = node.data.status === 'error' ? 'error' : 'draft'
     resetDraft(node.data.config ?? {}, schema.value)
     await loadCandidates()
-
-    // Debounced auto-infer for SQL nodes
     if (autoInferTimer) clearTimeout(autoInferTimer)
     autoInferTimer = setTimeout(() => {
       tryAutoInferSchema(node).catch(() => undefined)
@@ -127,12 +122,10 @@ export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | unde
     syncNode(sanitizeDraftValue({ ...draft }))
   }
 
-  // Watch for node selection changes
   watch(() => toValue(nodeRef)?.id, async () => {
     await refresh()
   }, { immediate: true })
 
-  // Watch for upstream schema changes to refresh candidates
   watch(() => {
     const node = toValue(nodeRef)
     if (!node) return undefined
@@ -142,13 +135,10 @@ export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | unde
     loadCandidates().catch(() => undefined)
   })
 
-  const activeMeta = computed(() => meta.value)
-  const activeSchema = computed(() => schema.value)
-
   return {
     draft,
-    meta: activeMeta,
-    schema: activeSchema,
+    meta: computed(() => meta.value),
+    schema: computed(() => schema.value),
     schemaLoading: computed(() => schemaLoading.value),
     schemaError: computed(() => schemaError.value),
     candidateSlots,

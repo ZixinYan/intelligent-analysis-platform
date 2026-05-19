@@ -3,6 +3,7 @@ import { inferNodeSchema } from '@/api/node-definition'
 import { inferQuerySchema, previewQuery, validateQuery } from '@/api/query'
 import type { QueryRequestDTO, QueryResultDTO, SchemaInferResultDTO, ValidateResultDTO } from '@/types/contract'
 import type { WorkflowNode } from '@/types/workflow'
+import { getBusinessNodeType } from '@/adapters/workflow-graph'
 
 export function buildQueryRequest(node: WorkflowNode): QueryRequestDTO {
   const nodeData = node.data
@@ -60,9 +61,9 @@ export function useNodeDebug() {
     loading.value = true
     error.value = undefined
     try {
-      schema.value = node.data.nodeType === 'sql_query'
+      schema.value = getBusinessNodeType(node) === 'sql_query'
         ? await inferQuerySchema(buildQueryRequest(node))
-        : await inferNodeSchema(node.data.nodeType)
+        : await inferNodeSchema(getBusinessNodeType(node))
       return schema.value
     }
     catch (err) {

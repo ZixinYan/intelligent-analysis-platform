@@ -8,17 +8,18 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import type { NodeMetaDTO, WorkflowDefinitionDTO } from '@/types/contract'
 import type { Component } from 'vue'
-import AnalysisNodeShell from './AnalysisNodeShell.vue'
 import NodePalette from './NodePalette.vue'
-import NodeConfigPanel from './NodeConfigPanel.vue'
 import VersionHistoryPanel from './VersionHistoryPanel.vue'
 import TriggerPanel from './TriggerPanel.vue'
+import WorkflowNodeRenderer from './WorkflowNodeRenderer.vue'
+import WorkflowNodePanelRenderer from './WorkflowNodePanelRenderer.vue'
 import AiWorkflowDialog from '@/components/ai/AiWorkflowDialog.vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { storeToRefs } from 'pinia'
+import { getBusinessNodeType, WORKFLOW_RENDERER_NODE_TYPE } from '@/adapters/workflow-graph'
 
 const workflow = useWorkflowStore()
-const { nodes, edges, selectedNode, workflowName, workflowId, saving, workflowList, loading } = storeToRefs(workflow)
+const { nodes, edges, selectedNode, workflowName, workflowId, saving, workflowList, loading, viewport } = storeToRefs(workflow)
 
 type RightPanel = 'config' | 'versions' | 'triggers'
 const rightPanel = ref<RightPanel>('config')
@@ -43,13 +44,13 @@ function togglePanel(panel: Exclude<RightPanel, 'config'>) {
 }
 
 const aiDatasourceId = computed(() => {
-  const sqlNode = nodes.value.find(n => n.data.nodeType === 'sql_query' && n.data.config?.datasourceId)
+  const sqlNode = nodes.value.find(n => getBusinessNodeType(n) === 'sql_query' && n.data.config?.datasourceId)
   const id = sqlNode?.data.config?.datasourceId
   return typeof id === 'string' && id ? id : undefined
 })
 
 const nodeTypes = computed<Record<string, Component>>(() => ({
-  'analysis-node': AnalysisNodeShell,
+  [WORKFLOW_RENDERER_NODE_TYPE]: WorkflowNodeRenderer,
 }))
 
 const defaultEdgeOptions = ref({
@@ -93,6 +94,10 @@ function handleSelectWorkflow(event: Event) {
 function handleAiDraftBuilt(draft: WorkflowDefinitionDTO) {
   workflow.hydrate({ ...draft, workflowId: '' })
   showAiDialog.value = false
+}
+
+function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
+  workflow.setViewport(payload)
 }
 </script>
 
@@ -148,16 +153,17 @@ function handleAiDraftBuilt(draft: WorkflowDefinitionDTO) {
         :edges="edges"
         :node-types="nodeTypes"
         :default-edge-options="defaultEdgeOptions"
-        fit-view-on-init
+        :viewport="viewport"
         @nodes-change="workflow.onNodesChange"
         @connect="workflow.onConnect"
         @node-click="workflow.onNodeClick"
+        @viewport-change-end="handleViewportChange"
       >
         <Background :pattern-color="canvasPatternColor" />
         <Controls />
       </VueFlow>
     </div>
-    <NodeConfigPanel v-if="rightPanelVisible && rightPanel === 'config'" :node="selectedNode" />
+    <WorkflowNodePanelRenderer v-if="rightPanelVisible && rightPanel === 'config'" :node="selectedNode" />
     <VersionHistoryPanel
       v-else-if="rightPanelVisible && rightPanel === 'versions' && workflowId"
       :workflow-id="workflowId"

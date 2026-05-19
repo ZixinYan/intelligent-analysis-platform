@@ -1,7 +1,14 @@
 export type AnalysisNodeStatus = 'idle' | 'draft' | 'valid' | 'running' | 'success' | 'error' | 'skipped'
 
+export interface WorkflowViewport {
+  x: number
+  y: number
+  zoom: number
+}
+
 export interface WorkflowNodeData {
-  nodeType: string
+  type: string
+  nodeType?: string
   title: string
   meta?: import('./contract').NodeMetaDTO
   config: Record<string, unknown>
@@ -27,6 +34,12 @@ export interface WorkflowEdge {
   sourceHandle?: string | null
   targetHandle?: string | null
   animated?: boolean
-  condition?: 'true' | 'false' | null   // null = 无条件边
-  conditionLabel?: string               // 画布标注文字
+  condition?: 'true' | 'false' | null
+  conditionLabel?: string
+}
+
+export interface WorkflowGraph {
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+  viewport: WorkflowViewport
 }

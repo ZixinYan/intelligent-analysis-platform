@@ -1,5 +1,5 @@
-import type { NodeMetaDTO } from '@/types/contract'
 import { normalizeNodeType } from '@/constants/analysis-nodes'
+import type { NodeMetaDTO } from '@/types/contract'
 
 const categoryIcons: Record<string, string> = {
   QUERY:      '🔍',
@@ -10,14 +10,12 @@ const categoryIcons: Record<string, string> = {
 }
 
 const nodeTypeIcons: Record<string, string> = {
-  // 新版 analysis- 前缀（Phase 2 规范）
   'analysis-sql-query':           '🔍',
   'analysis-aggregate':           '∑',
   'analysis-time-series-compute': '📈',
   'analysis-pivot':               '⊞',
   'analysis-chart-output':        '📊',
   'analysis-table-output':        '📋',
-  // 旧版 snake_case（向后兼容）
   sql_query:           '🔍',
   aggregate:           '∑',
   time_series_compute: '📈',
@@ -29,27 +27,28 @@ const nodeTypeIcons: Record<string, string> = {
   java_code:           '☕',
   chart_output:        '📊',
   table_output:        '📋',
+  condition:           '⎇',
 }
 
 export function createDefaultNodeConfig(meta?: NodeMetaDTO) {
   return { ...(meta?.defaults ?? {}) }
 }
 
-export function resolveNodeIcon(meta?: NodeMetaDTO) {
+export function resolveNodeIcon(meta?: NodeMetaDTO, explicitType?: string) {
+  const nodeType = explicitType || meta?.nodeType
   if (meta?.icon) return meta.icon
-  if (meta?.nodeType && nodeTypeIcons[meta.nodeType]) return nodeTypeIcons[meta.nodeType]
+  if (nodeType && nodeTypeIcons[nodeType]) return nodeTypeIcons[nodeType]
   return categoryIcons[meta?.category ?? 'QUERY'] ?? '📦'
 }
 
-export function buildNodePreview(meta?: NodeMetaDTO, config: Record<string, unknown> = {}): string[] {
-  if (!meta) return ['未绑定元数据']
+export function buildNodePreview(meta?: NodeMetaDTO, config: Record<string, unknown> = {}, explicitType?: string): string[] {
+  if (!meta && !explicitType) return ['未绑定元数据']
 
-  // 统一规范化节点类型：analysis-sql-query → sql_query，sql_query → sql_query
-  const type = normalizeNodeType(meta.nodeType)
+  const type = normalizeNodeType(explicitType || meta?.nodeType || '')
 
   switch (type) {
     case 'sql_query': {
-      const ds  = config.datasourceId ? `数据源: ${config.datasourceId}` : '未选择数据源'
+      const ds = config.datasourceId ? `数据源: ${config.datasourceId}` : '未选择数据源'
       const sql = String(config.sqlTemplate ?? '').trim()
       const sqlLine = sql ? sql.split('\n')[0].slice(0, 60) : '未填写 SQL'
       return [ds, sqlLine]
@@ -65,9 +64,9 @@ export function buildNodePreview(meta?: NodeMetaDTO, config: Record<string, unkn
       return [`模式: ${mode}`, `时间粒度: ${grain}`]
     }
     case 'pivot': {
-      const rowDim  = String(config.rowField  ?? '未设置行维度')
-      const colDim  = String(config.colField  ?? '未设置列维度')
-      const valFld  = String(config.valueField ?? '未设置值字段')
+      const rowDim = String(config.rowField ?? '未设置行维度')
+      const colDim = String(config.colField ?? '未设置列维度')
+      const valFld = String(config.valueField ?? '未设置值字段')
       return [`行: ${rowDim}  列: ${colDim}`, `值: ${valFld}`]
     }
     case 'filter': {
@@ -80,7 +79,7 @@ export function buildNodePreview(meta?: NodeMetaDTO, config: Record<string, unkn
     }
     case 'formula': {
       const expr = String(config.expression ?? '').trim()
-      const col  = String(config.outputField ?? '新列')
+      const col = String(config.outputField ?? '新列')
       return [`新列: ${col}`, expr ? expr.slice(0, 50) : '未填写表达式']
     }
     case 'python_script': {
@@ -93,8 +92,8 @@ export function buildNodePreview(meta?: NodeMetaDTO, config: Record<string, unkn
     }
     case 'chart_output': {
       const chartType = String(config.chartType ?? 'line')
-      const x    = String(config.xField ?? '未选择 X 轴')
-      const y    = String(config.yField ?? '未选择 Y 轴')
+      const x = String(config.xField ?? '未选择 X 轴')
+      const y = String(config.yField ?? '未选择 Y 轴')
       return [`图表: ${chartType}`, `X: ${x}  Y: ${y}`]
     }
     case 'table_output': {
@@ -102,7 +101,11 @@ export function buildNodePreview(meta?: NodeMetaDTO, config: Record<string, unkn
       const page = config.pageable !== false ? '分页' : '不分页'
       return [`列: ${cols.slice(0, 50)}`, page]
     }
+    case 'condition': {
+      const conditions = Array.isArray(config.conditions) ? `${config.conditions.length} 条分支条件` : '未设置条件'
+      return [conditions]
+    }
     default:
-      return meta.description ? [meta.description.split(/[；，]/)[0].slice(0, 60)] : [meta.displayName]
+      return meta?.description ? [meta.description.split(/[；，]/)[0].slice(0, 60)] : [meta?.displayName ?? explicitType ?? '未命名节点']
   }
 }
