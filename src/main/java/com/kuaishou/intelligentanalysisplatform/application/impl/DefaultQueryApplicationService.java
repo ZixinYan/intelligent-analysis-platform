@@ -49,37 +49,15 @@ import com.kuaishou.intelligentanalysisplatform.infra.query.cache.QueryCacheKeyB
 import com.kuaishou.intelligentanalysisplatform.infra.query.cache.QueryCacheStore;
 import com.kuaishou.intelligentanalysisplatform.infra.query.cancel.QueryCancellationRegistry;
 import com.kuaishou.intelligentanalysisplatform.infra.query.executor.AsyncQueryExecutor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-/**
- * 查询应用服务的默认实现。
- *
- * <p>职责链：
- * <ol>
- *   <li><b>SQL 安全卫兵（guard）</b>：通过 {@link SqlGuard} 对 SQL 进行解析、标准化和安全规则校验，
- *       阻断多语句、写操作、危险子句等风险 SQL。</li>
- *   <li><b>流量治理</b>：通过 {@link QueryGovernanceLimiter} 在租户 QPS 和数据源并发两个维度限流，
- *       保护下游数据库不被打爆。</li>
- *   <li><b>缓存命中</b>：预览模式下按 tenantId + datasourceId + 标准化 SQL 构建缓存键，
- *       命中则直接返回，不消耗数据库连接。</li>
- *   <li><b>连接器执行</b>：通过 {@link ConnectorFactory} 获取对应数据库方言的 Connector，
- *       执行分页查询并截断超限行。</li>
- *   <li><b>可观测性</b>：执行后写入审计日志 & 指标（慢查询判定、超时计数、并发量）。</li>
- * </ol>
- *
- * <p>支持三种执行模式：
- * <ul>
- *   <li>{@code PREVIEW}（{@link #preview}）：同步执行，返回有限行数，超时短，适合实时预览。</li>
- *   <li>{@code RUN_ASYNC}（{@link #runAsync}）：异步提交，返回 taskId 供轮询，适合大数据量全量查询。</li>
- *   <li>{@code VALIDATE}（{@link #validate}）：只做 SQL 合法性校验，不实际执行查询。</li>
- * </ul>
- */
 @Service
 public class DefaultQueryApplicationService implements QueryApplicationService {
-    /** 预览模式标识，写入执行记录的 mode 字段 */
+    private static final Logger log = LoggerFactory.getLogger(DefaultQueryApplicationService.class);
     private static final String MODE_PREVIEW = "PREVIEW";
-    /** 全量运行模式标识 */
     private static final String MODE_RUN = "RUN";
 
     private final SqlGuard sqlGuard;
@@ -139,12 +117,6 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         this.datasourceConcurrencyLimit = datasourceConcurrencyLimit;
     }
 
-    /**
-     * SQL 合法性预校验。仅通过 SqlGuard 验证 SQL 语法和安全规则，不执行实际查询。
-     *
-     * @param request 查询请求，包含 datasourceId、sql 及可选的 requestId
-     * @return 校验结果，包含标准化 SQL、SQL 指纹及违规码列表
-     */
     @Override
     public ValidateResultDTO validate(QueryRequestDTO request) {
         GuardedRequest guardedRequest = guard(request, false, false);
@@ -159,25 +131,12 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
                 .build();
     }
 
-    /**
-     * 同步预览查询。适合用户在编辑 SQL 时实时预览结果，超时时间短（默认 10s）。
-     *
-     * <p>执行流程：
-     * <ol>
-     *   <li>guard：SQL 安全卫兵校验 + 数据源有效性检查</li>
-     *   <li>acquire：获取治理令牌（租户 QPS / 数据源并发双重限流）</li>
-     *   <li>cache：检查查询结果缓存，命中则直接返回</li>
-     *   <li>execute：通过 Connector 执行分页 SQL，写入缓存</li>
-     *   <li>record：记录执行日志 + 指标（慢查询、错误率）</li>
-     * </ol>
-     *
-     * @param request 查询请求（option.useCache=true 时启用缓存）
-     * @return 含数据集、执行元数据的查询结果
-     * @throws BaseBusinessException SQL 校验失败、数据源不可用或超时时抛出
-     */
     @Override
     public QueryResultDTO preview(QueryRequestDTO request) {
         GuardedRequest guardedRequest = guard(request, true, false);
+        QueryCommand command = buildCommand(request, guardedRequest.decision(), guardedRequest.queryId(), true);
+        log.info("Submitting preview query: queryId={}, tenantId={}, datasourceId={}, timeoutMs={}, pageSize={}, maxRows={}",
+                guardedRequest.queryId(), guardedRequest.tenantId(), guardedRequest.datasource().getId(), command.getTimeoutMs(), command.getPageSize(), command.getMaxRows());
         try (QueryGovernanceLimiter.Lease ignored = queryGovernanceLimiter.acquire(
                 guardedRequest.tenantId(),
                 tenantQpsLimit,
@@ -188,6 +147,8 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
             if (useCache(request)) {
                 QueryResult cached = queryCacheStore.get(cacheKey).orElse(null);
                 if (cached != null) {
+                    log.info("Preview query hit cache: queryId={}, datasourceId={}, rowCount={}",
+                            guardedRequest.queryId(), guardedRequest.datasource().getId(), cached.getRowCount());
                     QueryExecution execution = buildExecutionRecord(guardedRequest, MODE_PREVIEW, cached, true, ExecutionStatus.SUCCEEDED, null, null);
                     recordExecution(execution);
                     return toQueryResultDTO(guardedRequest.queryId(), guardedRequest.datasource(), cached, true, request.getOption(), MODE_PREVIEW, execution.getStartedAt(), execution.getFinishedAt(), ExecutionStatus.SUCCEEDED, null);
@@ -195,7 +156,7 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
             }
             try {
                 Connector connector = connectorFactory.create(guardedRequest.datasource());
-                QueryResult result = connector.execute(guardedRequest.datasource(), buildCommand(request, guardedRequest.decision(), guardedRequest.queryId(), true));
+                QueryResult result = connector.execute(guardedRequest.datasource(), command);
                 QueryResult finalResult = QueryResult.builder()
                         .fields(result.getFields())
                         .rows(result.getRows())
@@ -213,6 +174,8 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
                 return toQueryResultDTO(guardedRequest.queryId(), guardedRequest.datasource(), finalResult, false, request.getOption(), MODE_PREVIEW, execution.getStartedAt(), execution.getFinishedAt(), ExecutionStatus.SUCCEEDED, null);
             } catch (IllegalStateException e) {
                 BaseBusinessException exception = mapExecutionException(e);
+                log.warn("Preview query failed: queryId={}, datasourceId={}, errorCode={}, message={}",
+                        guardedRequest.queryId(), guardedRequest.datasource().getId(), exception.getErrorCode(), e.getMessage(), e);
                 QueryExecution execution = buildExecutionFailure(guardedRequest, MODE_PREVIEW, exception.getErrorCode(), exception.getMessage());
                 recordExecution(execution);
                 if (exception.getErrorCode() == ErrorCode.QUERY_TIMEOUT) {
@@ -225,23 +188,12 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         }
     }
 
-    /**
-     * 异步提交全量查询任务。适合大数据量、长时查询场景。
-     *
-     * <p>设计要点：
-     * <ul>
-     *   <li>限流令牌在提交时 acquire，任务完成后由 {@link AsyncQueryExecutor} 释放，
-     *       保证下游数据库并发在全生命周期内受控。</li>
-     *   <li>queryId 和 taskId 通过 {@link #toTaskId} 建立关联，前端通过 taskId 轮询状态。</li>
-     *   <li>执行状态初始为 {@code QUEUED}，由异步线程更新为 RUNNING / SUCCEEDED / FAILED。</li>
-     * </ul>
-     *
-     * @param request 查询请求
-     * @return 包含 taskId 和初始状态 QUEUED 的提交响应
-     */
     @Override
     public AsyncSubmitResponseDTO runAsync(QueryRequestDTO request) {
         GuardedRequest guardedRequest = guard(request, false, false);
+        QueryCommand command = buildCommand(request, guardedRequest.decision(), guardedRequest.queryId(), false);
+        log.info("Submitting async query: queryId={}, tenantId={}, datasourceId={}, timeoutMs={}, pageSize={}, maxRows={}",
+                guardedRequest.queryId(), guardedRequest.tenantId(), guardedRequest.datasource().getId(), command.getTimeoutMs(), command.getPageSize(), command.getMaxRows());
         QueryGovernanceLimiter.Lease lease = queryGovernanceLimiter.acquire(
                 guardedRequest.tenantId(),
                 tenantQpsLimit,
@@ -280,7 +232,7 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
                 .build();
         asyncTaskRepository.save(task);
         queryAuditLogService.logTask(task);
-        asyncQueryExecutor.submit(execution, guardedRequest.datasource(), buildCommand(request, guardedRequest.decision(), guardedRequest.queryId(), false), lease);
+        asyncQueryExecutor.submit(execution, guardedRequest.datasource(), command, lease);
         return AsyncSubmitResponseDTO.builder()
                 .taskId(taskId)
                 .status(ExecutionStatus.QUEUED)
@@ -288,18 +240,6 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
                 .build();
     }
 
-    /**
-     * 取消正在运行的查询。
-     *
-     * <p>取消机制：
-     * <ul>
-     *   <li>通过 {@link QueryCancellationRegistry} 调用底层 JDBC Statement.cancel()。</li>
-     *   <li>若 Statement 尚未注册（任务刚提交还未到执行阶段），直接将状态置为 CANCELLED。</li>
-     * </ul>
-     *
-     * @param queryId 要取消的查询 ID
-     * @throws BaseBusinessException 查询不存在、已取消或非运行态时抛出
-     */
     @Override
     public void cancel(String queryId) {
         QueryExecution execution = queryExecutionRepository.findById(queryId)
@@ -311,6 +251,7 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
             throw new BaseBusinessException(ErrorCode.ASYNC_TASK_NOT_FOUND, "query not running");
         }
         if (!queryCancellationRegistry.cancel(queryId)) {
+            log.warn("Query cancellation fallback to status update: queryId={}", queryId);
             queryExecutionRepository.updateStatus(queryId, ExecutionStatus.CANCELLED, System.currentTimeMillis(), ErrorCode.QUERY_CANCELLED.getCode(), "query cancellation requested before statement registration");
         }
     }

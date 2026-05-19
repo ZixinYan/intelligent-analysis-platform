@@ -1,5 +1,8 @@
 package com.kuaishou.intelligentanalysisplatform.infra.connector.jdbc;
 
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
 import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceType;
 import com.kuaishou.intelligentanalysisplatform.domain.datasource.AnalysisDatasource;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.Connector;
@@ -25,6 +28,12 @@ public class ClickHouseJdbcConnector extends AbstractJdbcConnector implements Co
     }
 
     @Override
-    protected void configureTimeout(java.sql.PreparedStatement statement, QueryCommand command) {
+    protected void configureTimeout(PreparedStatement statement, QueryCommand command) throws SQLException {
+        Integer timeoutMs = command.getTimeoutMs();
+        if (timeoutMs == null || timeoutMs <= 0) {
+            return;
+        }
+        statement.setQueryTimeout(Math.max(1, timeoutMs / 1000));
+        statement.setFetchSize(256);
     }
 }

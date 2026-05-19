@@ -25,24 +25,32 @@ import com.kuaishou.intelligentanalysisplatform.domain.query.connector.Connector
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.ConnectorFactory;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.HealthCheckResult;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.QueryCommand;
+import com.kuaishou.intelligentanalysisplatform.infra.connector.pool.HikariPoolRegistry;
 import com.kuaishou.intelligentanalysisplatform.infra.security.CredentialEncryptor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class DatasourceApplicationServiceImpl implements DatasourceApplicationService {
+    private static final Logger log = LoggerFactory.getLogger(DatasourceApplicationServiceImpl.class);
+
     private final DatasourceRepository datasourceRepository;
     private final CredentialEncryptor credentialEncryptor;
     private final PermissionChecker permissionChecker;
     private final ConnectorFactory connectorFactory;
+    private final HikariPoolRegistry hikariPoolRegistry;
 
     public DatasourceApplicationServiceImpl(DatasourceRepository datasourceRepository,
                                              CredentialEncryptor credentialEncryptor,
                                              PermissionChecker permissionChecker,
-                                             ConnectorFactory connectorFactory) {
+                                             ConnectorFactory connectorFactory,
+                                             HikariPoolRegistry hikariPoolRegistry) {
         this.datasourceRepository = datasourceRepository;
         this.credentialEncryptor = credentialEncryptor;
         this.permissionChecker = permissionChecker;
         this.connectorFactory = connectorFactory;
+        this.hikariPoolRegistry = hikariPoolRegistry;
     }
 
     @Override
@@ -84,7 +92,11 @@ public class DatasourceApplicationServiceImpl implements DatasourceApplicationSe
                 request.getJdbcOptions(),
                 request.getReadonly()
         );
-        return toDTO(datasourceRepository.save(datasource));
+        DatasourceDTO result = toDTO(datasourceRepository.save(datasource));
+        log.info("Datasource updated, evicting connection pool: datasourceId={}, tenantId={}, type={}",
+                datasource.getId(), datasource.getTenantId(), datasource.getType());
+        hikariPoolRegistry.evict(datasource.getId());
+        return result;
     }
 
     @Override
@@ -92,6 +104,9 @@ public class DatasourceApplicationServiceImpl implements DatasourceApplicationSe
         permissionChecker.requireDelete(context);
         AnalysisDatasource datasource = requireOwnedDatasource(id, context);
         datasourceRepository.deleteByIdAndTenantId(datasource.getId(), datasource.getTenantId());
+        log.info("Datasource deleted, evicting connection pool: datasourceId={}, tenantId={}, type={}",
+                datasource.getId(), datasource.getTenantId(), datasource.getType());
+        hikariPoolRegistry.evict(datasource.getId());
     }
 
     @Override
@@ -129,11 +144,15 @@ public class DatasourceApplicationServiceImpl implements DatasourceApplicationSe
     public DatasourceTestConnectionResultDTO testConnection(DatasourceTestConnectionRequestDTO request) {
         permissionChecker.requireTestConnection(request.getContext());
         AnalysisDatasource datasource = requireOwnedDatasource(request.getDatasourceId(), request.getContext());
+        log.info("Testing datasource connection: datasourceId={}, tenantId={}, type={}, host={}, port={}",
+                datasource.getId(), datasource.getTenantId(), datasource.getType(), datasource.getHost(), datasource.getPort());
         Connector connector = connectorFactory.create(datasource);
         HealthCheckResult healthCheckResult = connector.healthCheck(datasource);
         if (healthCheckResult.success()) {
             datasource.markReachable();
             datasourceRepository.save(datasource);
+            log.info("Datasource connection test succeeded: datasourceId={}, latencyMs={}, serverVersion={}",
+                    datasource.getId(), healthCheckResult.latencyMs(), healthCheckResult.serverVersion());
             return DatasourceTestConnectionResultDTO.builder()
                     .success(Boolean.TRUE)
                     .latencyMs(healthCheckResult.latencyMs())
@@ -143,6 +162,8 @@ public class DatasourceApplicationServiceImpl implements DatasourceApplicationSe
         }
         datasource.markUnreachable();
         datasourceRepository.save(datasource);
+        log.warn("Datasource connection test failed: datasourceId={}, latencyMs={}, message={}",
+                datasource.getId(), healthCheckResult.latencyMs(), healthCheckResult.message());
         return DatasourceTestConnectionResultDTO.builder()
                 .success(Boolean.FALSE)
                 .latencyMs(healthCheckResult.latencyMs())
