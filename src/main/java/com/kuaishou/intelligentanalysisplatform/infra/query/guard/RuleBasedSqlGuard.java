@@ -106,7 +106,7 @@ public class RuleBasedSqlGuard implements SqlGuard {
         }
         String withoutBlockComment = BLOCK_COMMENT.matcher(sql).replaceAll(" ");
         String withoutLineComment = LINE_COMMENT.matcher(withoutBlockComment).replaceAll(" ");
-        return withoutLineComment.trim().replaceAll("\\s+", " ");
+        return withoutLineComment.trim().replaceAll("\\s+", " ").replaceAll(";\\s*$", "");
     }
 
     private boolean isMultiStatement(String sql) {
