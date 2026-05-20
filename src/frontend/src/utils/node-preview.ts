@@ -30,6 +30,83 @@ const nodeTypeIcons: Record<string, string> = {
   condition:           '⎇',
 }
 
+function getCodeNodeLanguage(type: string) {
+  if (type === 'python_script') return 'Python'
+  if (type === 'java_code') return 'Java'
+  return 'Code'
+}
+
+function getCodeNodeSource(config: Record<string, unknown>) {
+  const candidates = [config.code, config.script]
+  return candidates.find(value => typeof value === 'string' && value.trim()) as string | undefined
+}
+
+function getCodeNodeInputs(config: Record<string, unknown>) {
+  const candidates = [config.inputVars, config.inputs, config.inputVariables]
+  for (const value of candidates) {
+    if (Array.isArray(value)) {
+      const names = value
+        .map((item) => {
+          if (typeof item === 'string') return item
+          if (item && typeof item === 'object') {
+            const record = item as Record<string, unknown>
+            return String(record.name ?? record.key ?? record.field ?? '').trim()
+          }
+          return ''
+        })
+        .filter(Boolean)
+      if (names.length) return names
+    }
+  }
+  return []
+}
+
+function getCodeNodeOutputs(config: Record<string, unknown>) {
+  const candidates = [config.outputs, config.outputVars, config.outputVar, config.resultVar]
+  for (const value of candidates) {
+    if (Array.isArray(value)) {
+      const names = value
+        .map((item) => {
+          if (typeof item === 'string') return item
+          if (item && typeof item === 'object') {
+            const record = item as Record<string, unknown>
+            return String(record.name ?? record.key ?? record.field ?? '').trim()
+          }
+          return ''
+        })
+        .filter(Boolean)
+      if (names.length) return names
+    }
+    if (value && typeof value === 'object') {
+      const names = Object.keys(value as Record<string, unknown>).filter(Boolean)
+      if (names.length) return names
+    }
+    if (typeof value === 'string' && value.trim()) {
+      return [value.trim()]
+    }
+  }
+  return []
+}
+
+function getCodeNodeSummary(code?: string) {
+  if (!code) return '未填写代码'
+  const line = code.split('\n').map(item => item.trim()).find(Boolean)
+  return line ? line.slice(0, 60) : '未填写代码'
+}
+
+function buildCodeNodePreview(type: string, config: Record<string, unknown>) {
+  const language = getCodeNodeLanguage(type)
+  const inputs = getCodeNodeInputs(config)
+  const outputs = getCodeNodeOutputs(config)
+  const code = getCodeNodeSource(config)
+  return [
+    `语言: ${language}`,
+    `输入: ${inputs.length ? inputs.slice(0, 3).join(', ') : '未配置'}`,
+    `输出: ${outputs.length ? outputs.slice(0, 3).join(', ') : '未声明'}`,
+    `摘要: ${getCodeNodeSummary(code)}`,
+  ]
+}
+
 export function createDefaultNodeConfig(meta?: NodeMetaDTO) {
   return { ...(meta?.defaults ?? {}) }
 }
@@ -82,13 +159,9 @@ export function buildNodePreview(meta?: NodeMetaDTO, config: Record<string, unkn
       const col = String(config.outputField ?? '新列')
       return [`新列: ${col}`, expr ? expr.slice(0, 50) : '未填写表达式']
     }
-    case 'python_script': {
-      const lines = String(config.script ?? '').split('\n').filter(Boolean)
-      return lines.length ? [`${lines.length} 行脚本`, lines[0].slice(0, 55)] : ['未填写脚本']
-    }
+    case 'python_script':
     case 'java_code': {
-      const lines = String(config.code ?? '').split('\n').filter(Boolean)
-      return lines.length ? [`${lines.length} 行代码`, lines[0].slice(0, 55)] : ['未填写代码']
+      return buildCodeNodePreview(type, config)
     }
     case 'chart_output': {
       const chartType = String(config.chartType ?? 'line')

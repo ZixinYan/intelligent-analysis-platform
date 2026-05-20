@@ -33,7 +33,7 @@ describe('NodeInsertPicker', () => {
     expect(document.body.textContent).toContain('SQL 查询')
     const firstItem = document.body.querySelector('.picker__item') as HTMLButtonElement | null
     expect(firstItem).toBeTruthy()
-    await wrapper.findAll('.picker__item')[0].trigger('click')
+    firstItem?.click()
     expect(wrapper.emitted('select')?.[0]?.[0]).toMatchObject({ nodeType: 'sql_query' })
   })
 

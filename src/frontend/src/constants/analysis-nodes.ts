@@ -30,6 +30,15 @@ export type LegacyAnalysisNodeType = typeof LEGACY_ANALYSIS_NODE_TYPES[keyof typ
 /** 节点所属分析类别标识（对应 NodeMetaDTO.category） */
 export const ANALYSIS_CATEGORY = 'ANALYSIS'
 
+const RAW_NODE_TYPE_BY_BUSINESS: Record<string, string> = {
+  [LEGACY_ANALYSIS_NODE_TYPES.SQL_QUERY]: ANALYSIS_NODE_TYPES.SQL_QUERY,
+  [LEGACY_ANALYSIS_NODE_TYPES.AGGREGATE]: ANALYSIS_NODE_TYPES.AGGREGATE,
+  [LEGACY_ANALYSIS_NODE_TYPES.TIME_SERIES]: ANALYSIS_NODE_TYPES.TIME_SERIES,
+  [LEGACY_ANALYSIS_NODE_TYPES.PIVOT]: ANALYSIS_NODE_TYPES.PIVOT,
+  [LEGACY_ANALYSIS_NODE_TYPES.CHART_OUTPUT]: ANALYSIS_NODE_TYPES.CHART_OUTPUT,
+  [LEGACY_ANALYSIS_NODE_TYPES.TABLE_OUTPUT]: ANALYSIS_NODE_TYPES.TABLE_OUTPUT,
+}
+
 /** 所有分析节点类型（新版 + 旧版） */
 export const ALL_ANALYSIS_NODE_TYPES: string[] = [
   ...Object.values(ANALYSIS_NODE_TYPES),
@@ -41,4 +50,14 @@ export function normalizeNodeType(nodeType: string): string {
   return nodeType
     .replace(/^analysis-/, '')
     .replace(/-/g, '_')
+}
+
+export function toRawNodeType(nodeType: string): string {
+  if (!nodeType) {
+    return ''
+  }
+  if (nodeType.startsWith('analysis-')) {
+    return nodeType
+  }
+  return RAW_NODE_TYPE_BY_BUSINESS[nodeType] ?? nodeType
 }

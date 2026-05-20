@@ -1,5 +1,6 @@
 import { computed, ref, type MaybeRefOrGetter, toValue } from 'vue'
 import { getMappingCandidates, getMappingCandidatesWithFields } from '@/api/node-definition'
+import { getRawNodeType } from '@/adapters/workflow-graph'
 import { useWorkflowStore } from '@/stores/workflow'
 import type { FieldCandidateSlotDTO, NodeConfigSchemaDTO } from '@/types/contract'
 import type { WorkflowNode } from '@/types/workflow'
@@ -34,14 +35,13 @@ export function useMappingCandidates(
     loading.value = true
     const currentRequestId = ++requestId
     try {
-      const nodeType = node.data.nodeType ?? node.data.type
+      const nodeType = getRawNodeType(node)
       if (!nodeType) {
         candidateSlots.value = []
         return
       }
       const renderer = String(node.data.config.chartType ?? nodeType ?? 'default')
 
-      // Try POST with upstream fields first, fall back to GET
       let result: FieldCandidateSlotDTO[]
       try {
         result = await getMappingCandidatesWithFields(nodeType, {
@@ -50,7 +50,6 @@ export function useMappingCandidates(
         })
       }
       catch {
-        // Fallback: GET without upstream fields
         result = await getMappingCandidates(nodeType, renderer)
       }
       if (currentRequestId === requestId) {

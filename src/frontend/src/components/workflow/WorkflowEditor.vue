@@ -7,7 +7,6 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import type { NodeMetaDTO, WorkflowDefinitionDTO } from '@/types/contract'
-import type { Component } from 'vue'
 import type { WorkflowInsertTrigger } from './insert-types'
 import NodePalette from './NodePalette.vue'
 import NodeInsertPicker from './NodeInsertPicker.vue'
@@ -19,7 +18,7 @@ import WorkflowInsertEdge from './WorkflowInsertEdge.vue'
 import AiWorkflowDialog from '@/components/ai/AiWorkflowDialog.vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { storeToRefs } from 'pinia'
-import { getBusinessNodeType, WORKFLOW_INSERT_EDGE_TYPE, WORKFLOW_RENDERER_NODE_TYPE } from '@/adapters/workflow-graph'
+import { getBusinessNodeType } from '@/adapters/workflow-graph'
 
 const workflow = useWorkflowStore()
 const { nodes, edges, selectedNode, workflowName, workflowId, saving, workflowList, loading, viewport } = storeToRefs(workflow)
@@ -53,14 +52,6 @@ const aiDatasourceId = computed(() => {
   const id = sqlNode?.data.config?.datasourceId
   return typeof id === 'string' && id ? id : undefined
 })
-
-const nodeTypes = computed<Record<string, Component>>(() => ({
-  [WORKFLOW_RENDERER_NODE_TYPE]: WorkflowNodeRenderer,
-}))
-
-const edgeTypes = computed<Record<string, Component>>(() => ({
-  [WORKFLOW_INSERT_EDGE_TYPE]: WorkflowInsertEdge,
-}))
 
 const defaultEdgeOptions = ref({
   type: 'smoothstep',
@@ -221,8 +212,6 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
       <VueFlow
         :nodes="nodes"
         :edges="edges"
-        :node-types="nodeTypes"
-        :edge-types="edgeTypes"
         :default-edge-options="defaultEdgeOptions"
         :viewport="viewport"
         :elements-selectable="true"

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import type { PanelFieldDTO } from '@/types/contract'
+import { computed, ref, watch } from 'vue'
+import type { PanelFieldDTO, FieldSchemaDTO } from '@/types/contract'
 import AiSqlDialog from '@/components/ai/AiSqlDialog.vue'
+import { getTableSchema } from '@/api/datasource'
 
 const props = defineProps<{
   field: PanelFieldDTO
@@ -15,6 +16,9 @@ const emit = defineEmits<{
 }>()
 
 const showAiDialog = ref(false)
+const tableSchema = ref<FieldSchemaDTO[]>([])
+const schemaLoading = ref(false)
+const schemaExpanded = ref(true)
 
 const currentTable = computed(() => {
   const tableId = props.model?.tableId
@@ -25,6 +29,19 @@ const currentDatasourceId = computed(() => {
   const ds = props.model?.datasourceId
   return typeof ds === 'string' && ds ? ds : null
 })
+
+watch([currentDatasourceId, currentTable], async ([dsId, tableName]) => {
+  tableSchema.value = []
+  if (!dsId || !tableName) return
+  schemaLoading.value = true
+  try {
+    tableSchema.value = await getTableSchema(dsId, tableName)
+  } catch {
+    tableSchema.value = []
+  } finally {
+    schemaLoading.value = false
+  }
+}, { immediate: true })
 
 function handleInput(event: Event) {
   emit('update:modelValue', (event.target as HTMLTextAreaElement).value)
@@ -62,6 +79,23 @@ function onAiSqlAccepted(sql: string) {
         @click="showAiDialog = true"
       >✦ AI 生成</button>
     </div>
+
+    <div v-if="currentTable" class="sql-schema-panel">
+      <button type="button" class="sql-schema-panel__toggle" @click="schemaExpanded = !schemaExpanded">
+        <span class="sql-schema-panel__arrow" :class="{ 'sql-schema-panel__arrow--open': schemaExpanded }">▶</span>
+        <span>字段列表</span>
+        <span v-if="!schemaLoading" class="sql-schema-panel__count">{{ tableSchema.length }} 列</span>
+        <span v-else class="sql-schema-panel__count">加载中…</span>
+      </button>
+      <ul v-if="schemaExpanded && tableSchema.length > 0" class="sql-schema-panel__list">
+        <li v-for="field in tableSchema" :key="field.name ?? field.fieldId" class="sql-schema-panel__field">
+          <span class="sql-schema-panel__fname">{{ field.name }}</span>
+          <span class="sql-schema-panel__ftype">{{ field.valueType }}</span>
+        </li>
+      </ul>
+      <div v-else-if="schemaExpanded && !schemaLoading && tableSchema.length === 0" class="sql-schema-panel__empty">暂无字段信息</div>
+    </div>
+
     <textarea
       class="sql-editor"
       rows="8"
@@ -167,6 +201,86 @@ function onAiSqlAccepted(sql: string) {
 }
 
 .sql-editor::placeholder {
+  color: #475569;
+}
+
+.sql-schema-panel {
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0a0f1e;
+}
+
+.sql-schema-panel__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s;
+}
+
+.sql-schema-panel__toggle:hover {
+  color: #94a3b8;
+}
+
+.sql-schema-panel__arrow {
+  font-size: 9px;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+
+.sql-schema-panel__arrow--open {
+  transform: rotate(90deg);
+}
+
+.sql-schema-panel__count {
+  margin-left: auto;
+  color: #475569;
+}
+
+.sql-schema-panel__list {
+  margin: 0;
+  padding: 0 0 6px;
+  list-style: none;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.sql-schema-panel__field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 10px;
+  gap: 8px;
+}
+
+.sql-schema-panel__field:hover {
+  background: rgba(51, 65, 85, 0.3);
+}
+
+.sql-schema-panel__fname {
+  font-family: 'SFMono-Regular', ui-monospace, monospace;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.sql-schema-panel__ftype {
+  font-size: 11px;
+  color: #475569;
+  font-family: 'SFMono-Regular', ui-monospace, monospace;
+  flex-shrink: 0;
+}
+
+.sql-schema-panel__empty {
+  padding: 6px 10px 8px;
+  font-size: 11px;
   color: #475569;
 }
 </style>

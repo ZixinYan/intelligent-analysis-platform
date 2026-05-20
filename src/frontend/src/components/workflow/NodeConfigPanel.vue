@@ -30,6 +30,35 @@ const categoryColor: Record<string, string> = {
   QUERY: '#3b82f6', COMPUTE: '#8b5cf6', OUTPUT: '#10b981', GOVERNANCE: '#f59e0b', ANALYSIS: '#06b6d4',
 }
 
+function collectCodeVarNames(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === 'string') return item
+        if (item && typeof item === 'object') {
+          const record = item as Record<string, unknown>
+          return String(record.name ?? record.key ?? record.field ?? '').trim()
+        }
+        return ''
+      })
+      .filter(Boolean)
+  }
+  if (value && typeof value === 'object') {
+    return Object.keys(value as Record<string, unknown>).filter(Boolean)
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return [value.trim()]
+  }
+  return []
+}
+
+function getCodeSummary(config: Record<string, unknown>) {
+  const source = [config.code, config.script].find(value => typeof value === 'string' && value.trim()) as string | undefined
+  if (!source) return '未填写代码'
+  const line = source.split('\n').map(item => item.trim()).find(Boolean)
+  return line ? line.slice(0, 72) : '未填写代码'
+}
+
 const nodeCategoryLabel = computed(() => categoryLabel[meta.value?.category ?? ''] ?? meta.value?.category ?? '')
 const nodeCategoryColor = computed(() => categoryColor[meta.value?.category ?? ''] ?? '#64748b')
 const mockInputRaw = ref('{}')
@@ -64,6 +93,11 @@ function handleRunNode() {
 
 const isSqlQueryNode = computed(() => nodeType.value === 'sql_query')
 const isChartOutputNode = computed(() => nodeType.value === 'chart_output')
+const isCodeNode = computed(() => nodeType.value === 'python_script' || nodeType.value === 'java_code')
+const codeLanguage = computed(() => nodeType.value === 'python_script' ? 'Python' : nodeType.value === 'java_code' ? 'Java' : 'Code')
+const codeInputs = computed(() => collectCodeVarNames(draft.inputVars ?? draft.inputs ?? draft.inputVariables))
+const codeOutputs = computed(() => collectCodeVarNames(draft.outputs ?? draft.outputVars ?? draft.outputVar ?? draft.resultVar))
+const codeSummary = computed(() => getCodeSummary(draft))
 
 function handleSqlUpdate(sql: string) {
   const cleaned = Object.fromEntries(Object.entries(draft).filter(([k]) => k !== '__schema'))
@@ -137,6 +171,15 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
           <div v-else-if="schemaError" class="ncp__state ncp__state--error">{{ schemaError }}</div>
           <div v-else-if="!schema" class="ncp__state">当前节点暂无配置</div>
           <FormRenderer v-else :schema="schema" :model-value="draft" :candidate-slots="candidateSlots" @update:model-value="handleUpdate" @valid="handleValid" />
+          <div v-if="isCodeNode" class="ncp__code-summary">
+            <div class="ncp__section-label">Code 摘要</div>
+            <div class="ncp__code-grid">
+              <div class="ncp__code-item"><span>语言</span><strong>{{ codeLanguage }}</strong></div>
+              <div class="ncp__code-item"><span>输入</span><strong>{{ codeInputs.length ? codeInputs.slice(0, 4).join(', ') : '未配置' }}</strong></div>
+              <div class="ncp__code-item"><span>输出</span><strong>{{ codeOutputs.length ? codeOutputs.slice(0, 4).join(', ') : '未声明' }}</strong></div>
+              <div class="ncp__code-item ncp__code-item--full"><span>摘要</span><code>{{ codeSummary }}</code></div>
+            </div>
+          </div>
           <QueryActionsBar v-if="isSqlQueryNode && activeNode && schema && !schemaLoading" :node="activeNode" :datasource-id="String(draft.datasourceId ?? '')" :sql-template="String(draft.sqlTemplate ?? '')" :table-name="String(draft.tableId ?? '')" @sql-update="handleSqlUpdate" />
           <div v-if="isChartOutputNode" class="ncp__ai-recommend">
             <button class="ncp__ai-btn" :disabled="chartRecommendLoading || upstreamFields.length === 0" @click="requestChartRecommend">
@@ -203,6 +246,13 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
 .ncp__mock-error { font-size: 11px; color: var(--iap-error-text); }
 .ncp__empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--iap-text-placeholder); font-size: 13px; }
 .ncp__empty-icon { font-size: 28px; color: var(--iap-text-disabled); }
+.ncp__code-summary { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--iap-divider); border-radius: 10px; background: var(--iap-code-bg); }
+.ncp__code-grid { display: grid; gap: 8px; }
+.ncp__code-item { display: grid; gap: 4px; }
+.ncp__code-item span { font-size: 11px; color: var(--iap-text-tertiary); }
+.ncp__code-item strong, .ncp__code-item code { color: var(--iap-text-primary); font-size: 12px; }
+.ncp__code-item code { font-family: 'JetBrains Mono', ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }
+.ncp__code-item--full { padding-top: 4px; border-top: 1px solid var(--iap-divider); }
 .ncp__ai-recommend { display: flex; flex-direction: column; gap: 8px; }
 .ncp__ai-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--iap-ai-btn-border); background: var(--iap-ai-btn-bg); color: var(--iap-ai-btn-text); font-size: 12px; cursor: pointer; transition: background 0.15s; }
 .ncp__ai-btn:hover:not(:disabled) { background: var(--iap-ai-btn-hover); }

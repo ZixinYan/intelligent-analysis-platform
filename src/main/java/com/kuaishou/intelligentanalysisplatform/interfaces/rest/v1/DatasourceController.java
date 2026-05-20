@@ -9,6 +9,7 @@ import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceQueryR
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceTestConnectionRequestDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceTestConnectionResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasourceUpdateRequestDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.FieldSchemaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.OptionDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.RequestContextDTO;
 import jakarta.validation.Valid;
@@ -87,6 +88,14 @@ public class DatasourceController {
                                                 @RequestHeader("X-Tenant-Id") String tenantId,
                                                 @RequestHeader("X-User-Id") String userId) {
         return ApiResponse.success(datasourceApplicationService.listTables(id, contextOf(tenantId, userId)));
+    }
+
+    @GetMapping("/{id}/tables/{tableName}/schema")
+    public ApiResponse<List<FieldSchemaDTO>> getTableSchema(@PathVariable String id,
+                                                            @PathVariable String tableName,
+                                                            @RequestHeader("X-Tenant-Id") String tenantId,
+                                                            @RequestHeader("X-User-Id") String userId) {
+        return ApiResponse.success(datasourceApplicationService.introspectTableSchema(id, tableName, contextOf(tenantId, userId)));
     }
 
     @GetMapping("/options")

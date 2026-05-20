@@ -19,6 +19,7 @@ import {
   DEFAULT_VIEWPORT,
   definitionDtoToGraph,
   getBusinessNodeType,
+  getRawNodeType,
   graphToSaveRequest,
   WORKFLOW_INSERT_EDGE_TYPE,
   WORKFLOW_RENDERER_NODE_TYPE,
@@ -163,7 +164,22 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   function createNode(meta: NodeMetaDTO, position: XYPosition): WorkflowNode {
-    const businessType = meta.nodeType
+    const rawType = getRawNodeType({
+      type: meta.nodeType,
+      nodeType: meta.nodeType,
+      title: meta.displayName,
+      meta,
+      config: {},
+      status: 'idle',
+    })
+    const businessType = getBusinessNodeType({
+      type: rawType,
+      nodeType: rawType,
+      title: meta.displayName,
+      meta,
+      config: {},
+      status: 'idle',
+    })
     const id = createNodeId(businessType)
     const config = createDefaultNodeConfig(meta)
     return {
@@ -172,8 +188,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
       position,
       selected: true,
       data: {
-        type: businessType,
-        nodeType: businessType,
+        type: rawType,
+        nodeType: rawType,
         title: meta.displayName,
         meta,
         config,

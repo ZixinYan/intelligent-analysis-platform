@@ -5,6 +5,7 @@ import type {
   DatasourceQueryRequestDTO,
   DatasourceTestConnectionResultDTO,
   DatasourceUpdateRequestDTO,
+  FieldSchemaDTO,
   PageResult,
 } from '@/types/contract'
 
@@ -34,6 +35,10 @@ export function testDatasourceConnection(id: string) {
 
 export function getDatasourceTables(id: string) {
   return unwrapResponse<string[]>(client.get(`/api/v1/datasources/${id}/tables`))
+}
+
+export function getTableSchema(id: string, tableName: string) {
+  return unwrapResponse<FieldSchemaDTO[]>(client.get(`/api/v1/datasources/${id}/tables/${encodeURIComponent(tableName)}/schema`))
 }
 
 export function listDatasourceOptions() {

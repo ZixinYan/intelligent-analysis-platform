@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { getDatasourceTables } from '@/api/datasource'
+import { getDatasourceTables, getTableSchema } from '@/api/datasource'
+import type { FieldSchemaDTO } from '@/types/contract'
 
 const props = defineProps<{
   visible: boolean
@@ -13,10 +14,19 @@ const loading = ref(false)
 const error = ref<string>()
 const search = ref('')
 
+// 每张表的字段信息：tableName → fields
+const tableFields = ref<Record<string, FieldSchemaDTO[]>>({})
+// 正在加载字段的表
+const loadingFields = ref<Record<string, boolean>>({})
+// 已展开的表
+const expandedTables = ref<Set<string>>(new Set())
+
 async function load() {
   loading.value = true
   error.value = undefined
   tables.value = []
+  tableFields.value = {}
+  expandedTables.value = new Set()
   try {
     tables.value = await getDatasourceTables(props.datasourceId)
   }
@@ -25,6 +35,25 @@ async function load() {
   }
   finally {
     loading.value = false
+  }
+}
+
+async function toggleTable(tableName: string) {
+  if (expandedTables.value.has(tableName)) {
+    expandedTables.value.delete(tableName)
+    return
+  }
+  expandedTables.value.add(tableName)
+  if (tableFields.value[tableName] !== undefined) return
+  loadingFields.value[tableName] = true
+  try {
+    tableFields.value[tableName] = await getTableSchema(props.datasourceId, tableName)
+  }
+  catch {
+    tableFields.value[tableName] = []
+  }
+  finally {
+    delete loadingFields.value[tableName]
   }
 }
 
@@ -63,14 +92,23 @@ const filteredTables = () =>
         <div v-else-if="error" class="state-msg state-msg--error">{{ error }}</div>
         <div v-else-if="!tables.length" class="state-msg">该数据源暂无可见表</div>
         <ul v-else class="table-list">
-          <li
-            v-for="table in filteredTables()"
-            :key="table"
-            class="table-list__item"
-          >
-            <span class="table-icon">⊞</span>
-            {{ table }}
-          </li>
+          <template v-for="table in filteredTables()" :key="table">
+            <li class="table-list__item" @click="toggleTable(table)">
+              <span class="table-icon">⊞</span>
+              <span class="table-name">{{ table }}</span>
+              <span class="table-expand-icon" :class="{ 'table-expand-icon--open': expandedTables.has(table) }">▶</span>
+            </li>
+            <li v-if="expandedTables.has(table)" class="table-fields">
+              <div v-if="loadingFields[table]" class="table-fields__loading">加载字段中…</div>
+              <template v-else-if="tableFields[table]?.length">
+                <div v-for="field in tableFields[table]" :key="field.name ?? field.fieldId" class="table-fields__row">
+                  <span class="table-fields__name">{{ field.name }}</span>
+                  <span class="table-fields__type">{{ field.valueType }}</span>
+                </div>
+              </template>
+              <div v-else class="table-fields__loading">暂无字段信息</div>
+            </li>
+          </template>
           <li v-if="!filteredTables().length" class="state-msg state-msg--inner">无匹配结果</li>
         </ul>
       </div>
@@ -169,6 +207,7 @@ const filteredTables = () =>
   font-size: 14px;
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
   transition: background 0.1s, color 0.1s;
+  cursor: pointer;
 }
 .table-list__item:hover {
   background: color-mix(in srgb, var(--iap-text-accent) 12%, var(--iap-surface-hover));
@@ -177,6 +216,52 @@ const filteredTables = () =>
 .table-icon {
   color: var(--iap-text-placeholder);
   font-size: 12px;
+  flex-shrink: 0;
+}
+.table-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.table-expand-icon {
+  font-size: 9px;
+  color: var(--iap-text-placeholder);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.table-expand-icon--open {
+  transform: rotate(90deg);
+}
+.table-fields {
+  list-style: none;
+  padding: 0 12px 6px 34px;
+  border-bottom: 1px solid var(--iap-divider);
+  margin-bottom: 2px;
+}
+.table-fields__loading {
+  font-size: 11px;
+  color: var(--iap-text-tertiary);
+  padding: 4px 0;
+}
+.table-fields__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+}
+.table-fields__name {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--iap-text-secondary);
+}
+.table-fields__type {
+  font-size: 11px;
+  color: var(--iap-text-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  flex-shrink: 0;
 }
 .state-msg {
   padding: 24px;

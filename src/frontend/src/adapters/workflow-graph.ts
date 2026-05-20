@@ -5,7 +5,7 @@ import type {
   WorkflowSaveRequestDTO,
 } from '@/types/contract'
 import type { AnalysisNodeStatus, WorkflowEdge, WorkflowGraph, WorkflowNode, WorkflowViewport } from '@/types/workflow'
-import { normalizeNodeType } from '@/constants/analysis-nodes'
+import { normalizeNodeType, toRawNodeType } from '@/constants/analysis-nodes'
 import { buildNodePreview } from '@/utils/node-preview'
 
 const DEFAULT_NODE_POSITION = { x: 120, y: 120 }
@@ -13,9 +13,13 @@ export const DEFAULT_VIEWPORT: WorkflowViewport = { x: 0, y: 0, zoom: 1 }
 export const WORKFLOW_RENDERER_NODE_TYPE = 'workflow-node'
 export const WORKFLOW_INSERT_EDGE_TYPE = 'workflow-insert-edge'
 
-export function getBusinessNodeType(node: Pick<WorkflowNode, 'data'> | WorkflowNode['data']) {
+export function getRawNodeType(node: Pick<WorkflowNode, 'data'> | WorkflowNode['data']) {
   const data = 'data' in node ? node.data : node
-  const rawType = data.type || data.nodeType || data.meta?.nodeType || ''
+  return toRawNodeType(data.meta?.nodeType || data.nodeType || data.type || '')
+}
+
+export function getBusinessNodeType(node: Pick<WorkflowNode, 'data'> | WorkflowNode['data']) {
+  const rawType = getRawNodeType(node)
   return rawType ? normalizeNodeType(rawType) : ''
 }
 
@@ -31,20 +35,21 @@ function toWorkflowNode(definition: WorkflowDefinitionDTO, node: WorkflowDefinit
   const meta = node.metadata
   const config = (node.config ?? {}) as Record<string, unknown>
   const position = definition.positions?.[node.nodeId] ?? DEFAULT_NODE_POSITION
-  const type = node.nodeType || meta?.nodeType || ''
+  const rawType = toRawNodeType(node.nodeType || meta?.nodeType || '')
+  const businessType = normalizeNodeType(rawType)
 
   return {
     id: node.nodeId,
     type: WORKFLOW_RENDERER_NODE_TYPE,
     position: { x: position.x ?? DEFAULT_NODE_POSITION.x, y: position.y ?? DEFAULT_NODE_POSITION.y },
     data: {
-      type,
-      nodeType: type,
-      title: meta?.displayName ?? type,
+      type: rawType,
+      nodeType: rawType,
+      title: meta?.displayName ?? (businessType || rawType),
       meta,
       config,
       status: 'idle' as AnalysisNodeStatus,
-      preview: buildNodePreview(meta, config, type),
+      preview: buildNodePreview(meta, config, businessType),
     },
   }
 }
@@ -76,7 +81,7 @@ export function graphToSaveRequest(graph: WorkflowGraph, workflowName: string): 
     workflowName: workflowName.trim() || '未命名工作流',
     nodes: graph.nodes.map(node => ({
       nodeId: node.id,
-      nodeType: getBusinessNodeType(node),
+      nodeType: getRawNodeType(node),
       category: node.data.meta?.category,
       version: node.data.meta?.nodeVersion,
       metadata: node.data.meta,

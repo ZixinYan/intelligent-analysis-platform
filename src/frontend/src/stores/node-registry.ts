@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { listNodeDefinitions } from '@/api/node-definition'
+import { normalizeNodeType, toRawNodeType } from '@/constants/analysis-nodes'
 import type { NodeMetaDTO } from '@/types/contract'
 
 export const useNodeRegistryStore = defineStore('node-registry', () => {
@@ -31,7 +32,9 @@ export const useNodeRegistryStore = defineStore('node-registry', () => {
   }
 
   function findNodeMeta(nodeType: string) {
-    return nodes.value.find(item => item.nodeType === nodeType)
+    const rawType = toRawNodeType(nodeType)
+    return nodes.value.find(item => item.nodeType === rawType)
+      ?? nodes.value.find(item => normalizeNodeType(item.nodeType) === normalizeNodeType(nodeType))
   }
 
   return {

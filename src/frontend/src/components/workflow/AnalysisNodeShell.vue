@@ -2,8 +2,8 @@
 import { computed, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import type { WorkflowNodeData } from '@/types/workflow'
+import { getBusinessNodeType } from '@/adapters/workflow-graph'
 import { resolveNodeIcon } from '@/utils/node-preview'
-import { normalizeNodeType } from '@/constants/analysis-nodes'
 import { useWorkflowStore } from '@/stores/workflow'
 import { resolveRendererModel } from '@/components/output/renderer'
 import type { WorkflowInsertTrigger } from './insert-types'
@@ -50,8 +50,9 @@ const categoryLabel = computed(() => ({
   ANALYSIS: '分析',
 }[props.data.meta?.category ?? 'QUERY'] ?? ''))
 
-const businessType = computed(() => props.data.type || props.data.nodeType || props.data.meta?.nodeType || '')
-const isConditionNode = computed(() => normalizeNodeType(businessType.value) === 'condition')
+const businessType = computed(() => getBusinessNodeType(props.data))
+const isConditionNode = computed(() => businessType.value === 'condition')
+const isCodeNode = computed(() => businessType.value === 'python_script' || businessType.value === 'java_code')
 
 const statusConfig = computed(() => ({
   idle: { color: '#64748b', label: '就绪', dot: false },
@@ -66,7 +67,7 @@ const statusConfig = computed(() => ({
 interface UsageHint { label: string; icon: string }
 
 const usageHints = computed<UsageHint[]>(() => {
-  const nodeType = normalizeNodeType(businessType.value)
+  const nodeType = businessType.value
   const hintMap: Record<string, UsageHint[]> = {
     sql_query: [
       { label: '连接数据源，执行 SQL 查询', icon: '📝' },
@@ -104,14 +105,14 @@ const usageHints = computed<UsageHint[]>(() => {
       { label: '支持数学、字符串、日期函数', icon: '🔣' },
     ],
     python_script: [
-      { label: '用 Python 3 自定义数据变换', icon: '🐍' },
-      { label: '入参 rows: List[dict]，返回同格式', icon: '📋' },
-      { label: '可引入标准库进行复杂处理', icon: '⚙️' },
+      { label: '统一 code 风格展示 Python 处理逻辑', icon: '🐍' },
+      { label: '突出输入变量、输出变量和代码摘要', icon: '📋' },
+      { label: '适合脚本型数据清洗与转换', icon: '⚙️' },
     ],
     java_code: [
-      { label: '用 Java 编写高性能处理逻辑', icon: '☕' },
-      { label: '实现 transform(List<Map>) 方法', icon: '🔧' },
-      { label: '适合计算密集型场景', icon: '⚡' },
+      { label: '统一 code 风格展示 Java 处理逻辑', icon: '☕' },
+      { label: '突出输入变量、输出变量和代码摘要', icon: '📋' },
+      { label: '适合较复杂或高性能处理场景', icon: '⚡' },
     ],
     chart_output: [
       { label: '将数据渲染为可视化图表', icon: '📊' },
@@ -216,6 +217,7 @@ const resultSummary = computed(() => {
           <div class="ans__meta-row">
             <span class="ans__category-badge">{{ categoryLabel }}</span>
             <span class="ans__subtype">{{ data.meta?.displayName ?? businessType }}</span>
+            <span v-if="isCodeNode" class="ans__code-badge">CODE</span>
           </div>
         </div>
         <div class="ans__header-right">
@@ -230,7 +232,7 @@ const resultSummary = computed(() => {
         </div>
       </div>
       <div class="ans__divider" />
-      <div v-if="data.preview?.length" class="ans__preview">
+      <div v-if="data.preview?.length" class="ans__preview" :class="{ 'ans__preview--code': isCodeNode }">
         <div class="ans__section-label">当前配置</div>
         <div class="ans__preview-body">
           <div v-for="line in data.preview" :key="line" class="ans__preview-line">
@@ -306,6 +308,7 @@ const resultSummary = computed(() => {
 .ans__meta-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
 .ans__category-badge { font-size: 10px; font-weight: 700; color: var(--cat); background: color-mix(in srgb, var(--cat) 15%, transparent); border: 1px solid color-mix(in srgb, var(--cat) 30%, transparent); border-radius: 4px; padding: 1px 6px; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; flex-shrink: 0; }
 .ans__subtype { font-size: 11px; color: var(--iap-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.ans__code-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; color: var(--iap-text-accent); background: color-mix(in srgb, var(--iap-text-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--iap-text-accent) 24%, transparent); }
 .ans__header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
 .ans__header-actions { display: flex; align-items: center; gap: 4px; }
 .ans__run-btn { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--cat) 35%, transparent); background: color-mix(in srgb, var(--cat) 10%, transparent); color: var(--cat); font-size: 11px; cursor: pointer; transition: all 0.15s; padding: 0; line-height: 1; font-family: inherit; }
@@ -318,6 +321,7 @@ const resultSummary = computed(() => {
 .ans__divider { height: 1px; margin: 0 14px 0 18px; background: linear-gradient(90deg, color-mix(in srgb, var(--cat) 26%, var(--iap-divider)), transparent 70%); }
 .ans__section-label { font-size: 10px; font-weight: 700; color: var(--iap-text-tertiary); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
 .ans__preview { padding: 12px 14px 0 18px; }
+.ans__preview--code .ans__preview-body { font-family: 'JetBrains Mono', ui-monospace, monospace; }
 .ans__preview-body { display: grid; gap: 6px; border: 1px solid var(--iap-divider); background: var(--iap-code-bg); border-radius: 10px; padding: 10px 12px; }
 .ans__preview-line { display: flex; gap: 6px; font-size: 12px; line-height: 1.5; color: var(--iap-text-secondary); }
 .ans__preview-bullet { color: var(--cat); }
