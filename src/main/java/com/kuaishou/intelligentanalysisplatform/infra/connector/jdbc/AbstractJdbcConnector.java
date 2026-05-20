@@ -41,6 +41,10 @@ public abstract class AbstractJdbcConnector implements Connector {
         this.cancellationRegistry = cancellationRegistry;
     }
 
+    protected DataSource getDataSource(AnalysisDatasource datasource) {
+        return poolRegistry.getOrCreate(datasource);
+    }
+
     @Override
     public QueryResult execute(AnalysisDatasource datasource, QueryCommand command) {
         long start = System.currentTimeMillis();
@@ -225,6 +229,11 @@ public abstract class AbstractJdbcConnector implements Connector {
                     .build());
         }
         return fields;
+    }
+
+    @Override
+    public Map<String, String> listColumnComments(AnalysisDatasource datasource, String tableName) {
+        return Map.of();
     }
 
     protected Map<String, Object> readRow(ResultSet resultSet, ResultSetMetaData metaData) throws SQLException {

@@ -1,7 +1,11 @@
 package com.kuaishou.intelligentanalysisplatform.infra.connector.jdbc;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceType;
 import com.kuaishou.intelligentanalysisplatform.domain.datasource.AnalysisDatasource;
@@ -35,5 +39,28 @@ public class ClickHouseJdbcConnector extends AbstractJdbcConnector implements Co
         }
         statement.setQueryTimeout(Math.max(1, timeoutMs / 1000));
         statement.setFetchSize(256);
+    }
+
+    @Override
+    public Map<String, String> listColumnComments(AnalysisDatasource datasource, String tableName) {
+        String sql = "SELECT name, comment FROM system.columns"
+                + " WHERE database = currentDatabase() AND table = ?";
+        Map<String, String> comments = new LinkedHashMap<>();
+        try (Connection conn = getDataSource(datasource).getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, tableName);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String colName = rs.getString(1);
+                    String comment = rs.getString(2);
+                    if (comment != null && !comment.isBlank()) {
+                        comments.put(colName, comment);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // 备注获取失败不影响主流程
+        }
+        return comments;
     }
 }

@@ -103,6 +103,7 @@ const filteredTables = () =>
               <template v-else-if="tableFields[table]?.length">
                 <div v-for="field in tableFields[table]" :key="field.name ?? field.fieldId" class="table-fields__row">
                   <span class="table-fields__name">{{ field.name }}</span>
+                  <span v-if="field.extensions?.comment" class="table-fields__comment">{{ field.extensions.comment }}</span>
                   <span class="table-fields__type">{{ field.valueType }}</span>
                 </div>
               </template>
@@ -256,6 +257,15 @@ const filteredTables = () =>
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 12px;
   color: var(--iap-text-secondary);
+}
+.table-fields__comment {
+  flex: 1;
+  font-size: 11px;
+  color: var(--iap-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
 }
 .table-fields__type {
   font-size: 11px;

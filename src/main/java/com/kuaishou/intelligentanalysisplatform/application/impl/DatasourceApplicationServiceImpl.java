@@ -1,6 +1,7 @@
 package com.kuaishou.intelligentanalysisplatform.application.impl;
 
 import java.util.List;
+import java.util.Map;
 
 import com.kuaishou.intelligentanalysisplatform.application.DatasourceApplicationService;
 import com.kuaishou.intelligentanalysisplatform.application.security.PermissionChecker;
@@ -211,7 +212,32 @@ public class DatasourceApplicationServiceImpl implements DatasourceApplicationSe
                     .normalizedSql("SELECT * FROM " + tableName + " LIMIT 0")
                     .maxRows(0)
                     .build();
-            return connector.inferSchema(datasource, command);
+            List<FieldSchemaDTO> fields = connector.inferSchema(datasource, command);
+
+            // 合并 column comment 到 extensions
+            Map<String, String> comments = connector.listColumnComments(datasource, tableName);
+            if (!comments.isEmpty()) {
+                fields = fields.stream().map(f -> {
+                    String comment = comments.get(f.getName());
+                    if (comment == null || comment.isBlank()) return f;
+                    Map<String, Object> ext = new java.util.HashMap<>(f.getExtensions() != null ? f.getExtensions() : Map.of());
+                    ext.put("comment", comment);
+                    return FieldSchemaDTO.builder()
+                            .fieldId(f.getFieldId())
+                            .name(f.getName())
+                            .path(f.getPath())
+                            .valueType(f.getValueType())
+                            .nullable(f.getNullable())
+                            .displayName(f.getDisplayName())
+                            .semanticType(f.getSemanticType())
+                            .capabilities(f.getCapabilities())
+                            .sampleValues(f.getSampleValues())
+                            .stats(f.getStats())
+                            .extensions(ext)
+                            .build();
+                }).toList();
+            }
+            return fields;
         } catch (RuntimeException e) {
             String detail = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
             throw new BaseBusinessException(ErrorCode.DATASOURCE_CONNECTION_FAILED, "introspect table schema failed", detail, null, false);

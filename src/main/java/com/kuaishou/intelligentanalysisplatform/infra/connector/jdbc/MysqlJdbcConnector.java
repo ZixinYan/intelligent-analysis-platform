@@ -1,5 +1,10 @@
 package com.kuaishou.intelligentanalysisplatform.infra.connector.jdbc;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceType;
@@ -48,5 +53,29 @@ public class MysqlJdbcConnector extends AbstractJdbcConnector implements Connect
         int offset = resolveOffset(command);
         String sql = TRAILING_LIMIT.matcher(command.getNormalizedSql()).replaceAll("").trim();
         return sql + " LIMIT " + offset + ", " + pageSize;
+    }
+
+    @Override
+    public Map<String, String> listColumnComments(AnalysisDatasource datasource, String tableName) {
+        String sql = "SELECT COLUMN_NAME, COLUMN_COMMENT"
+                + " FROM information_schema.COLUMNS"
+                + " WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?";
+        Map<String, String> comments = new LinkedHashMap<>();
+        try (Connection conn = getDataSource(datasource).getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, tableName);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String colName = rs.getString(1);
+                    String comment = rs.getString(2);
+                    if (comment != null && !comment.isBlank()) {
+                        comments.put(colName, comment);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // 备注获取失败不影响主流程
+        }
+        return comments;
     }
 }

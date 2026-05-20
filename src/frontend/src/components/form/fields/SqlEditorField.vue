@@ -90,6 +90,7 @@ function onAiSqlAccepted(sql: string) {
       <ul v-if="schemaExpanded && tableSchema.length > 0" class="sql-schema-panel__list">
         <li v-for="field in tableSchema" :key="field.name ?? field.fieldId" class="sql-schema-panel__field">
           <span class="sql-schema-panel__fname">{{ field.name }}</span>
+          <span v-if="field.extensions?.comment" class="sql-schema-panel__fcomment">{{ field.extensions.comment }}</span>
           <span class="sql-schema-panel__ftype">{{ field.valueType }}</span>
         </li>
       </ul>
@@ -269,6 +270,16 @@ function onAiSqlAccepted(sql: string) {
   font-family: 'SFMono-Regular', ui-monospace, monospace;
   font-size: 12px;
   color: #cbd5e1;
+}
+
+.sql-schema-panel__fcomment {
+  flex: 1;
+  font-size: 11px;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
 }
 
 .sql-schema-panel__ftype {
