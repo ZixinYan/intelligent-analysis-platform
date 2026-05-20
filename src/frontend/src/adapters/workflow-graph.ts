@@ -5,6 +5,7 @@ import type {
   WorkflowSaveRequestDTO,
 } from '@/types/contract'
 import type { AnalysisNodeStatus, WorkflowEdge, WorkflowGraph, WorkflowNode, WorkflowViewport } from '@/types/workflow'
+import { normalizeNodeType } from '@/constants/analysis-nodes'
 import { buildNodePreview } from '@/utils/node-preview'
 
 const DEFAULT_NODE_POSITION = { x: 120, y: 120 }
@@ -14,7 +15,8 @@ export const WORKFLOW_INSERT_EDGE_TYPE = 'workflow-insert-edge'
 
 export function getBusinessNodeType(node: Pick<WorkflowNode, 'data'> | WorkflowNode['data']) {
   const data = 'data' in node ? node.data : node
-  return data.type || data.nodeType || data.meta?.nodeType || ''
+  const rawType = data.type || data.nodeType || data.meta?.nodeType || ''
+  return rawType ? normalizeNodeType(rawType) : ''
 }
 
 export function createEmptyWorkflowGraph(): WorkflowGraph {
