@@ -6,16 +6,32 @@ import { resolveNodeIcon } from '@/utils/node-preview'
 import { normalizeNodeType } from '@/constants/analysis-nodes'
 import { useWorkflowStore } from '@/stores/workflow'
 import { resolveRendererModel } from '@/components/output/renderer'
+import type { WorkflowInsertTrigger } from './insert-types'
 
 const props = defineProps<{
   id: string
   data: WorkflowNodeData
 }>()
 
+const emit = defineEmits<{
+  'open-insert-picker': [trigger: WorkflowInsertTrigger]
+}>()
+
+type InsertTriggerInput =
+  | Omit<Extract<WorkflowInsertTrigger, { kind: 'node-output' }>, 'anchor'>
+  | Omit<Extract<WorkflowInsertTrigger, { kind: 'node-input' }>, 'anchor'>
+
 const workflow = useWorkflowStore()
 
 function handleRun() {
   workflow.runNodeDebug(props.id)
+}
+
+function openInsertPicker(event: MouseEvent, trigger: InsertTriggerInput) {
+  emit('open-insert-picker', {
+    ...trigger,
+    anchor: { x: event.clientX + 12, y: event.clientY + 12 },
+  } as WorkflowInsertTrigger)
 }
 
 const categoryColor = computed(() => ({
@@ -156,11 +172,39 @@ const resultSummary = computed(() => {
     </Transition>
 
     <Handle id="input" type="target" :position="Position.Left" class="ans__handle ans__handle--in" />
+    <button
+      class="ans__insert-button ans__insert-button--in"
+      @click.stop="openInsertPicker($event, { kind: 'node-input', nodeId: id, targetHandle: 'input' })"
+    >
+      +
+    </button>
     <template v-if="isConditionNode">
       <Handle id="true" type="source" :position="Position.Right" class="ans__handle ans__handle--out ans__handle--true" style="top: calc(35% - 10px)" />
       <Handle id="false" type="source" :position="Position.Right" class="ans__handle ans__handle--out ans__handle--false" style="top: calc(65% - 10px)" />
+      <button
+        class="ans__insert-button ans__insert-button--out ans__insert-button--true"
+        style="top: calc(35% - 10px)"
+        @click.stop="openInsertPicker($event, { kind: 'node-output', nodeId: id, sourceHandle: 'true' })"
+      >
+        +
+      </button>
+      <button
+        class="ans__insert-button ans__insert-button--out ans__insert-button--false"
+        style="top: calc(65% - 10px)"
+        @click.stop="openInsertPicker($event, { kind: 'node-output', nodeId: id, sourceHandle: 'false' })"
+      >
+        +
+      </button>
     </template>
-    <Handle v-else id="output" type="source" :position="Position.Right" class="ans__handle ans__handle--out" />
+    <template v-else>
+      <Handle id="output" type="source" :position="Position.Right" class="ans__handle ans__handle--out" />
+      <button
+        class="ans__insert-button ans__insert-button--out"
+        @click.stop="openInsertPicker($event, { kind: 'node-output', nodeId: id, sourceHandle: 'output' })"
+      >
+        +
+      </button>
+    </template>
 
     <div class="ans" :style="{ '--cat': categoryColor }">
       <div class="ans__top-line" />
@@ -250,6 +294,11 @@ const resultSummary = computed(() => {
 .ans__handle--true::after { color: #22c55e !important; }
 .ans__handle--false { border-color: #ef4444 !important; box-shadow: 0 0 0 3px var(--iap-shadow-heavy), 0 0 12px -2px #ef4444 !important; }
 .ans__handle--false::after { color: #ef4444 !important; }
+.ans__insert-button { position: absolute; z-index: 11; width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid var(--cat); border-radius: 999px; background: var(--iap-panel-bg); color: var(--cat); box-shadow: var(--iap-shadow-panel); cursor: pointer; }
+.ans__insert-button--in { left: -36px; top: calc(50% - 12px); }
+.ans__insert-button--out { right: -36px; top: calc(50% - 12px); }
+.ans__insert-button--true { color: #22c55e; border-color: #22c55e; }
+.ans__insert-button--false { color: #ef4444; border-color: #ef4444; }
 .ans__header { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 10px; padding: 14px 12px 12px 18px; }
 .ans__icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: color-mix(in srgb, var(--cat) 14%, var(--iap-surface-secondary)); border: 1px solid color-mix(in srgb, var(--cat) 28%, var(--iap-divider)); font-size: 20px; line-height: 1; flex-shrink: 0; }
 .ans__title-group { min-width: 0; }

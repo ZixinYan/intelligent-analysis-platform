@@ -20,12 +20,17 @@ import {
   definitionDtoToGraph,
   getBusinessNodeType,
   graphToSaveRequest,
+  WORKFLOW_INSERT_EDGE_TYPE,
   WORKFLOW_RENDERER_NODE_TYPE,
 } from '@/adapters/workflow-graph'
 import { buildNodePreview, createDefaultNodeConfig } from '@/utils/node-preview'
 
 function createNodeId(nodeType: string) {
   return `${nodeType}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function createEdgeId(source: string, target: string) {
+  return `${source}-${target}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
 }
 
 function inferSchemaFromDataset(dataset: DatasetDTO, nodeId: string): SchemaInferResultDTO | null {
@@ -149,11 +154,19 @@ export const useWorkflowStore = defineStore('workflow', () => {
     selectedNodeId.value = undefined
   }
 
-  function addNode(meta: NodeMetaDTO, position: XYPosition = { x: 120, y: 120 }) {
+  function getNodeById(nodeId: string) {
+    return graph.value.nodes.find(node => node.id === nodeId)
+  }
+
+  function getEdgeById(edgeId: string) {
+    return graph.value.edges.find(edge => edge.id === edgeId)
+  }
+
+  function createNode(meta: NodeMetaDTO, position: XYPosition): WorkflowNode {
     const businessType = meta.nodeType
     const id = createNodeId(businessType)
     const config = createDefaultNodeConfig(meta)
-    const node: WorkflowNode = {
+    return {
       id,
       type: WORKFLOW_RENDERER_NODE_TYPE,
       position,
@@ -168,12 +181,87 @@ export const useWorkflowStore = defineStore('workflow', () => {
         preview: buildNodePreview(meta, config, businessType),
       },
     }
+  }
+
+  function appendNode(node: WorkflowNode, select = true) {
     graph.value = {
       ...graph.value,
-      nodes: graph.value.nodes.map(item => item.selected ? { ...item, selected: false } : item).concat(node),
+      nodes: graph.value.nodes
+        .map(item => item.selected ? { ...item, selected: false } : item)
+        .concat({ ...node, selected: select }),
       edges: graph.value.edges.map(edge => edge.selected ? { ...edge, selected: false } : edge),
     }
     syncSelectionFromGraph()
+    return node
+  }
+
+  function createEdge(connection: Connection): WorkflowEdge {
+    const condition = connection.sourceHandle === 'true' || connection.sourceHandle === 'false'
+      ? connection.sourceHandle
+      : undefined
+    return {
+      id: createEdgeId(connection.source!, connection.target!),
+      type: WORKFLOW_INSERT_EDGE_TYPE,
+      source: connection.source!,
+      target: connection.target!,
+      sourceHandle: connection.sourceHandle,
+      targetHandle: connection.targetHandle,
+      animated: false,
+      condition,
+      conditionLabel: condition,
+    }
+  }
+
+  function appendEdge(edge: WorkflowEdge) {
+    const exists = graph.value.edges.some(item =>
+      item.source === edge.source
+      && item.target === edge.target
+      && item.sourceHandle === edge.sourceHandle
+      && item.targetHandle === edge.targetHandle)
+    if (exists) {
+      return
+    }
+    graph.value = {
+      ...graph.value,
+      edges: [
+        ...graph.value.edges.map(item => item.selected ? { ...item, selected: false } : item),
+        edge,
+      ],
+    }
+  }
+
+  function calculateInsertedNodePosition(params: {
+    mode: 'after-node' | 'before-node' | 'on-edge'
+    sourceNode?: WorkflowNode
+    targetNode?: WorkflowNode
+    sourceHandle?: string
+  }): XYPosition {
+    if (params.mode === 'after-node' && params.sourceNode) {
+      const yOffset = params.sourceHandle === 'true' ? -100 : params.sourceHandle === 'false' ? 100 : 0
+      return {
+        x: params.sourceNode.position.x + 320,
+        y: params.sourceNode.position.y + yOffset,
+      }
+    }
+    if (params.mode === 'before-node' && params.targetNode) {
+      return {
+        x: params.targetNode.position.x - 320,
+        y: params.targetNode.position.y,
+      }
+    }
+    if (params.sourceNode && params.targetNode) {
+      return {
+        x: (params.sourceNode.position.x + params.targetNode.position.x) / 2,
+        y: (params.sourceNode.position.y + params.targetNode.position.y) / 2,
+      }
+    }
+    return { x: 120, y: 120 }
+  }
+
+  function addNode(meta: NodeMetaDTO, position: XYPosition = { x: 120, y: 120 }) {
+    const node = createNode(meta, position)
+    appendNode(node)
+    return node
   }
 
   function updateNode(nodeId: string, updater: (node: WorkflowNode) => WorkflowNode) {
@@ -298,25 +386,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     if (!connection.source || !connection.target) {
       return
     }
-    const condition = connection.sourceHandle === 'true' || connection.sourceHandle === 'false'
-      ? connection.sourceHandle
-      : undefined
-    graph.value = {
-      ...graph.value,
-      edges: [
-        ...graph.value.edges.map(edge => edge.selected ? { ...edge, selected: false } : edge),
-        {
-          id: `${connection.source}-${connection.target}-${Date.now()}`,
-          source: connection.source,
-          target: connection.target,
-          sourceHandle: connection.sourceHandle,
-          targetHandle: connection.targetHandle,
-          animated: false,
-          condition,
-          conditionLabel: condition,
-        },
-      ],
-    }
+    appendEdge(createEdge(connection))
 
     const sourceNode = graph.value.nodes.find(n => n.id === connection.source)
     if (sourceNode && !sourceNode.data.schema && sourceNode.data.debugResult?.result?.dataset) {
@@ -327,6 +397,102 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
     propagateSchemaFrom(connection.source)
     syncSelectionFromGraph()
+  }
+
+  function insertNodeAfter(params: { sourceNodeId: string; meta: NodeMetaDTO; sourceHandle?: string }) {
+    const sourceNode = getNodeById(params.sourceNodeId)
+    if (!sourceNode) {
+      return
+    }
+    const insertedNode = addNode(params.meta, calculateInsertedNodePosition({
+      mode: 'after-node',
+      sourceNode,
+      sourceHandle: params.sourceHandle,
+    }))
+    onConnect({
+      source: sourceNode.id,
+      sourceHandle: params.sourceHandle ?? 'output',
+      target: insertedNode.id,
+      targetHandle: 'input',
+    })
+    if (sourceNode.data.schema) {
+      updateNodeSchema(insertedNode.id, sourceNode.data.schema)
+      propagateSchemaFrom(insertedNode.id, true)
+    }
+    return insertedNode
+  }
+
+  function insertNodeBefore(params: { targetNodeId: string; meta: NodeMetaDTO; targetHandle?: string }) {
+    const targetNode = getNodeById(params.targetNodeId)
+    if (!targetNode) {
+      return
+    }
+    const insertedNode = addNode(params.meta, calculateInsertedNodePosition({
+      mode: 'before-node',
+      targetNode,
+    }))
+    onConnect({
+      source: insertedNode.id,
+      sourceHandle: 'output',
+      target: targetNode.id,
+      targetHandle: params.targetHandle ?? 'input',
+    })
+    const upstreamNode = getUpstreamNode(targetNode.id)
+    if (upstreamNode?.data.schema) {
+      updateNodeSchema(insertedNode.id, upstreamNode.data.schema)
+      propagateSchemaFrom(insertedNode.id, true)
+    }
+    return insertedNode
+  }
+
+  function insertNodeOnEdge(params: { edgeId: string; meta: NodeMetaDTO }) {
+    const edge = getEdgeById(params.edgeId)
+    if (!edge) {
+      return
+    }
+    const sourceNode = getNodeById(edge.source)
+    const targetNode = getNodeById(edge.target)
+    if (!sourceNode || !targetNode) {
+      return
+    }
+    const insertedNode = addNode(params.meta, calculateInsertedNodePosition({
+      mode: 'on-edge',
+      sourceNode,
+      targetNode,
+    }))
+
+    graph.value = {
+      ...graph.value,
+      edges: graph.value.edges.filter(item => item.id !== edge.id),
+    }
+
+    appendEdge(createEdge({
+      source: sourceNode.id,
+      sourceHandle: edge.sourceHandle ?? 'output',
+      target: insertedNode.id,
+      targetHandle: 'input',
+    }))
+    appendEdge(createEdge({
+      source: insertedNode.id,
+      sourceHandle: 'output',
+      target: targetNode.id,
+      targetHandle: edge.targetHandle ?? 'input',
+    }))
+
+    if (edge.condition) {
+      const firstEdge = graph.value.edges.find(item => item.source === sourceNode.id && item.target === insertedNode.id)
+      if (firstEdge) {
+        firstEdge.condition = edge.condition
+        firstEdge.conditionLabel = edge.condition
+      }
+    }
+
+    if (sourceNode.data.schema) {
+      updateNodeSchema(insertedNode.id, sourceNode.data.schema)
+      propagateSchemaFrom(insertedNode.id, true)
+    }
+    syncSelectionFromGraph()
+    return insertedNode
   }
 
   function propagateSchemaFrom(sourceNodeId: string, force = false) {
@@ -511,6 +677,9 @@ export const useWorkflowStore = defineStore('workflow', () => {
     debugActiveTab,
     debugLoadingNodeId,
     addNode,
+    insertNodeAfter,
+    insertNodeBefore,
+    insertNodeOnEdge,
     setGraph,
     setViewport,
     updateNodeConfig,

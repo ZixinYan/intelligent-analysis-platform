@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useNodeRegistryStore } from '@/stores/node-registry'
 import { resolveNodeIcon } from '@/utils/node-preview'
 import type { NodeMetaDTO } from '@/types/contract'
+import { groupNodeCatalog, shortNodeDesc } from './node-catalog'
 
 const emit = defineEmits<{
   add: [meta: NodeMetaDTO]
@@ -12,33 +13,7 @@ const emit = defineEmits<{
 const registry = useNodeRegistryStore()
 const { sortedNodes, loading, error } = storeToRefs(registry)
 
-const categoryMeta: Record<string, { label: string; color: string; desc: string }> = {
-  QUERY:      { label: '取数',  color: '#3b82f6', desc: '连接数据源，执行查询' },
-  COMPUTE:    { label: '计算',  color: '#8b5cf6', desc: '数据转换与运算' },
-  OUTPUT:     { label: '输出',  color: '#10b981', desc: '渲染图表或表格' },
-  GOVERNANCE: { label: '治理',  color: '#f59e0b', desc: '数据质量与权限' },
-  ANALYSIS:   { label: '分析',  color: '#06b6d4', desc: '数据分析智能节点' },
-}
-
-const groupedNodes = computed(() => {
-  const groups: Record<string, NodeMetaDTO[]> = {}
-  for (const node of sortedNodes.value) {
-    const cat = node.category ?? 'OTHER'
-    if (!groups[cat]) groups[cat] = []
-    groups[cat].push(node)
-  }
-  return Object.entries(groups).map(([category, nodes]) => ({
-    category,
-    meta: categoryMeta[category] ?? { label: category, color: '#64748b', desc: '' },
-    nodes,
-  }))
-})
-
-function shortDesc(desc?: string): string {
-  if (!desc) return ''
-  const firstClause = desc.split(/[；，、]/)[0]
-  return firstClause.length > 22 ? firstClause.slice(0, 22) + '…' : firstClause
-}
+const groupedNodes = computed(() => groupNodeCatalog(sortedNodes.value))
 </script>
 
 <template>
@@ -72,7 +47,7 @@ function shortDesc(desc?: string): string {
           <div class="palette__item-icon">{{ resolveNodeIcon(meta) }}</div>
           <div class="palette__item-body">
             <div class="palette__item-name">{{ meta.displayName }}</div>
-            <div v-if="meta.description" class="palette__item-desc">{{ shortDesc(meta.description) }}</div>
+            <div v-if="meta.description" class="palette__item-desc">{{ shortNodeDesc(meta.description) }}</div>
           </div>
           <div class="palette__item-arrow">+</div>
         </button>

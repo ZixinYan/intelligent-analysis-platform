@@ -32,7 +32,7 @@ describe('useDatasourceStore', () => {
     await store.load()
 
     expect(store.datasources).toHaveLength(1)
-    expect(store.options).toEqual([{ label: '订单库', value: 'ds-1' }])
+    expect(store.options).toEqual([{ label: 'orders', value: 'ds-1' }])
   })
 
   it('creates and removes datasource', async () => {

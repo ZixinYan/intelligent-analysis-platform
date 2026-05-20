@@ -8,15 +8,18 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import type { NodeMetaDTO, WorkflowDefinitionDTO } from '@/types/contract'
 import type { Component } from 'vue'
+import type { WorkflowInsertTrigger } from './insert-types'
 import NodePalette from './NodePalette.vue'
+import NodeInsertPicker from './NodeInsertPicker.vue'
 import VersionHistoryPanel from './VersionHistoryPanel.vue'
 import TriggerPanel from './TriggerPanel.vue'
 import WorkflowNodeRenderer from './WorkflowNodeRenderer.vue'
 import WorkflowNodePanelRenderer from './WorkflowNodePanelRenderer.vue'
+import WorkflowInsertEdge from './WorkflowInsertEdge.vue'
 import AiWorkflowDialog from '@/components/ai/AiWorkflowDialog.vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { storeToRefs } from 'pinia'
-import { getBusinessNodeType, WORKFLOW_RENDERER_NODE_TYPE } from '@/adapters/workflow-graph'
+import { getBusinessNodeType, WORKFLOW_INSERT_EDGE_TYPE, WORKFLOW_RENDERER_NODE_TYPE } from '@/adapters/workflow-graph'
 
 const workflow = useWorkflowStore()
 const { nodes, edges, selectedNode, workflowName, workflowId, saving, workflowList, loading, viewport } = storeToRefs(workflow)
@@ -25,6 +28,8 @@ type RightPanel = 'config' | 'versions' | 'triggers'
 const rightPanel = ref<RightPanel>('config')
 const rightPanelVisible = ref(true)
 const showAiDialog = ref(false)
+const insertTrigger = ref<WorkflowInsertTrigger | null>(null)
+const insertPickerVisible = ref(false)
 const canvasPatternColor = ref('rgba(133, 133, 173, 0.12)')
 
 function updateWorkflowThemeVars() {
@@ -51,6 +56,10 @@ const aiDatasourceId = computed(() => {
 
 const nodeTypes = computed<Record<string, Component>>(() => ({
   [WORKFLOW_RENDERER_NODE_TYPE]: WorkflowNodeRenderer,
+}))
+
+const edgeTypes = computed<Record<string, Component>>(() => ({
+  [WORKFLOW_INSERT_EDGE_TYPE]: WorkflowInsertEdge,
 }))
 
 const defaultEdgeOptions = ref({
@@ -104,6 +113,33 @@ onUnmounted(() => {
 
 function handleAddNode(meta: NodeMetaDTO) {
   workflow.addNode(meta, { x: 160 + nodes.value.length * 40, y: 120 + nodes.value.length * 24 })
+}
+
+function openInsertPicker(trigger: WorkflowInsertTrigger) {
+  insertTrigger.value = trigger
+  insertPickerVisible.value = true
+}
+
+function closeInsertPicker() {
+  insertPickerVisible.value = false
+  insertTrigger.value = null
+}
+
+function handleInsertNodeSelect(meta: NodeMetaDTO) {
+  const trigger = insertTrigger.value
+  if (!trigger) {
+    return
+  }
+  if (trigger.kind === 'node-output') {
+    workflow.insertNodeAfter({ sourceNodeId: trigger.nodeId, sourceHandle: trigger.sourceHandle, meta })
+  }
+  if (trigger.kind === 'node-input') {
+    workflow.insertNodeBefore({ targetNodeId: trigger.nodeId, targetHandle: trigger.targetHandle, meta })
+  }
+  if (trigger.kind === 'edge') {
+    workflow.insertNodeOnEdge({ edgeId: trigger.edgeId, meta })
+  }
+  closeInsertPicker()
 }
 
 function handleReset() {
@@ -174,11 +210,19 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
       @cancel="showAiDialog = false"
     />
     <NodePalette @add="handleAddNode" />
+    <NodeInsertPicker
+      :visible="insertPickerVisible"
+      :anchor="insertTrigger?.anchor ?? { x: 24, y: 24 }"
+      :trigger="insertTrigger"
+      @close="closeInsertPicker"
+      @select="handleInsertNodeSelect"
+    />
     <div class="workflow-editor__canvas">
       <VueFlow
         :nodes="nodes"
         :edges="edges"
         :node-types="nodeTypes"
+        :edge-types="edgeTypes"
         :default-edge-options="defaultEdgeOptions"
         :viewport="viewport"
         :elements-selectable="true"
@@ -195,6 +239,12 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
         @pane-click="workflow.onPaneClick"
         @viewport-change-end="handleViewportChange"
       >
+        <template #node-workflow-node="nodeProps">
+          <WorkflowNodeRenderer v-bind="nodeProps" @open-insert-picker="openInsertPicker" />
+        </template>
+        <template #edge-workflow-insert-edge="edgeProps">
+          <WorkflowInsertEdge v-bind="edgeProps" @insert="openInsertPicker({ kind: 'edge', edgeId: $event.edgeId, anchor: $event.anchor })" />
+        </template>
         <Background :pattern-color="canvasPatternColor" />
         <Controls />
       </VueFlow>

@@ -10,6 +10,7 @@ import { buildNodePreview } from '@/utils/node-preview'
 const DEFAULT_NODE_POSITION = { x: 120, y: 120 }
 export const DEFAULT_VIEWPORT: WorkflowViewport = { x: 0, y: 0, zoom: 1 }
 export const WORKFLOW_RENDERER_NODE_TYPE = 'workflow-node'
+export const WORKFLOW_INSERT_EDGE_TYPE = 'workflow-insert-edge'
 
 export function getBusinessNodeType(node: Pick<WorkflowNode, 'data'> | WorkflowNode['data']) {
   const data = 'data' in node ? node.data : node
@@ -51,6 +52,7 @@ export function definitionDtoToGraph(definition: WorkflowDefinitionDTO, viewport
     nodes: (definition.nodes ?? []).map(node => toWorkflowNode(definition, node)),
     edges: (definition.edges ?? []).map(edge => ({
       id: edge.id,
+      type: WORKFLOW_INSERT_EDGE_TYPE,
       source: edge.source,
       target: edge.target,
       sourceHandle: edge.sourceHandle ?? undefined,

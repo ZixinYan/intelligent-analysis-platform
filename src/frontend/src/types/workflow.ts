@@ -30,6 +30,7 @@ export interface WorkflowNode {
 
 export interface WorkflowEdge {
   id: string
+  type?: string
   source: string
   target: string
   sourceHandle?: string | null
