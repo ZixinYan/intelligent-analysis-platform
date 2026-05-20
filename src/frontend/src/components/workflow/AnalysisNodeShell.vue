@@ -285,17 +285,13 @@ const resultSummary = computed(() => {
 .ans__top-line { position: absolute; top: 0; left: 4px; right: 0; height: 1.5px; background: linear-gradient(90deg, color-mix(in srgb, var(--cat) 70%, transparent), transparent 80%); border-radius: 0 var(--iap-radius-node) 0 0; }
 .ans__accent { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: linear-gradient(180deg, var(--cat), color-mix(in srgb, var(--cat) 40%, var(--iap-node-bg))); border-radius: var(--iap-radius-node) 0 0 var(--iap-radius-node); }
 .ans__handle { width: 20px !important; height: 20px !important; border: 2.5px solid var(--cat) !important; background: var(--iap-panel-bg) !important; border-radius: 50% !important; display: flex !important; align-items: center !important; justify-content: center !important; cursor: crosshair !important; transition: all 0.2s ease !important; box-shadow: 0 0 0 3px var(--iap-shadow-heavy), 0 0 12px -2px var(--cat) !important; z-index: 10 !important; }
-.ans__handle::after { content: '+' !important; font-size: 14px !important; font-weight: 700 !important; color: var(--cat) !important; line-height: 1 !important; transition: inherit !important; }
 .ans__handle:hover { width: 26px !important; height: 26px !important; border-width: 3px !important; background: var(--iap-panel-bg) !important; box-shadow: 0 0 0 4px var(--iap-shadow-heavy), 0 0 0 8px color-mix(in srgb, var(--cat) 25%, transparent), 0 0 20px -2px var(--cat) !important; transform: translate(-3px, -3px) !important; }
-.ans__handle:hover::after { font-size: 18px !important; }
 .ans__handle--in { left: -12px !important; top: calc(50% - 10px) !important; }
 .ans__handle--out { right: -12px !important; top: calc(50% - 10px) !important; }
 .ans__handle--in:hover { left: -15px !important; top: calc(50% - 13px) !important; }
 .ans__handle--out:hover { right: -15px !important; top: calc(50% - 13px) !important; }
 .ans__handle--true { border-color: #22c55e !important; box-shadow: 0 0 0 3px var(--iap-shadow-heavy), 0 0 12px -2px #22c55e !important; }
-.ans__handle--true::after { color: #22c55e !important; }
 .ans__handle--false { border-color: #ef4444 !important; box-shadow: 0 0 0 3px var(--iap-shadow-heavy), 0 0 12px -2px #ef4444 !important; }
-.ans__handle--false::after { color: #ef4444 !important; }
 .ans__insert-button { position: absolute; z-index: 11; width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid var(--cat); border-radius: 999px; background: var(--iap-panel-bg); color: var(--cat); box-shadow: var(--iap-shadow-panel); cursor: pointer; }
 .ans__insert-button--in { left: -36px; top: calc(50% - 12px); }
 .ans__insert-button--out { right: -36px; top: calc(50% - 12px); }
