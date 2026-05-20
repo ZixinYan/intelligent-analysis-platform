@@ -49,8 +49,8 @@ public abstract class AbstractJdbcConnector implements Connector {
         int effectiveOffset = resolveOffset(command);
         int effectivePageSize = resolvePageSize(command);
         int maxRows = resolveMaxRows(command, effectivePageSize);
-        log.info("Executing query: datasourceId={}, type={}, queryId={}, timeoutMs={}, pageSize={}, maxRows={}, offset={}",
-                datasource.getId(), datasource.getType(), command.getQueryId(), command.getTimeoutMs(), effectivePageSize, maxRows, effectiveOffset);
+        log.info("Executing query: datasourceId={}, type={}, queryId={}, timeoutMs={}, pageSize={}, maxRows={}, offset={}, sql={}",
+                datasource.getId(), datasource.getType(), command.getQueryId(), command.getTimeoutMs(), effectivePageSize, maxRows, effectiveOffset, sql);
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             configureStatement(statement, command);
@@ -83,8 +83,8 @@ public abstract class AbstractJdbcConnector implements Connector {
                 cancellationRegistry.deregister(command.getQueryId());
             }
         } catch (SQLException e) {
-            log.error("Query execution failed: datasourceId={}, queryId={}, sqlState={}, errorCode={}, message={}",
-                    datasource.getId(), command.getQueryId(), e.getSQLState(), e.getErrorCode(), e.getMessage(), e);
+            log.error("Query execution failed: datasourceId={}, queryId={}, sqlState={}, errorCode={}, message={}, sql={}",
+                    datasource.getId(), command.getQueryId(), e.getSQLState(), e.getErrorCode(), e.getMessage(), sql, e);
             throw new IllegalStateException("query execution failed", e);
         }
     }

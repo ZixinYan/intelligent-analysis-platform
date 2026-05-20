@@ -9,6 +9,7 @@ import javax.sql.DataSource;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceType;
 import com.kuaishou.intelligentanalysisplatform.domain.datasource.AnalysisDatasource;
 import com.kuaishou.intelligentanalysisplatform.infra.security.CredentialEncryptor;
+import com.kuaishou.intelligentanalysisplatform.infra.observability.SqlLogInterceptor;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
@@ -24,22 +25,26 @@ public class HikariPoolRegistry {
 
     private final ConcurrentHashMap<String, HikariDataSource> pools = new ConcurrentHashMap<>();
     private final CredentialEncryptor credentialEncryptor;
+    private final SqlLogInterceptor sqlLogInterceptor;
     private final int maxPoolSize;
     private final long connectionTimeoutMs;
     private final long idleTimeoutMs;
 
     public HikariPoolRegistry(CredentialEncryptor credentialEncryptor,
+                              SqlLogInterceptor sqlLogInterceptor,
                               @Value("${connector.pool.max-pool-size:5}") int maxPoolSize,
                               @Value("${connector.pool.connection-timeout-ms:3000}") long connectionTimeoutMs,
                               @Value("${connector.pool.idle-timeout-ms:600000}") long idleTimeoutMs) {
         this.credentialEncryptor = credentialEncryptor;
+        this.sqlLogInterceptor = sqlLogInterceptor;
         this.maxPoolSize = maxPoolSize;
         this.connectionTimeoutMs = connectionTimeoutMs;
         this.idleTimeoutMs = idleTimeoutMs;
     }
 
     public DataSource getOrCreate(AnalysisDatasource datasource) {
-        return pools.computeIfAbsent(datasource.getId(), key -> createDataSource(datasource));
+        HikariDataSource pool = pools.computeIfAbsent(datasource.getId(), key -> createDataSource(datasource));
+        return sqlLogInterceptor.wrap(pool, datasource.getId());
     }
 
     public void evict(String datasourceId) {

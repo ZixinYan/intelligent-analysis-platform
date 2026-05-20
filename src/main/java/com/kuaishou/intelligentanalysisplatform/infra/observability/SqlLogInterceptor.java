@@ -16,11 +16,15 @@ import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 
 /**
- * Spring JDBC 的 SQL 拦截日志器，等价于 MyBatis Interceptor。
+ * SQL 拦截日志器，等价于 MyBatis Interceptor，但作用于 Spring JDBC 层。
  *
- * <p>通过 {@link BeanPostProcessor} 代理 Spring 管理的主 {@code dataSource} Bean，
- * 在 {@code prepareStatement → execute*} 链路上注入日志，记录 SQL 语句和执行耗时。
- * 仅拦截 Repository 层的 SQL，不影响 {@code HikariPoolRegistry} 管理的用户查询连接池。
+ * <p>拦截两路 DataSource：
+ * <ul>
+ *   <li>Spring 管理的主 {@code dataSource}（Repository 层），通过 {@link BeanPostProcessor} 自动代理。</li>
+ *   <li>{@code HikariPoolRegistry} 管理的用户查询连接池，调用方显式调用 {@link #wrap} 方法。</li>
+ * </ul>
+ *
+ * 在 {@code PreparedStatement.execute*()} 处记录 SQL 语句和执行耗时。
  */
 @Component
 public class SqlLogInterceptor implements BeanPostProcessor, Ordered {
@@ -32,24 +36,29 @@ public class SqlLogInterceptor implements BeanPostProcessor, Ordered {
         return Ordered.LOWEST_PRECEDENCE;
     }
 
-    @Override
-    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
-        if (!"dataSource".equals(beanName) || !(bean instanceof DataSource)) {
-            return bean;
-        }
-        DataSource original = (DataSource) bean;
+    /** 供 HikariPoolRegistry 显式调用，为用户查询连接池包装日志代理。 */
+    public DataSource wrap(DataSource target, String datasourceId) {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         return (DataSource) Proxy.newProxyInstance(cl, new Class[]{DataSource.class},
                 (proxy, method, args) -> {
-                    Object result = invoke(original, method, args);
+                    Object result = invoke(target, method, args);
                     if ("getConnection".equals(method.getName()) && result instanceof Connection conn) {
-                        return wrapConnection(conn);
+                        return wrapConnection(conn, datasourceId);
                     }
                     return result;
                 });
     }
 
-    private Connection wrapConnection(Connection conn) {
+    /** BeanPostProcessor 回调：自动包装 Spring 主 dataSource Bean。 */
+    @Override
+    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+        if ("dataSource".equals(beanName) && bean instanceof DataSource ds) {
+            return wrap(ds, "app");
+        }
+        return bean;
+    }
+
+    private Connection wrapConnection(Connection conn, String datasourceId) {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         return (Connection) Proxy.newProxyInstance(cl, new Class[]{Connection.class},
                 (proxy, method, args) -> {
@@ -57,13 +66,13 @@ public class SqlLogInterceptor implements BeanPostProcessor, Ordered {
                     if ("prepareStatement".equals(method.getName())
                             && args != null && args.length > 0
                             && result instanceof PreparedStatement stmt) {
-                        return wrapPreparedStatement(stmt, String.valueOf(args[0]));
+                        return wrapPreparedStatement(stmt, String.valueOf(args[0]), datasourceId);
                     }
                     return result;
                 });
     }
 
-    private PreparedStatement wrapPreparedStatement(PreparedStatement stmt, String sql) {
+    private PreparedStatement wrapPreparedStatement(PreparedStatement stmt, String sql, String datasourceId) {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         return (PreparedStatement) Proxy.newProxyInstance(cl, new Class[]{PreparedStatement.class},
                 (proxy, method, args) -> {
@@ -73,12 +82,12 @@ public class SqlLogInterceptor implements BeanPostProcessor, Ordered {
                     long start = System.currentTimeMillis();
                     try {
                         Object result = invoke(stmt, method, args);
-                        log.info("Repository SQL: method={}, elapsedMs={}, sql={}",
-                                method.getName(), System.currentTimeMillis() - start, sql);
+                        log.info("SQL executed: datasourceId={}, method={}, elapsedMs={}, sql={}",
+                                datasourceId, method.getName(), System.currentTimeMillis() - start, sql);
                         return result;
                     } catch (Exception e) {
-                        log.warn("Repository SQL failed: method={}, elapsedMs={}, sql={}, error={}",
-                                method.getName(), System.currentTimeMillis() - start, sql, e.getMessage());
+                        log.warn("SQL failed: datasourceId={}, method={}, elapsedMs={}, sql={}, error={}",
+                                datasourceId, method.getName(), System.currentTimeMillis() - start, sql, e.getMessage());
                         throw e;
                     }
                 });
