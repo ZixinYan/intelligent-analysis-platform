@@ -24,6 +24,7 @@ export interface WorkflowNode {
   id: string
   type: string
   position: { x: number; y: number }
+  selected?: boolean
   data: WorkflowNodeData
 }
 
@@ -34,6 +35,7 @@ export interface WorkflowEdge {
   sourceHandle?: string | null
   targetHandle?: string | null
   animated?: boolean
+  selected?: boolean
   condition?: 'true' | 'false' | null
   conditionLabel?: string
 }

@@ -34,19 +34,24 @@ export function useMappingCandidates(
     loading.value = true
     const currentRequestId = ++requestId
     try {
-      const renderer = String(node.data.config.chartType ?? node.data.nodeType ?? 'default')
+      const nodeType = node.data.nodeType ?? node.data.type
+      if (!nodeType) {
+        candidateSlots.value = []
+        return
+      }
+      const renderer = String(node.data.config.chartType ?? nodeType ?? 'default')
 
       // Try POST with upstream fields first, fall back to GET
       let result: FieldCandidateSlotDTO[]
       try {
-        result = await getMappingCandidatesWithFields(node.data.nodeType, {
+        result = await getMappingCandidatesWithFields(nodeType, {
           renderer,
           upstreamFields: upstream.data.schema.fields,
         })
       }
       catch {
         // Fallback: GET without upstream fields
-        result = await getMappingCandidates(node.data.nodeType, renderer)
+        result = await getMappingCandidates(nodeType, renderer)
       }
       if (currentRequestId === requestId) {
         candidateSlots.value = result

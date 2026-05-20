@@ -30,11 +30,6 @@ export function updateWorkflow(id: string, payload: WorkflowSaveRequestDTO) {
   return unwrapResponse<WorkflowDefinitionDTO>(client.put(`/api/v1/workflows/${id}`, payload))
 }
 
-/**
- * 流式执行工作流。
- * 通过 fetch 发起 POST 请求，返回 AsyncIterable<WorkflowStreamEventDTO>。
- * 调用方负责 for-await-of 消费，并可通过传入 AbortSignal 取消。
- */
 export async function* runWorkflowStream(
   workflowId: string,
   request: WorkflowRunRequestDTO,
@@ -58,10 +53,6 @@ export async function* runWorkflowStream(
   yield* parseSseStream<WorkflowStreamEventDTO>(response.body)
 }
 
-/**
- * 通用 SSE 流解析器（text/event-stream 格式）。
- * 每个完整事件块（由空行分隔）解析为一个 T 值。
- */
 async function* parseSseStream<T>(body: ReadableStream<Uint8Array>): AsyncIterable<T> {
   const decoder = new TextDecoder()
   const reader = body.getReader()
@@ -85,18 +76,17 @@ async function* parseSseStream<T>(body: ReadableStream<Uint8Array>): AsyncIterab
         if (json) {
           try {
             yield JSON.parse(json) as T
-          } catch {
-            // skip malformed JSON
+          }
+          catch {
           }
         }
       }
     }
-  } finally {
+  }
+  finally {
     reader.releaseLock()
   }
 }
-
-// ── Version Management API ──────────────────────────────────────────────────
 
 export function listVersions(workflowId: string, page = 1, pageSize = 20) {
   return unwrapResponse<PageResult<WorkflowVersionDTO>>(
@@ -133,8 +123,6 @@ export function diffVersions(workflowId: string, from: number, to: number) {
     client.get(`/api/v1/workflows/${workflowId}/versions/diff`, { params: { from, to } }),
   )
 }
-
-// ── Trigger API ──────────────────────────────────────────────────────────────
 
 export function createTrigger(workflowId: string, payload: CreateTriggerRequestDTO) {
   return unwrapResponse<TriggerDTO>(

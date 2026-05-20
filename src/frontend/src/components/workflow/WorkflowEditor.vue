@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
-import { VueFlow } from '@vue-flow/core'
+import { VueFlow, SelectionMode } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -59,6 +59,31 @@ const defaultEdgeOptions = ref({
   style: { stroke: '#5289ff', strokeWidth: 2 },
 })
 
+function shouldIgnoreDeleteShortcut(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+  const tagName = target.tagName.toLowerCase()
+  return tagName === 'input'
+    || tagName === 'textarea'
+    || tagName === 'select'
+    || target.isContentEditable
+    || target.getAttribute('role') === 'textbox'
+    || Boolean(target.closest('[contenteditable="true"]'))
+    || Boolean(target.closest('[role="textbox"]'))
+}
+
+function handleWindowKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Delete' && event.key !== 'Backspace') {
+    return
+  }
+  if (shouldIgnoreDeleteShortcut(event.target)) {
+    return
+  }
+  event.preventDefault()
+  workflow.deleteSelection()
+}
+
 let themeObserver: MutationObserver | undefined
 
 onMounted(() => {
@@ -69,10 +94,12 @@ onMounted(() => {
     attributes: true,
     attributeFilter: ['data-theme'],
   })
+  window.addEventListener('keydown', handleWindowKeydown)
 })
 
 onUnmounted(() => {
   themeObserver?.disconnect()
+  window.removeEventListener('keydown', handleWindowKeydown)
 })
 
 function handleAddNode(meta: NodeMetaDTO) {
@@ -154,9 +181,18 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
         :node-types="nodeTypes"
         :default-edge-options="defaultEdgeOptions"
         :viewport="viewport"
+        :elements-selectable="true"
+        :nodes-focusable="true"
+        :edges-focusable="true"
+        :selection-on-drag="true"
+        :selection-mode="SelectionMode.Partial as any"
+        :multi-selection-key-code="['Meta', 'Control']"
+        :delete-key-code="null"
         @nodes-change="workflow.onNodesChange"
+        @edges-change="workflow.onEdgesChange"
         @connect="workflow.onConnect"
         @node-click="workflow.onNodeClick"
+        @pane-click="workflow.onPaneClick"
         @viewport-change-end="handleViewportChange"
       >
         <Background :pattern-color="canvasPatternColor" />

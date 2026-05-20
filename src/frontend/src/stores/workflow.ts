@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import type { Connection, NodeChange, XYPosition } from '@vue-flow/core'
+import type { Connection, EdgeChange, NodeChange, XYPosition } from '@vue-flow/core'
 import type {
   DatasetDTO,
   FieldSchemaDTO,
@@ -11,7 +11,7 @@ import type {
   SchemaInferResultDTO,
   WorkflowDefinitionDTO,
 } from '@/types/contract'
-import type { AnalysisNodeStatus, WorkflowGraph, WorkflowNode, WorkflowViewport } from '@/types/workflow'
+import type { AnalysisNodeStatus, WorkflowEdge, WorkflowGraph, WorkflowNode, WorkflowViewport } from '@/types/workflow'
 import { createWorkflow, getWorkflow, listWorkflows, updateWorkflow } from '@/api/workflow'
 import { runNodeDebug as runNodeDebugApi } from '@/api/node-debug'
 import {
@@ -93,6 +93,8 @@ function persistViewport(viewport: WorkflowViewport, workflowId?: string) {
 export const useWorkflowStore = defineStore('workflow', () => {
   const graph = ref<WorkflowGraph>(createEmptyWorkflowGraph())
   const selectedNodeId = ref<string>()
+  const selectedNodeIds = ref<string[]>([])
+  const selectedEdgeIds = ref<string[]>([])
   const workflowId = ref<string>()
   const workflowName = ref('未命名工作流')
   const saving = ref(false)
@@ -108,6 +110,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   function setGraph(nextGraph: WorkflowGraph) {
     graph.value = nextGraph
+    syncSelectionFromGraph()
   }
 
   function setViewport(nextViewport: WorkflowViewport) {
@@ -118,6 +121,34 @@ export const useWorkflowStore = defineStore('workflow', () => {
     persistViewport(graph.value.viewport, workflowId.value)
   }
 
+  function syncSelectionFromGraph() {
+    selectedNodeIds.value = graph.value.nodes.filter(node => node.selected).map(node => node.id)
+    selectedEdgeIds.value = graph.value.edges.filter(edge => edge.selected).map(edge => edge.id)
+    selectedNodeId.value = selectedNodeIds.value.length === 1 && selectedEdgeIds.value.length === 0
+      ? selectedNodeIds.value[0]
+      : undefined
+  }
+
+  function setSingleNodeSelection(nodeId: string) {
+    graph.value = {
+      ...graph.value,
+      nodes: graph.value.nodes.map(node => ({ ...node, selected: node.id === nodeId })),
+      edges: graph.value.edges.map(edge => edge.selected ? { ...edge, selected: false } : edge),
+    }
+    syncSelectionFromGraph()
+  }
+
+  function clearSelection() {
+    graph.value = {
+      ...graph.value,
+      nodes: graph.value.nodes.map(node => node.selected ? { ...node, selected: false } : node),
+      edges: graph.value.edges.map(edge => edge.selected ? { ...edge, selected: false } : edge),
+    }
+    selectedNodeIds.value = []
+    selectedEdgeIds.value = []
+    selectedNodeId.value = undefined
+  }
+
   function addNode(meta: NodeMetaDTO, position: XYPosition = { x: 120, y: 120 }) {
     const businessType = meta.nodeType
     const id = createNodeId(businessType)
@@ -126,6 +157,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       id,
       type: WORKFLOW_RENDERER_NODE_TYPE,
       position,
+      selected: true,
       data: {
         type: businessType,
         nodeType: businessType,
@@ -138,9 +170,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }
     graph.value = {
       ...graph.value,
-      nodes: [...graph.value.nodes, node],
+      nodes: graph.value.nodes.map(item => item.selected ? { ...item, selected: false } : item).concat(node),
+      edges: graph.value.edges.map(edge => edge.selected ? { ...edge, selected: false } : edge),
     }
-    selectedNodeId.value = id
+    syncSelectionFromGraph()
   }
 
   function updateNode(nodeId: string, updater: (node: WorkflowNode) => WorkflowNode) {
@@ -183,22 +216,82 @@ export const useWorkflowStore = defineStore('workflow', () => {
     }))
   }
 
+  function removeSelectedElements(nodeIds: string[], edgeIds: string[]) {
+    if (nodeIds.length === 0 && edgeIds.length === 0) {
+      return
+    }
+    const nodeIdSet = new Set(nodeIds)
+    const edgeIdSet = new Set(edgeIds)
+    graph.value = {
+      ...graph.value,
+      nodes: graph.value.nodes.filter(node => !nodeIdSet.has(node.id)),
+      edges: graph.value.edges.filter(edge => !edgeIdSet.has(edge.id) && !nodeIdSet.has(edge.source) && !nodeIdSet.has(edge.target)),
+    }
+    syncSelectionFromGraph()
+  }
+
   function onNodesChange(changes: NodeChange[]) {
+    let nextNodes = graph.value.nodes
+    let nextEdges = graph.value.edges
+    let changed = false
+
     for (const change of changes) {
       if (change.type === 'position' && change.position) {
-        updateNode(change.id, node => ({ ...node, position: change.position }))
+        nextNodes = nextNodes.map(node => node.id === change.id ? { ...node, position: change.position } : node)
+        changed = true
       }
       if (change.type === 'remove') {
-        graph.value = {
-          ...graph.value,
-          nodes: graph.value.nodes.filter(node => node.id !== change.id),
-          edges: graph.value.edges.filter(edge => edge.source !== change.id && edge.target !== change.id),
-        }
+        nextNodes = nextNodes.filter(node => node.id !== change.id)
+        nextEdges = nextEdges.filter(edge => edge.source !== change.id && edge.target !== change.id)
+        changed = true
       }
-      if (change.type === 'select' && change.selected) {
-        selectedNodeId.value = change.id
+      if (change.type === 'select') {
+        nextNodes = nextNodes.map(node => node.id === change.id ? { ...node, selected: change.selected } : node)
+        changed = true
       }
     }
+
+    if (!changed) {
+      return
+    }
+
+    graph.value = {
+      ...graph.value,
+      nodes: nextNodes,
+      edges: nextEdges,
+    }
+    syncSelectionFromGraph()
+  }
+
+  function onEdgesChange(changes: EdgeChange[]) {
+    let nextEdges: WorkflowEdge[] = graph.value.edges
+    let changed = false
+
+    for (const change of changes) {
+      if (change.type === 'remove') {
+        nextEdges = nextEdges.filter(edge => edge.id !== change.id)
+        changed = true
+      }
+      if (change.type === 'select') {
+        nextEdges = nextEdges.map(edge => edge.id === change.id ? { ...edge, selected: change.selected } : edge)
+        changed = true
+      }
+    }
+
+    if (!changed) {
+      return
+    }
+
+    graph.value = {
+      ...graph.value,
+      edges: nextEdges,
+    }
+    syncSelectionFromGraph()
+  }
+
+  function deleteSelection() {
+    const nodeIds = selectedNodeIds.value.length ? selectedNodeIds.value : selectedNodeId.value ? [selectedNodeId.value] : []
+    removeSelectedElements(nodeIds, selectedEdgeIds.value)
   }
 
   function onConnect(connection: Connection) {
@@ -211,7 +304,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     graph.value = {
       ...graph.value,
       edges: [
-        ...graph.value.edges,
+        ...graph.value.edges.map(edge => edge.selected ? { ...edge, selected: false } : edge),
         {
           id: `${connection.source}-${connection.target}-${Date.now()}`,
           source: connection.source,
@@ -233,6 +326,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
       }
     }
     propagateSchemaFrom(connection.source)
+    syncSelectionFromGraph()
   }
 
   function propagateSchemaFrom(sourceNodeId: string, force = false) {
@@ -251,8 +345,14 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   function onNodeClick(payload: { node: WorkflowNode }) {
-    selectedNodeId.value = payload.node.id
+    if (!selectedNodeIds.value.includes(payload.node.id) || selectedNodeIds.value.length !== 1 || selectedEdgeIds.value.length > 0) {
+      setSingleNodeSelection(payload.node.id)
+    }
     debugActiveTab.value = 'config'
+  }
+
+  function onPaneClick() {
+    clearSelection()
   }
 
   function getUpstreamNode(nodeId: string) {
@@ -272,6 +372,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     workflowName.value = definition.workflowName || '未命名工作流'
     setGraph(definitionDtoToGraph(definition, loadStoredViewport(definition.workflowId)))
     selectedNodeId.value = undefined
+    selectedNodeIds.value = []
+    selectedEdgeIds.value = []
   }
 
   async function save() {
@@ -315,6 +417,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
   function reset() {
     setGraph(createEmptyWorkflowGraph())
     selectedNodeId.value = undefined
+    selectedNodeIds.value = []
+    selectedEdgeIds.value = []
     workflowId.value = undefined
     workflowName.value = '未命名工作流'
     debugActiveTab.value = 'config'
@@ -397,6 +501,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     edges,
     viewport,
     selectedNode,
+    selectedNodeIds,
+    selectedEdgeIds,
     workflowId,
     workflowName,
     saving,
@@ -411,8 +517,13 @@ export const useWorkflowStore = defineStore('workflow', () => {
     updateNodeStatus,
     updateNodeSchema,
     onNodesChange,
+    onEdgesChange,
     onConnect,
     onNodeClick,
+    onPaneClick,
+    clearSelection,
+    deleteSelection,
+    setSingleNodeSelection,
     getUpstreamNode,
     propagateSchemaFrom,
     buildUpstreamInputs,

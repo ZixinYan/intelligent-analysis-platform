@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { WorkflowNode } from '@/types/workflow'
 import { resolveNodeComponent } from '@/components/workflow/nodes'
 
