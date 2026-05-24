@@ -32,8 +32,11 @@ export function createEmptyWorkflowGraph(): WorkflowGraph {
 }
 
 function toWorkflowNode(definition: WorkflowDefinitionDTO, node: WorkflowDefinitionDTO['nodes'][number]): WorkflowNode {
-  const meta = node.metadata
   const config = (node.config ?? {}) as Record<string, unknown>
+  const metadata = node.metadata
+  const meta = metadata && typeof metadata === 'object' && 'nodeType' in metadata && 'displayName' in metadata
+    ? metadata as import('@/types/contract').NodeMetaDTO
+    : undefined
   const position = definition.positions?.[node.nodeId] ?? DEFAULT_NODE_POSITION
   const rawType = toRawNodeType(node.nodeType || meta?.nodeType || '')
   const businessType = normalizeNodeType(rawType)
@@ -84,7 +87,7 @@ export function graphToSaveRequest(graph: WorkflowGraph, workflowName: string): 
       nodeType: getRawNodeType(node),
       category: node.data.meta?.category,
       version: node.data.meta?.nodeVersion,
-      metadata: node.data.meta,
+      metadata: node.data.meta ? { ...node.data.meta } : undefined,
       config: node.data.config,
     })),
     edges: graph.edges.map(edge => ({

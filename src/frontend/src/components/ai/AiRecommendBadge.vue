@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from '@/components/icons/AppIcon.vue'
 import type { ChartRecommendationDTO } from '@/types/contract'
 
 defineProps<{
@@ -16,7 +17,7 @@ function confidencePercent(confidence: number) {
 
 <template>
   <div class="ai-recommend-badge" :title="recommendation.reason">
-    <span class="ai-recommend-badge__icon">✦</span>
+    <span class="ai-recommend-badge__icon"><AppIcon name="ai" :size="12" /></span>
     <span class="ai-recommend-badge__type">AI 推荐：{{ recommendation.chartType }}</span>
     <span class="ai-recommend-badge__confidence">{{ confidencePercent(recommendation.confidence) }}%</span>
     <button class="ai-recommend-badge__apply" @click.stop="emit('accept')">应用</button>
@@ -37,7 +38,7 @@ function confidencePercent(confidence: number) {
   color: #a5b4fc;
   cursor: default;
 }
-.ai-recommend-badge__icon { font-size: 11px; }
+.ai-recommend-badge__icon { display: grid; place-items: center; }
 .ai-recommend-badge__type { font-weight: 600; }
 .ai-recommend-badge__confidence { color: #6366f1; }
 .ai-recommend-badge__apply {

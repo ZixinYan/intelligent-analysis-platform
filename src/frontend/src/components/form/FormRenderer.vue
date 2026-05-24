@@ -26,16 +26,16 @@ watch(() => props.modelValue, (value) => {
 
 const orderedSections = computed<PanelSectionDTO[]>(() => {
   return [...(props.schema?.sections ?? [])]
-    .sort((a, b) => a.order - b.order)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map(section => ({
       ...section,
-      fields: [...section.fields].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      fields: [...(section.fields ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
     }))
 })
 
 const activeFields = computed(() => {
   return orderedSections.value.flatMap((section) => {
-    return section.fields.filter((field) => {
+    return section.fields.filter((field: PanelFieldDTO) => {
       const { visible } = useFieldState(field, () => draft)
       return visible.value
     })
@@ -47,23 +47,25 @@ watch([orderedSections, () => ({ ...draft })], () => {
     delete errors[key]
   })
   for (const field of activeFields.value) {
-    errors[field.field] = validateFieldValue(field, draft[field.field])
+    errors[field.field ?? field.fieldKey ?? ''] = validateFieldValue(field, draft[field.field ?? field.fieldKey ?? ''])
   }
-  emit('valid', !Object.values(errors).some(item => item.length > 0))
+  emit('valid', !Object.values(errors).some((item: string[]) => item.length > 0))
 }, { immediate: true, deep: true })
 
 function fieldCandidates(field: PanelFieldDTO) {
   if (field.componentType !== 'FIELD_PICKER' && field.componentType !== 'FIELD_MULTI_SELECTOR') {
     return undefined
   }
+  const fieldKey = field.field ?? field.fieldKey
   return props.candidateSlots
-    ?.find(item => item.slot === field.field)
+    ?.find(item => item.slot === fieldKey)
     ?.candidates
-    .map(item => item.field)
+    ?.map((item: { field: string }) => item.field)
 }
 
 function updateField(field: PanelFieldDTO, value: unknown) {
-  draft[field.field] = value
+  const fieldKey = field.field ?? field.fieldKey ?? ''
+  draft[fieldKey] = value
   emit('update:modelValue', { ...draft })
 }
 </script>
@@ -74,12 +76,12 @@ function updateField(field: PanelFieldDTO, value: unknown) {
       <header class="form-renderer__header">{{ section.title }}</header>
       <FieldRenderer
         v-for="field in section.fields"
-        :key="field.field"
+        :key="field.field ?? field.fieldKey"
         :field="field"
-        :model-value="draft[field.field]"
+        :model-value="draft[field.field ?? field.fieldKey ?? '']"
         :model="draft"
         :candidates="fieldCandidates(field)"
-        :error="errors[field.field]?.[0]"
+        :error="errors[field.field ?? field.fieldKey ?? '']?.[0]"
         @update:model-value="updateField(field, $event)"
       />
     </section>

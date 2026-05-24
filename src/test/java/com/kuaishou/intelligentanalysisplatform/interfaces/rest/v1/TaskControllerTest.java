@@ -7,13 +7,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kuaishou.intelligentanalysisplatform.common.response.GlobalExceptionHandler;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ExecutionStatus;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.AsyncTaskStatusDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.ai.AiClarificationQuestionDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.util.Map;
+
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -32,6 +34,15 @@ class TaskControllerTest {
                 .taskId("task-demo")
                 .status(ExecutionStatus.RUNNING)
                 .build());
+        when(taskApplicationService.getTask("task-agent")).thenReturn(AsyncTaskStatusDTO.builder()
+                .taskId("task-agent")
+                .agentTaskId("task-agent")
+                .taskType("AGENT")
+                .status(ExecutionStatus.RUNNING)
+                .clarification(AiClarificationQuestionDTO.builder().key("k1").label("Need input").build())
+                .trace(Map.of("step", "planning"))
+                .confidence(0.88)
+                .build());
         when(taskApplicationService.getTask("missing")).thenThrow(new BaseBusinessException(
                 ErrorCode.ASYNC_TASK_NOT_FOUND,
                 "task not found"
@@ -49,6 +60,18 @@ class TaskControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("OK"))
                 .andExpect(jsonPath("$.data.status").value("RUNNING"));
+    }
+
+    @Test
+    void shouldGetAgentTaskStatus() throws Exception {
+        mockMvc.perform(get("/api/v1/tasks/task-agent"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("OK"))
+                .andExpect(jsonPath("$.data.taskType").value("AGENT"))
+                .andExpect(jsonPath("$.data.agentTaskId").value("task-agent"))
+                .andExpect(jsonPath("$.data.clarification.label").value("Need input"))
+                .andExpect(jsonPath("$.data.trace.step").value("planning"))
+                .andExpect(jsonPath("$.data.confidence").value(0.88));
     }
 
     @Test

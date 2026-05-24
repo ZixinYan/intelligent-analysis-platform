@@ -27,7 +27,7 @@ describe('useAsyncTask', () => {
     queryApi.runQueryAsync.mockResolvedValue({ taskId: 'task-1', status: 'PENDING' })
     taskApi.getTaskStatus
       .mockResolvedValueOnce({ taskId: 'task-1', taskType: 'QUERY', status: 'RUNNING', progress: 40 })
-      .mockResolvedValueOnce({ taskId: 'task-1', taskType: 'QUERY', status: 'SUCCESS', progress: 100, dataset: { rows: [{ id: 1 }] } })
+      .mockResolvedValueOnce({ taskId: 'task-1', taskType: 'QUERY', status: 'SUCCEEDED', progress: 100, dataset: { rows: [{ id: 1 }] } })
 
     const task = useAsyncTask(10)
     const promise = task.submit({ datasourceId: 'ds-1', sql: 'select 1' })
@@ -35,8 +35,30 @@ describe('useAsyncTask', () => {
     await vi.advanceTimersByTimeAsync(10)
     await promise
 
-    expect(task.status.value).toBe('SUCCESS')
+    expect(task.status.value).toBe('SUCCEEDED')
     expect(task.dataset.value?.rows).toEqual([{ id: 1 }])
+  })
+
+  it('exposes extended agent task fields', async () => {
+    taskApi.getTaskStatus.mockResolvedValue({
+      taskId: 'task-agent-1',
+      agentTaskId: 'task-agent-1',
+      taskType: 'AGENT',
+      status: 'RUNNING',
+      progress: 50,
+      clarification: { key: 'k1', label: 'Need input' },
+      trace: { step: 'planning' },
+      confidence: 0.82,
+    })
+
+    const task = useAsyncTask(10)
+    task.taskId.value = 'task-agent-1'
+    await task.poll()
+
+    expect(task.task.value?.agentTaskId).toBe('task-agent-1')
+    expect(task.task.value?.clarification?.label).toBe('Need input')
+    expect(task.task.value?.trace).toEqual({ step: 'planning' })
+    expect(task.task.value?.confidence).toBe(0.82)
   })
 
   it('cancels running task', async () => {

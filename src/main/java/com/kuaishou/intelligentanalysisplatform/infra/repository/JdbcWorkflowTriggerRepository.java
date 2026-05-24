@@ -38,28 +38,34 @@ public class JdbcWorkflowTriggerRepository implements WorkflowTriggerRepository 
 
     @Override
     public WorkflowTrigger save(WorkflowTrigger t) {
-        jdbc.update("""
-                INSERT INTO workflow_trigger (
-                    id, workflow_id, tenant_id, trigger_type, trigger_status,
-                    cron_expr, next_fire_at, webhook_token, secret_key,
-                    default_inputs, last_fire_at, last_run_id, last_status,
-                    created_at, updated_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                ON DUPLICATE KEY UPDATE
-                    trigger_status  = VALUES(trigger_status),
-                    next_fire_at    = VALUES(next_fire_at),
-                    last_fire_at    = VALUES(last_fire_at),
-                    last_run_id     = VALUES(last_run_id),
-                    last_status     = VALUES(last_status),
-                    updated_at      = VALUES(updated_at)
-                """,
-                t.getId(), t.getWorkflowId(), t.getTenantId(),
-                t.getTriggerType().name(), t.getTriggerStatus().name(),
-                t.getCronExpr(), t.getNextFireAt(),
-                t.getWebhookToken(), t.getSecretKey(),
-                t.getDefaultInputs(),
-                t.getLastFireAt(), t.getLastRunId(), t.getLastStatus(),
-                t.getCreatedAt(), t.getUpdatedAt());
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM workflow_trigger WHERE id = ?", Integer.class, t.getId());
+        if (count != null && count > 0) {
+            jdbc.update("""
+                    UPDATE workflow_trigger SET
+                        trigger_status = ?, next_fire_at = ?, last_fire_at = ?,
+                        last_run_id = ?, last_status = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    t.getTriggerStatus().name(), t.getNextFireAt(), t.getLastFireAt(),
+                    t.getLastRunId(), t.getLastStatus(), t.getUpdatedAt(), t.getId());
+        } else {
+            jdbc.update("""
+                    INSERT INTO workflow_trigger (
+                        id, workflow_id, tenant_id, trigger_type, trigger_status,
+                        cron_expr, next_fire_at, webhook_token, secret_key,
+                        default_inputs, last_fire_at, last_run_id, last_status,
+                        created_at, updated_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """,
+                    t.getId(), t.getWorkflowId(), t.getTenantId(),
+                    t.getTriggerType().name(), t.getTriggerStatus().name(),
+                    t.getCronExpr(), t.getNextFireAt(),
+                    t.getWebhookToken(), t.getSecretKey(),
+                    t.getDefaultInputs(),
+                    t.getLastFireAt(), t.getLastRunId(), t.getLastStatus(),
+                    t.getCreatedAt(), t.getUpdatedAt());
+        }
         return t;
     }
 
@@ -85,13 +91,6 @@ public class JdbcWorkflowTriggerRepository implements WorkflowTriggerRepository 
     }
 
     @Override
-    public List<WorkflowTrigger> findDueScheduleTriggers(TriggerType type, TriggerStatus status, long now) {
-        return jdbc.query(
-                "SELECT * FROM workflow_trigger WHERE trigger_type = ? AND trigger_status = ? AND next_fire_at <= ?",
-                ROW_MAPPER, type.name(), status.name(), now);
-    }
-
-    @Override
     public void updateNextFireAt(String triggerId, Long nextFireAt, long lastFireAt) {
         jdbc.update(
                 "UPDATE workflow_trigger SET next_fire_at = ?, last_fire_at = ?, updated_at = ? WHERE id = ?",
@@ -109,4 +108,19 @@ public class JdbcWorkflowTriggerRepository implements WorkflowTriggerRepository 
     public void deleteById(String triggerId) {
         jdbc.update("DELETE FROM workflow_trigger WHERE id = ?", triggerId);
     }
+
+    @Override
+    public List<WorkflowTrigger> findDueCronTriggers(long nowMs) {
+        return jdbc.query(
+                "SELECT * FROM workflow_trigger WHERE trigger_type = ? AND trigger_status = ? AND next_fire_at <= ? ORDER BY next_fire_at ASC LIMIT 50",
+                ROW_MAPPER, TriggerType.SCHEDULE.name(), TriggerStatus.ACTIVE.name(), nowMs);
+    }
+
+    @Override
+    public void updateLastFire(String triggerId, long firedAt, String status, long nextFireAt) {
+        jdbc.update(
+                "UPDATE workflow_trigger SET last_fire_at = ?, last_status = ?, next_fire_at = ?, updated_at = ? WHERE id = ?",
+                firedAt, status, nextFireAt, firedAt, triggerId);
+    }
 }
+

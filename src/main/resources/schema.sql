@@ -1,52 +1,8 @@
 -- ============================================================
--- Helper: conditionally create index (MySQL, JDBC-safe via separator: //)
+-- Schema for app runtime and tests
 -- ============================================================
-CREATE PROCEDURE IF NOT EXISTS try_create_index(
-    IN idx_name VARCHAR(64),
-    IN tbl_name VARCHAR(64),
-    IN col_list VARCHAR(256),
-    IN unique_flag BOOLEAN
-)
-BEGIN
-    DECLARE idx_count INT DEFAULT 0;
-    SELECT COUNT(*) INTO idx_count
-        FROM information_schema.statistics
-        WHERE table_schema = DATABASE()
-          AND table_name = tbl_name
-          AND index_name = idx_name;
-    IF idx_count = 0 THEN
-        IF unique_flag THEN
-            SET @ddl = CONCAT('CREATE UNIQUE INDEX ', idx_name, ' ON ', tbl_name, ' (', col_list, ')');
-        ELSE
-            SET @ddl = CONCAT('CREATE INDEX ', idx_name, ' ON ', tbl_name, ' (', col_list, ')');
-        END IF;
-        PREPARE stmt FROM @ddl;
-        EXECUTE stmt;
-        DEALLOCATE PREPARE stmt;
-    END IF;
-END //
 
-CREATE PROCEDURE IF NOT EXISTS try_add_column(
-    IN tbl_name VARCHAR(64),
-    IN col_name VARCHAR(64),
-    IN col_def  VARCHAR(256)
-)
-BEGIN
-    DECLARE col_count INT DEFAULT 0;
-    SELECT COUNT(*) INTO col_count
-        FROM information_schema.columns
-        WHERE table_schema = DATABASE()
-          AND table_name  = tbl_name
-          AND column_name = col_name;
-    IF col_count = 0 THEN
-        SET @ddl = CONCAT('ALTER TABLE ', tbl_name, ' ADD COLUMN ', col_name, ' ', col_def);
-        PREPARE stmt FROM @ddl;
-        EXECUTE stmt;
-        DEALLOCATE PREPARE stmt;
-    END IF;
-END //
-
-CREATE TABLE IF NOT EXISTS query_execution (
+CREATE TABLE IF NOT EXISTS "query_execution" (
     query_id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     datasource_id VARCHAR(64) NOT NULL,
@@ -63,10 +19,10 @@ CREATE TABLE IF NOT EXISTS query_execution (
     error_message VARCHAR(2000),
     operator_id VARCHAR(64),
     created_at BIGINT NOT NULL
-) //
+);
 
-CALL try_create_index('idx_query_execution_tenant_status', 'query_execution', 'tenant_id, status', FALSE) //
-CALL try_create_index('idx_query_execution_tenant_ds', 'query_execution', 'tenant_id, datasource_id', FALSE) //
+CREATE INDEX IF NOT EXISTS idx_query_execution_tenant_status ON "query_execution" (tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_query_execution_tenant_ds ON "query_execution" (tenant_id, datasource_id);
 
 CREATE TABLE IF NOT EXISTS async_task (
     task_id VARCHAR(64) PRIMARY KEY,
@@ -79,48 +35,45 @@ CREATE TABLE IF NOT EXISTS async_task (
     error_message VARCHAR(2000),
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL
-) //
+);
 
-CALL try_create_index('idx_async_task_tenant_status', 'async_task', 'tenant_id, status', FALSE) //
+CREATE INDEX IF NOT EXISTS idx_async_task_tenant_status ON async_task (tenant_id, status);
 
 CREATE TABLE IF NOT EXISTS task_result (
     task_id VARCHAR(64) PRIMARY KEY,
-    result_json MEDIUMTEXT NOT NULL,
+    result_json CLOB NOT NULL,
     created_at BIGINT NOT NULL
-) //
+);
 
 CREATE TABLE IF NOT EXISTS workflow_definition (
     workflow_id VARCHAR(64) PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     workflow_name VARCHAR(256) NOT NULL,
-    definition_json MEDIUMTEXT NOT NULL,
+    definition_json CLOB NOT NULL,
     operator_id VARCHAR(64),
     created_at BIGINT NOT NULL,
-    updated_at BIGINT NOT NULL
-) //
+    updated_at BIGINT NOT NULL,
+    current_version_id VARCHAR(64),
+    published_version_id VARCHAR(64)
+);
 
-CALL try_create_index('idx_workflow_definition_tenant_updated', 'workflow_definition', 'tenant_id, updated_at', FALSE) //
-CALL try_create_index('uq_workflow_definition_id_tenant', 'workflow_definition', 'workflow_id, tenant_id', TRUE) //
-
-CALL try_add_column('workflow_definition', 'current_version_id',   'VARCHAR(64)') //
-CALL try_add_column('workflow_definition', 'published_version_id', 'VARCHAR(64)') //
+CREATE INDEX IF NOT EXISTS idx_workflow_definition_tenant_updated ON workflow_definition (tenant_id, updated_at);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_workflow_definition_id_tenant ON workflow_definition (workflow_id, tenant_id);
 
 CREATE TABLE IF NOT EXISTS workflow_version (
     version_id      VARCHAR(64) PRIMARY KEY,
     workflow_id     VARCHAR(64) NOT NULL,
     tenant_id       VARCHAR(64) NOT NULL,
     version_number  INT NOT NULL,
-    definition_json MEDIUMTEXT NOT NULL,
+    definition_json CLOB NOT NULL,
     change_summary  VARCHAR(1000),
     published       BOOLEAN NOT NULL DEFAULT FALSE,
     created_by      VARCHAR(64),
     created_at      BIGINT NOT NULL
-) //
+);
 
-CALL try_create_index('idx_wf_version_workflow_num', 'workflow_version',
-    'workflow_id, version_number', FALSE) //
-CALL try_create_index('idx_wf_version_tenant_published', 'workflow_version',
-    'tenant_id, workflow_id, published', FALSE) //
+CREATE INDEX IF NOT EXISTS idx_wf_version_workflow_num ON workflow_version (workflow_id, version_number);
+CREATE INDEX IF NOT EXISTS idx_wf_version_tenant_published ON workflow_version (tenant_id, workflow_id, published);
 
 CREATE TABLE IF NOT EXISTS datasource_config (
     id VARCHAR(64) PRIMARY KEY,
@@ -138,10 +91,10 @@ CREATE TABLE IF NOT EXISTS datasource_config (
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
     created_by VARCHAR(64)
-) //
+);
 
-CALL try_create_index('idx_ds_config_tenant', 'datasource_config', 'tenant_id', FALSE) //
-CALL try_create_index('idx_ds_config_tenant_name', 'datasource_config', 'tenant_id, name', FALSE) //
+CREATE INDEX IF NOT EXISTS idx_ds_config_tenant ON datasource_config (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_ds_config_tenant_name ON datasource_config (tenant_id, name);
 
 CREATE TABLE IF NOT EXISTS approval_request (
     request_id      VARCHAR(64) PRIMARY KEY,
@@ -156,10 +109,10 @@ CREATE TABLE IF NOT EXISTS approval_request (
     created_at      BIGINT NOT NULL,
     decided_at      BIGINT,
     expires_at      BIGINT
-) //
+);
 
-CALL try_create_index('idx_approval_tenant_status', 'approval_request', 'tenant_id, status', FALSE) //
-CALL try_create_index('idx_approval_workflow_node', 'approval_request', 'workflow_id, node_id', FALSE) //
+CREATE INDEX IF NOT EXISTS idx_approval_tenant_status ON approval_request (tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_approval_workflow_node ON approval_request (workflow_id, node_id);
 
 CREATE TABLE IF NOT EXISTS saved_dataset (
     dataset_id          VARCHAR(64) PRIMARY KEY,
@@ -167,16 +120,16 @@ CREATE TABLE IF NOT EXISTS saved_dataset (
     name                VARCHAR(256) NOT NULL,
     description         VARCHAR(1000),
     created_by          VARCHAR(64),
-    schema_json         TEXT NOT NULL,
-    stat_json           TEXT,
-    rows_json           MEDIUMTEXT,
+    schema_json         CLOB NOT NULL,
+    stat_json           CLOB,
+    rows_json           CLOB,
     source_workflow_id  VARCHAR(64),
     source_node_id      VARCHAR(64),
     created_at          BIGINT NOT NULL,
     updated_at          BIGINT NOT NULL
-) //
+);
 
-CALL try_create_index('idx_saved_dataset_tenant_updated', 'saved_dataset', 'tenant_id, updated_at', FALSE) //
+CREATE INDEX IF NOT EXISTS idx_saved_dataset_tenant_updated ON saved_dataset (tenant_id, updated_at);
 
 CREATE TABLE IF NOT EXISTS export_file (
     file_id         VARCHAR(64) PRIMARY KEY,
@@ -188,39 +141,43 @@ CREATE TABLE IF NOT EXISTS export_file (
     row_count       INT,
     created_at      BIGINT NOT NULL,
     expires_at      BIGINT
-) //
+);
 
-CALL try_create_index('idx_export_file_tenant', 'export_file', 'tenant_id', FALSE) //
-CALL try_create_index('idx_export_file_expires', 'export_file', 'expires_at', FALSE) //
-
-ALTER TABLE workflow_definition
-    MODIFY COLUMN definition_json MEDIUMTEXT NOT NULL //
-
-ALTER TABLE task_result
-    MODIFY COLUMN result_json MEDIUMTEXT NOT NULL //
+CREATE INDEX IF NOT EXISTS idx_export_file_tenant ON export_file (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_export_file_expires ON export_file (expires_at);
 
 CREATE TABLE IF NOT EXISTS ai_conversation (
     conversation_id VARCHAR(64) PRIMARY KEY,
     tenant_id       VARCHAR(64) NOT NULL,
     user_id         VARCHAR(64),
     topic           VARCHAR(256),
-    messages_json   MEDIUMTEXT NOT NULL,
     created_at      BIGINT NOT NULL,
     updated_at      BIGINT NOT NULL
-) //
+);
 
-CALL try_create_index('idx_ai_conv_tenant_updated', 'ai_conversation', 'tenant_id, updated_at', FALSE) //
+CREATE INDEX IF NOT EXISTS idx_ai_conv_tenant_updated ON ai_conversation (tenant_id, updated_at);
+
+CREATE TABLE IF NOT EXISTS ai_conversation_message (
+    message_id       VARCHAR(64) PRIMARY KEY,
+    conversation_id  VARCHAR(64) NOT NULL,
+    role             VARCHAR(16) NOT NULL,
+    content          CLOB NOT NULL,
+    estimated_tokens INT,
+    created_at       BIGINT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_conv_msg_conv ON ai_conversation_message (conversation_id, created_at);
 
 CREATE TABLE IF NOT EXISTS knowledge_base (
     id          VARCHAR(64) PRIMARY KEY,
     tenant_id   VARCHAR(64) NOT NULL,
     name        VARCHAR(255) NOT NULL,
-    description TEXT,
+    description CLOB,
     created_at  BIGINT NOT NULL,
     updated_at  BIGINT NOT NULL
-) //
+);
 
-CALL try_create_index('idx_knowledge_base_tenant', 'knowledge_base', 'tenant_id', FALSE) //
+CREATE INDEX IF NOT EXISTS idx_knowledge_base_tenant ON knowledge_base (tenant_id);
 
 CREATE TABLE IF NOT EXISTS workflow_trigger (
     id              VARCHAR(64) PRIMARY KEY,
@@ -232,17 +189,14 @@ CREATE TABLE IF NOT EXISTS workflow_trigger (
     next_fire_at    BIGINT,
     webhook_token   VARCHAR(128),
     secret_key      VARCHAR(256),
-    default_inputs  TEXT,
+    default_inputs  CLOB,
     last_fire_at    BIGINT,
     last_run_id     VARCHAR(64),
     last_status     VARCHAR(32),
     created_at      BIGINT NOT NULL,
     updated_at      BIGINT NOT NULL
-) //
+);
 
-CALL try_create_index('idx_trigger_type_status', 'workflow_trigger', 'trigger_type, trigger_status', FALSE) //
-CALL try_create_index('idx_trigger_webhook_token', 'workflow_trigger', 'webhook_token', FALSE) //
-CALL try_create_index('idx_trigger_workflow_id', 'workflow_trigger', 'workflow_id', FALSE) //
-
-DROP PROCEDURE IF EXISTS try_create_index //
-DROP PROCEDURE IF EXISTS try_add_column //
+CREATE INDEX IF NOT EXISTS idx_trigger_type_status ON workflow_trigger (trigger_type, trigger_status);
+CREATE INDEX IF NOT EXISTS idx_trigger_webhook_token ON workflow_trigger (webhook_token);
+CREATE INDEX IF NOT EXISTS idx_trigger_workflow_id ON workflow_trigger (workflow_id);

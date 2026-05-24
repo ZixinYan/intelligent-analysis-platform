@@ -5,8 +5,16 @@ export function getTaskStatus(taskId: string) {
   return unwrapResponse<AsyncTaskStatusDTO>(client.get(`/api/v1/tasks/${taskId}`))
 }
 
+export function getAgentTaskStatus(taskId: string) {
+  return getTaskStatus(taskId)
+}
+
 export function cancelTask(taskId: string) {
   return unwrapResponse<void>(client.post(`/api/v1/tasks/${taskId}/cancel`))
+}
+
+export function cancelAgentTask(taskId: string) {
+  return cancelTask(taskId)
 }
 
 /**
@@ -28,13 +36,18 @@ export function pollTask(
       if (Date.now() > deadline)
         return reject(new Error('Task polling timeout'))
 
-      const status = await getTaskStatus(taskId)
-      onProgress?.(status)
+      try {
+        const status = await getTaskStatus(taskId)
+        onProgress?.(status)
 
-      if (status.status === 'SUCCESS' || status.status === 'FAILED' || status.status === 'CANCELLED')
-        return resolve(status)
+        if (status.status === 'SUCCEEDED' || status.status === 'FAILED' || status.status === 'CANCELLED')
+          return resolve(status)
 
-      setTimeout(tick, intervalMs)
+        setTimeout(tick, intervalMs)
+      }
+      catch (error) {
+        reject(error)
+      }
     }
     tick()
   })

@@ -1,547 +1,98 @@
-/**
- * 前后端接口契约类型定义（Data Transfer Objects）。
- *
- * 本文件与后端 contract 模块的 DTO 类严格对应，字段变更需同步更新。
- * 所有接口均为只读数据结构，不含业务逻辑。
- *
- * 模块划分：
- *  - 基础响应结构（ApiResponse / PageResult）
- *  - 节点元数据 & 配置 Schema（NodeMetaDTO / PanelFieldDTO 等）
- *  - 查询相关（QueryRequestDTO / QueryResultDTO / ValidateResultDTO）
- *  - 工作流定义 & 执行（WorkflowDefinitionDTO / WorkflowRunRequestDTO 等）
- *  - 流式 SSE 事件（WorkflowStreamEventDTO 联合类型）
- *  - 数据源管理（DatasourceDTO / DatasourceCreateRequestDTO 等）
- *  - AI 辅助（AiSqlRequestDTO / AiWorkflowBuildRequestDTO 等）
- *  - 触发器（TriggerDTO）
- *  - 已保存数据集（SavedDatasetSummaryDTO）
- *  - 导出（ExportFileDTO）
- *  - 运维指标（OpsMetricsSummaryDTO）
- */
+export type ValueType =
+  | 'STRING'
+  | 'LONG'
+  | 'DOUBLE'
+  | 'BOOLEAN'
+  | 'DATE'
+  | 'TIMESTAMP'
+  | 'JSON'
+  | 'UNKNOWN'
 
-/** 统一 API 响应包装体，所有接口均以此格式返回 */
+export interface RequestContextDTO {
+  requestId: string
+  tenantId: string
+  userId: string
+}
+
 export interface ApiResponse<T> {
   code: string
   message: string
   data: T
-  success: boolean
-}
-
-/** 分页结果包装体 */
-export interface PageResult<T> {
-  items: T[]
-  total: number
-  page: number
-  pageSize: number
-}
-
-/** 节点所属功能分类：查询 / 计算 / 输出 / 治理 */
-export type NodeCategory = 'QUERY' | 'COMPUTE' | 'OUTPUT' | 'GOVERNANCE'
-/** 节点结果数据类型 */
-export type ResultKind = 'DATASET' | 'TABLE' | 'CHART' | 'VARIABLES' | 'EMPTY'
-/** 支持的图表类型 */
-export type ChartType = 'LINE' | 'BAR' | 'PIE' | 'SCATTER' | 'AREA' | 'MIXED'
-/** 字段值类型，涵盖基本类型和嵌套结构 */
-export type ValueType =
-  | 'STRING'
-  | 'INTEGER'
-  | 'LONG'
-  | 'DECIMAL'
-  | 'BOOLEAN'
-  | 'DATE'
-  | 'DATETIME'
-  | 'OBJECT'
-  | 'DATASET'
-  | 'CHART'
-/** 节点配置面板中，单个字段的 UI 组件类型（由后端 NodeMeta 声明） */
-export type FieldComponentType =
-  | 'INPUT'
-  | 'TEXTAREA'
-  | 'SELECT'
-  | 'MULTI_SELECT'
-  | 'SWITCH'
-  | 'NUMBER_INPUT'
-  | 'SQL_EDITOR'
-  | 'CODE_EDITOR'
-  | 'FIELD_PICKER'
-  | 'FIELD_MULTI_SELECTOR'
-  | 'DATASOURCE_SELECT'
-export type ExecutionStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'CANCELLED'
-export type ConditionOperator = 'EQ' | 'NE' | 'IN' | 'NOT_IN' | 'GT' | 'LT' | 'CONTAINS' | 'IS_EMPTY' | 'IS_NOT_EMPTY'
-
-export interface OptionDTO {
-  label: string
-  value: string
-}
-
-export interface OptionsSourceDTO {
-  type: 'remote' | 'schema-fields' | 'static'
-  uri?: string
-  method?: string
-  valueField?: string
-  labelField?: string
-  source?: string
-  acceptedCapabilities?: string[]
-}
-
-export interface ValidationRuleDTO {
-  type: string
-  message?: string
-  min?: number
-  max?: number
-  maxLength?: number
-}
-
-export interface VariableBindingSupportDTO {
-  enabled: boolean
-  allowLiteral: boolean
-  bindingPathHint?: string
-}
-
-export interface FieldVisibilityRuleDTO {
-  watchField: string
-  operator: ConditionOperator
-  targetValues: string[]
-  visible: boolean
-}
-
-export interface FieldEnableRuleDTO {
-  watchField: string
-  operator: ConditionOperator
-  targetValues: string[]
-  enabled: boolean
-}
-
-/** 节点配置面板中单个表单字段的完整描述，由后端动态下发，驱动前端动态表单渲染 */
-export interface PanelFieldDTO {
-  field: string
-  label: string
-  componentType: FieldComponentType
-  required?: boolean
-  visible?: boolean
-  editable?: boolean
-  disabled?: boolean
-  multiple?: boolean
-  order?: number
-  valueType?: ValueType
-  semanticType?: string
-  defaultValue?: unknown
-  placeholder?: string
-  description?: string
-  options?: OptionDTO[]
-  optionsSource?: OptionsSourceDTO
-  validations?: ValidationRuleDTO[]
-  validation?: ValidationRuleDTO
-  variableBinding?: VariableBindingSupportDTO
-  visibilityRules?: FieldVisibilityRuleDTO[]
-  enableRules?: FieldEnableRuleDTO[]
-  props?: Record<string, unknown>
-  extensions?: Record<string, unknown>
-}
-
-export interface PanelSectionDTO {
-  key: string
-  title: string
-  order: number
-  fields: PanelFieldDTO[]
-}
-
-export interface PanelRuleDTO {
-  field?: string
-  ruleType?: string
-  props?: Record<string, unknown>
-}
-
-export interface NodeConfigSchemaDTO {
-  schemaType: string
-  schemaVersion: string
-  panelId: string
-  layout?: Record<string, unknown>
-  sections: PanelSectionDTO[]
-  rules?: PanelRuleDTO[]
-  extensions?: Record<string, unknown>
-}
-
-export interface NodePortMetaDTO {
-  name: string
-  label: string
-  valueType: ValueType
-  required: boolean
-  multiple?: boolean
-  description?: string
-}
-
-export interface NodeCapabilityDTO {
-  code: string
-  name: string
-  capabilityConfig?: Record<string, unknown>
-  params?: Record<string, unknown>
-}
-
-/**
- * 节点元数据，由后端 /api/v1/node-definitions 接口返回。
- * 包含节点的显示信息、端口定义、配置 Schema 及能力标签，
- * 前端据此渲染节点卡片、配置面板和端口连接点。
- */
-export interface NodeMetaDTO {
-  protocolVersion: string
-  metadataVersion: string
-  nodeType: string
-  nodeVersion: string
-  displayName: string
-  category: NodeCategory
-  sortOrder?: number
-  icon?: string
-  description?: string
-  helpLink?: string
-  singleton?: boolean
-  startNode?: boolean
-  endNode?: boolean
-  tags?: string[]
-  configSchema?: NodeConfigSchemaDTO
-  inputPorts?: NodePortMetaDTO[]
-  outputPorts?: NodePortMetaDTO[]
-  capabilities?: NodeCapabilityDTO[]
-  defaults?: Record<string, unknown>
-  extensions?: Record<string, unknown>
-}
-
-/**
- * 数据字段 Schema，描述数据集中单个列的结构信息。
- * 用于字段选择器（FieldPicker）、图表字段映射、AI 推荐等场景。
- */
-export interface FieldSchemaDTO {
-  fieldId: string
-  name: string
-  path: string[]
-  valueType: ValueType
-  nullable: boolean
-  displayName: string
-  semanticType?: string
-  capabilities?: string[]
-  sampleValues?: unknown[]
-  stats?: Record<string, unknown>
-}
-
-export interface MappingHintsDTO {
-  chart?: Record<string, string[]>
-  table?: Record<string, string[]>
-}
-
-export interface SchemaInferResultDTO {
-  protocolVersion: string
-  schemaId: string
-  schemaVersion: string
-  kind: string
-  summary?: Record<string, unknown>
-  fields: FieldSchemaDTO[]
-  mappingHints?: MappingHintsDTO
-  rawSchema?: Record<string, unknown>
-}
-
-export interface FieldMappingCandidateDTO {
-  field: string
-  score: number
-  reason?: string
-}
-
-export interface MappingCandidateRequestDTO {
-  renderer?: string
-  upstreamFields?: FieldSchemaDTO[]
-}
-
-export interface FieldCandidateSlotDTO {
-  slot: string
-  required: boolean
-  acceptedTypes: string[]
-  acceptedCapabilities: string[]
-  candidates: FieldMappingCandidateDTO[]
-}
-
-export interface RequestContextDTO {
-  tenantId: string
-  userId: string
-  requestId?: string | null
-}
-
-export interface QueryOptionDTO {
-  timeoutMs?: number
-  limit?: number
-  useCache?: boolean
-  /** 流式分块大小（行数），默认 500 */
-  chunkSize?: number
-  /** 是否启用 SSE 流式推送 */
-  streaming?: boolean
-}
-
-// ---------------------------------------------------------------------------
-// 流式执行 SSE 事件类型
-// ---------------------------------------------------------------------------
-
-export interface NodeStartEventDTO {
-  eventType: 'node_start'
-  runId: string
-  nodeId: string
-  nodeType: string
-  startedAt: number
-}
-
-export interface NodeProgressEventDTO {
-  eventType: 'node_progress'
-  runId: string
-  nodeId: string
-  chunkIndex: number
-  totalChunks?: number
-  rows: Record<string, unknown>[]
-}
-
-export interface NodeResultEventDTO {
-  eventType: 'node_result'
-  runId: string
-  nodeId: string
-  status: string
-  result?: StandardResultDTO
-  meta?: NodeRunMetaDTO
-}
-
-export interface WorkflowDoneEventDTO {
-  eventType: 'workflow_done'
-  runId: string
-  workflowId: string
-  status: string
-  elapsedMs: number
-}
-
-export interface WorkflowErrorEventDTO {
-  eventType: 'workflow_error'
-  runId: string
-  workflowId: string
-  error: ErrorInfoDTO
-}
-
-export type WorkflowStreamEventDTO =
-  | NodeStartEventDTO
-  | NodeProgressEventDTO
-  | NodeResultEventDTO
-  | WorkflowDoneEventDTO
-  | WorkflowErrorEventDTO
-
-export interface QueryParameterDTO {
-  name?: string
-  type?: string
-  value?: unknown
-}
-
-export interface BaseNodeConfigDTO {
-  [key: string]: unknown
-}
-
-export interface SqlQueryNodeConfigDTO extends BaseNodeConfigDTO {
-  datasourceId?: string
-  sqlTemplate?: string
-  parameters?: QueryParameterDTO[]
-  queryOption?: QueryOptionDTO
-}
-
-export type JoinType = 'INNER' | 'LEFT' | 'RIGHT' | 'FULL'
-
-export interface JoinCondition {
-  leftField: string
-  rightField: string
-}
-
-export interface DataJoinNodeConfigDTO extends BaseNodeConfigDTO {
-  leftDatasetRef?: string
-  rightDatasetRef?: string
-  joinType?: JoinType
-  on?: JoinCondition[]
-  selectColumns?: string[]
-  memoryRowLimit?: number
-}
-
-export interface QueryRequestDTO {
-  requestId?: string
-  datasourceId: string
-  sql: string
-  parameters?: Record<string, unknown>
-  option?: QueryOptionDTO
-  context?: RequestContextDTO
-}
-
-export interface ErrorInfoDTO {
-  code?: string
-  message?: string
-  details?: Record<string, unknown>
-}
-
-export interface QueryExecutionMetaDTO {
-  durationMs?: number
-  affectedRows?: number
-  cacheHit?: boolean
-}
-
-export interface NodeRunMetaDTO {
-  nodeId?: string
-  nodeType?: string
-  elapsedMs?: number
-  cached?: boolean
-  taskId?: string
-  summary?: Record<string, unknown>
-}
-
-export interface NodeResultDTO {
-  nodeId?: string
-  nodeType?: string
-  status: ExecutionStatus
-  result?: StandardResultDTO
-  error?: ErrorInfoDTO
-  meta?: NodeRunMetaDTO
-}
-
-export interface NodeDebugRequestDTO {
-  workflowId?: string
-  nodeId?: string
-  node: WorkflowNodeDTO
-  upstreamMockInputs?: Record<string, unknown>
-  context?: RequestContextDTO
-}
-
-export interface OutputMetaDTO {
-  sourceNodeId?: string
-  generatedAt?: string
-  downloadable?: boolean
-  partial?: boolean
-  totalRows?: number
-  returnedRows?: number
-  truncationStrategy?: string
-}
-
-export interface ChartSeriesDTO {
-  name?: string
-  stack?: string
-  data?: unknown[]
-  yAxis?: string
-}
-
-export interface ChartDataDTO {
-  categories?: string[]
-  series?: ChartSeriesDTO[]
-}
-
-export interface ChartOptionDTO {
-  legend?: boolean
-  tooltip?: boolean
-  extensions?: Record<string, unknown>
-}
-
-export interface ChartOutputDTO {
-  title?: string
-  chartType?: ChartType
-  data?: ChartDataDTO
-  option?: ChartOptionDTO
-  meta?: OutputMetaDTO
 }
 
 export interface TableColumnDTO {
-  field: string
+  field?: string
   label?: string
-  valueType?: ValueType
   format?: string
   sortable?: boolean
+  name?: string
+  valueType?: ValueType
+  nullable?: boolean
+  description?: string
 }
 
-export interface TableOptionDTO {
-  pageable?: boolean
-  downloadable?: boolean
-  pageSize?: number
+export interface DataSourceConfigDTO {
+  datasourceId: string
+  datasourceName: string
+  datasourceType: string
 }
 
-export interface TableOutputDTO {
-  title?: string
-  columns?: TableColumnDTO[]
-  rows?: Array<Record<string, unknown>>
-  option?: TableOptionDTO
-  meta?: OutputMetaDTO
+export interface DatasourceSummaryDTO {
+  datasourceId: string
+  datasourceName: string
+  datasourceType: string
+  description?: string
+  createdAt?: number
+  updatedAt?: number
 }
 
-export interface StandardResultDTO {
-  kind?: ResultKind
-  dataset?: DatasetDTO
-  table?: TableOutputDTO
-  chart?: ChartOutputDTO
-  variables?: Record<string, unknown>
+export interface FieldSchemaDTO {
+  fieldId?: string
+  name: string
+  valueType?: ValueType
+  displayName?: string
+  extensions?: Record<string, unknown>
 }
 
-/**
- * 数据集 DTO，承载节点执行结果的表格数据。
- * sourceSql / sourceDatasourceId 在计算下推场景中使用：
- * 当下游算子（如聚合、过滤）支持 SQL 下推时，将此 SQL 作为子查询合并到数据库执行，
- * 避免将大量中间数据传至内存。
- */
-export interface DatasetDTO {
-  columns?: Array<Record<string, unknown>>
-  rows?: Array<Record<string, unknown>>
-  schema?: {
-    fields?: FieldSchemaDTO[]
-  }
-  total?: number
-  /** 产生此数据集的原始 SQL（下推时作为子查询使用） */
-  sourceSql?: string
-  /** 来源数据源 ID（必须与下游算子一致才可下推） */
-  sourceDatasourceId?: string
+export type ChartType = 'LINE' | 'BAR' | 'PIE' | 'SCATTER' | 'TABLE'
+
+export interface NodePositionDTO {
+  x: number
+  y: number
 }
 
-export interface QueryResultDTO {
-  queryId: string
-  status: ExecutionStatus
-  dataset?: DatasetDTO
-  result?: StandardResultDTO
-  executionMeta?: QueryExecutionMetaDTO
-  computeMeta?: NodeRunMetaDTO
-  error?: ErrorInfoDTO
-}
-
-export interface ValidateResultDTO {
-  queryId?: string
-  valid: boolean
-  normalizedSql?: string
-  sqlFingerprint?: string
-  violationCodes?: string[]
+export interface NodeTraceDTO {
+  nodeId: string
+  nodeName?: string
+  status?: string
+  startedAt?: number
+  finishedAt?: number
   message?: string
-  validatedAt?: number
+}
+
+export interface WorkflowPositionDTO {
+  x: number
+  y: number
 }
 
 export interface WorkflowNodeDTO {
   nodeId: string
   nodeType: string
-  category?: NodeCategory
+  category?: string
   version?: string
-  metadata?: NodeMetaDTO
-  config?: BaseNodeConfigDTO
+  metadata?: NodeMetaDTO | Record<string, unknown>
+  config?: Record<string, unknown>
 }
 
-/**
- * 工作流有向边，表示节点之间的数据流向。
- * condition 字段仅在源节点为 ConditionNode 时有效，
- * 取值 "true"/"false" 表示条件分支方向，null 表示无条件边。
- */
 export interface WorkflowEdgeDTO {
   id: string
   source: string
   target: string
   sourceHandle?: string
   targetHandle?: string
-  condition?: 'true' | 'false' | null   // null = 无条件边（向后兼容）
+  condition?: string
 }
 
-export interface WorkflowPositionDTO {
-  x?: number
-  y?: number
-}
-
-/**
- * 工作流完整定义，包含节点列表、有向边列表和节点位置信息（用于画布布局）。
- * 保存时提交 {@link WorkflowSaveRequestDTO}，加载时服务端返回此结构。
- */
 export interface WorkflowDefinitionDTO {
   workflowId: string
   workflowName: string
@@ -556,14 +107,390 @@ export interface WorkflowDefinitionDTO {
   publishedVersionNumber?: number
 }
 
-export interface WorkflowVersionDTO {
-  versionId: string
+export interface SqlNodeResultDTO {
+  queryId?: string
+  columns?: TableColumnDTO[]
+  rows?: Array<Record<string, unknown>>
+  rowCount?: number
+}
+
+export interface QueryExecutionSummaryDTO {
+  queryId: string
+  requestId?: string
+  datasourceId?: string
+  status?: string
+  startedAt?: number
+  finishedAt?: number
+}
+
+export interface QueryResultDTO extends QueryExecutionSummaryDTO {
+  sql?: string
+  dataset?: DatasetDTO
+  result?: StandardResultDTO
+  executionMeta?: {
+    elapsedMs?: number
+    durationMs?: number
+    scannedRows?: number
+    cacheHit?: boolean
+  }
+  columns?: TableColumnDTO[]
+  rows?: Array<Record<string, unknown>>
+  rowCount?: number
+  errorCode?: string
+  errorMessage?: string
+}
+
+export interface ValidateResultDTO {
+  queryId: string
+  valid: boolean
+  normalizedSql?: string
+  message?: string
+  violationCodes?: string[]
+}
+
+export interface AsyncSubmitResponseDTO {
+  taskId: string
+  status?: string
+  pollUrl?: string
+}
+
+export interface TriggerRunResultDTO {
+  triggerId?: string
+  runId?: string
+  workflowId?: string
+  status?: string
+  message?: string
+}
+
+export interface CreateDatasourceRequestDTO {
+  datasourceName: string
+  datasourceType: string
+  jdbcUrl: string
+  username?: string
+  password?: string
+  description?: string
+}
+
+export interface UpdateDatasourceRequestDTO extends CreateDatasourceRequestDTO {}
+
+export interface QueryRequestDTO {
+  requestId?: string
+  datasourceId: string
+  sql: string
+  limit?: number
+  parameters?: Record<string, unknown> | Array<Record<string, unknown>>
+  option?: {
+    timeoutMs?: number
+    limit?: number
+    useCache?: boolean
+  }
+}
+
+export interface TriggerDefinitionDTO {
+  triggerId: string
   workflowId: string
-  versionNumber: number
-  changeSummary?: string
-  published: boolean
-  createdBy?: string
+  triggerType: TriggerType
+  triggerStatus: TriggerStatus
+  cronExpr?: string
+  nextFireAt?: number
+  webhookToken?: string
+  webhookUrl?: string
+  defaultInputs?: string
+  lastFireAt?: number
+  lastRunId?: string
+  lastStatus?: string
   createdAt: number
+  updatedAt: number
+}
+
+export interface TriggerWebhookResponseDTO {
+  accepted: boolean
+  triggerId?: string
+  message?: string
+}
+
+export interface TriggerRunDetailDTO {
+  runId: string
+  triggerId: string
+  workflowId?: string
+  taskId?: string
+  status?: string
+  message?: string
+  startedAt?: number
+  finishedAt?: number
+}
+
+export interface NodeDefinitionDTO {
+  nodeType: string
+  displayName: string
+  description?: string
+  category?: string
+  version?: string
+}
+
+export type FieldComponentType =
+  | 'INPUT'
+  | 'TEXTAREA'
+  | 'SELECT'
+  | 'MULTI_SELECT'
+  | 'SWITCH'
+  | 'NUMBER_INPUT'
+  | 'SQL_EDITOR'
+  | 'CODE_EDITOR'
+  | 'FIELD_PICKER'
+  | 'FIELD_MULTI_SELECTOR'
+  | 'DATASOURCE_SELECT'
+
+export type ConditionOperator = 'EQ' | 'NE' | 'IN' | 'NOT_IN' | 'GT' | 'LT' | 'CONTAINS' | 'IS_EMPTY' | 'IS_NOT_EMPTY'
+
+export interface FieldRuleConditionDTO {
+  watchField: string
+  operator: ConditionOperator
+  targetValues: string[]
+  visible?: boolean
+  enabled?: boolean
+}
+
+export interface FieldValidationRuleDTO {
+  type: 'required' | 'min' | 'max' | 'minLength' | 'maxLength' | 'pattern'
+  message?: string
+  min?: number
+  max?: number
+  maxLength?: number
+  pattern?: string
+}
+
+export interface PanelFieldOptionsSourceDTO {
+  type?: 'static' | 'remote' | 'schema-fields'
+  uri?: string
+  labelField?: string
+  valueField?: string
+  acceptedCapabilities?: string[]
+}
+
+export interface VariableBindingConfigDTO {
+  allowLiteral?: boolean
+  enabled?: boolean
+  bindingPathHint?: string
+}
+
+export interface PanelFieldDTO {
+  field?: string
+  fieldKey?: string
+  label: string
+  description?: string
+  componentType?: FieldComponentType
+  required?: boolean
+  multiple?: boolean
+  placeholder?: string
+  helpText?: string
+  visible?: boolean
+  disabled?: boolean
+  options?: OptionDTO[]
+  optionsSource?: PanelFieldOptionsSourceDTO
+  props?: Record<string, unknown>
+  variableBinding?: VariableBindingConfigDTO
+  visibilityRules?: FieldRuleConditionDTO[]
+  enableRules?: FieldRuleConditionDTO[]
+  validation?: FieldValidationRuleDTO
+  validations?: FieldValidationRuleDTO[]
+}
+
+export interface OptionDTO {
+  label: string
+  value: string
+}
+
+export interface FieldCandidateSlotDTO {
+  slotKey?: string
+  slot?: string
+  label?: string
+  required?: boolean
+  multiple?: boolean
+  acceptedTypes?: string[]
+  acceptedCapabilities?: string[]
+  candidates?: Array<{ field: string, label?: string, score?: number }>
+}
+
+export interface MappingCandidateRequestDTO {
+  nodeType: string
+  renderer?: string
+  upstreamFields?: SchemaFieldDTO[]
+  schema?: SchemaInferResultDTO
+}
+
+export interface NodeCapabilityDTO {
+  capabilityKey: string
+  supported: boolean
+  message?: string
+}
+
+export interface NodeMetaDTO {
+  protocolVersion?: string
+  metadataVersion?: string
+  nodeType: string
+  displayName: string
+  description?: string
+  category?: string
+  version?: string
+  nodeVersion?: string
+  sortOrder?: number
+  icon?: string
+  defaults?: Record<string, unknown>
+  configSchema?: NodeConfigSchemaDTO
+  panelFields?: PanelFieldDTO[]
+  capabilities?: NodeCapabilityDTO[]
+  inputPorts?: Array<Record<string, unknown>>
+  outputPorts?: Array<Record<string, unknown>>
+  tags?: string[]
+}
+
+export interface DatasetSchemaDTO {
+  fields?: SchemaFieldDTO[]
+}
+
+export interface DatasetDTO {
+  datasetId?: string
+  total?: number
+  schema?: DatasetSchemaDTO
+  columns?: Array<Record<string, unknown> | TableColumnDTO>
+  rows?: Array<Record<string, unknown>>
+  rowCount?: number
+}
+
+export interface PageResult<T> {
+  items: T[]
+  total: number
+  pageNum?: number
+  pageSize?: number
+}
+
+export type ExecutionStatus = 'PENDING' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
+
+export interface ErrorInfoDTO {
+  code?: string
+  message?: string
+}
+
+export interface AsyncTaskStatusDTO {
+  taskId: string
+  agentTaskId?: string
+  taskType?: string
+  requestId?: string
+  status?: ExecutionStatus | string
+  progress?: number
+  dataset?: DatasetDTO
+  result?: WorkflowRunResultDTO
+  clarification?: AiClarificationQuestionDTO
+  trace?: Record<string, unknown>
+  confidence?: number
+  error?: ErrorInfoDTO
+  createdAt?: number
+  updatedAt?: number
+}
+
+export type DatasourceType = 'MYSQL' | 'CLICKHOUSE' | 'POSTGRESQL' | 'HIVE' | 'UNKNOWN'
+
+export interface DatasourceQueryRequestDTO {
+  page?: number
+  pageSize?: number
+  keyword?: string
+}
+
+export interface WorkflowQueryRequestDTO {
+  page?: number
+  pageSize?: number
+  keyword?: string
+}
+
+export interface WorkflowSaveRequestDTO {
+  workflowId?: string
+  workflowName: string
+  nodes: WorkflowNodeDTO[]
+  edges: WorkflowEdgeDTO[]
+  positions: Record<string, WorkflowPositionDTO>
+}
+
+export interface WorkflowStreamEventDTO {
+  eventType: 'node_start' | 'node_progress' | 'node_result' | 'workflow_done' | 'workflow_error'
+  nodeId?: string
+  chunkIndex?: number
+  rows?: Array<Record<string, unknown>>
+  error?: ErrorInfoDTO
+  status?: ExecutionStatus
+  result?: StandardResultDTO
+  meta?: {
+    elapsedMs?: number
+  }
+}
+
+export interface DatasourceCreateRequestDTO {
+  id?: string
+  name?: string
+  type?: string
+  host?: string
+  port?: number
+  database?: string
+  readonly?: boolean
+  jdbcOptions?: Record<string, string>
+  datasourceName?: string
+  datasourceType?: string
+  jdbcUrl?: string
+  username?: string
+  password?: string
+  description?: string
+}
+
+export interface DatasourceUpdateRequestDTO extends DatasourceCreateRequestDTO {}
+
+export interface DatasourceTestConnectionResultDTO {
+  success: boolean
+  message?: string
+  latencyMs?: number
+}
+
+export interface StandardResultDTO {
+  kind?: 'EMPTY' | 'DATASET' | 'TABLE' | 'CHART' | 'VARIABLES'
+  dataset?: DatasetDTO
+  chart?: ChartOutputDTO
+  table?: TableOutputDTO
+  variables?: Record<string, unknown>
+  outputs?: Record<string, unknown>
+}
+
+export interface WorkflowRunRequestDTO {
+  versionId?: string
+  inputs?: Record<string, unknown>
+}
+
+export interface NodeResultEventDTO {
+  eventType: 'node_result'
+  nodeId: string
+  status: ExecutionStatus
+  result?: StandardResultDTO
+  meta?: {
+    elapsedMs?: number
+  }
+}
+
+export interface DatasourceDTO {
+  id?: string
+  datasourceId: string
+  datasourceName: string
+  datasourceType: string
+  name?: string
+  type?: string
+  status?: string
+  readonly?: boolean
+  host?: string
+  port?: number
+  database?: string
+  jdbcOptions?: Record<string, string>
+  jdbcUrl?: string
+  username?: string
+  description?: string
+  createdAt?: number
+  updatedAt?: number
 }
 
 export interface WorkflowVersionDiffDTO {
@@ -576,137 +503,225 @@ export interface WorkflowVersionDiffDTO {
   removedEdgeIds: string[]
 }
 
-export interface WorkflowSaveRequestDTO {
+export interface WorkflowVersionDTO {
+  versionId: string
+  workflowId: string
+  versionNumber: number
+  changeSummary?: string
+  published?: boolean
+  createdAt?: number
+  definition?: WorkflowDefinitionDTO
+}
+
+export interface NodeConfigFieldDTO {
+  field: string
+  fieldKey?: string
+  label: string
+  order?: number
+  componentType?: FieldComponentType
+  required?: boolean
+  defaultValue?: unknown
+  visibilityRules?: FieldRuleConditionDTO[]
+  enableRules?: FieldRuleConditionDTO[]
+}
+
+export interface PanelSectionDTO {
+  key?: string
+  title?: string
+  order?: number
+  fields: Array<PanelFieldDTO | NodeConfigFieldDTO>
+}
+
+export interface NodeConfigSectionDTO {
+  key?: string
+  title?: string
+  order?: number
+  fields?: NodeConfigFieldDTO[]
+}
+
+export interface NodeConfigSchemaDTO {
+  schemaType?: string
+  schemaVersion?: string
+  panelId?: string
+  fields?: PanelFieldDTO[]
+  mappingSlots?: FieldCandidateSlotDTO[]
+  sections?: NodeConfigSectionDTO[]
+}
+
+export interface TableOutputDTO {
+  title?: string
+  columns?: TableColumnDTO[]
+  rows?: Array<Record<string, unknown>>
+  rowCount?: number
+  option?: {
+    pageable?: boolean
+    pageSize?: number
+    downloadable?: boolean
+  }
+  meta?: {
+    downloadable?: boolean
+    partial?: boolean
+    totalRows?: number
+    returnedRows?: number
+  }
+}
+
+export interface ChartSeriesDTO {
+  name?: string
+  data?: unknown[]
+  stack?: string
+  yAxis?: string
+}
+
+export interface ChartOutputDTO {
+  title?: string
+  chartType?: ChartType
+  data?: {
+    categories?: string[]
+    series?: ChartSeriesDTO[]
+  }
+  option?: {
+    legend?: boolean
+    tooltip?: boolean
+    extensions?: Record<string, unknown>
+  }
+  meta?: {
+    partial?: boolean
+  }
+}
+
+export interface SchemaFieldDTO {
+  fieldId?: string
+  name: string
+  path?: string[]
+  valueType?: ValueType
+  nullable?: boolean
+  displayName?: string
+  capabilities?: string[]
+  extensions?: Record<string, unknown>
+}
+
+export interface SchemaInferResultDTO {
+  protocolVersion?: string
+  schemaId?: string
+  schemaVersion?: string
+  kind?: string
+  fields?: SchemaFieldDTO[]
+}
+
+export interface NodeResultDTO {
+  nodeId?: string
+  nodeType?: string
+  status?: string
+  success?: boolean
+  message?: string
+  error?: { code?: string, message?: string }
+  meta?: { elapsedMs?: number }
+  result?: StandardResultDTO
+  columns?: TableColumnDTO[]
+  rows?: Array<Record<string, unknown>>
+  rowCount?: number
+  outputs?: Record<string, unknown>
+}
+
+export interface NodeDebugRequestDTO {
+  nodeId?: string
+  node?: {
+    nodeId?: string
+    nodeType?: string
+    config?: Record<string, unknown>
+  }
+  nodeType?: string
+  config?: Record<string, unknown>
+  upstreamOutputs?: Record<string, unknown>
+  upstreamMockInputs?: Record<string, unknown>
+}
+
+export interface SaveWorkflowRequestDTO {
+  workflowId?: string
   workflowName: string
   nodes: WorkflowNodeDTO[]
   edges: WorkflowEdgeDTO[]
   positions: Record<string, WorkflowPositionDTO>
-  context?: RequestContextDTO
 }
 
-export interface WorkflowQueryRequestDTO {
-  page?: number
-  pageSize?: number
-  context?: RequestContextDTO
+export interface WorkflowVersionSummaryDTO {
+  versionId: string
+  workflowId: string
+  versionNumber: number
+  changeSummary?: string
+  published?: boolean
+  createdAt?: number
 }
 
-export interface WorkflowRunRequestDTO {
-  workflowId?: string
+export interface WorkflowVersionDetailDTO extends WorkflowVersionSummaryDTO {
+  definition?: WorkflowDefinitionDTO
+}
+
+export interface CreateVersionRequestDTO {
+  workflowName?: string
+  changeSummary?: string
   nodes: WorkflowNodeDTO[]
-  edges?: WorkflowEdgeDTO[]
+  edges: WorkflowEdgeDTO[]
+  positions: Record<string, WorkflowPositionDTO>
+}
+
+export interface PublishVersionRequestDTO {
+  versionId?: string
+}
+
+export interface ExecuteWorkflowRequestDTO {
+  versionId?: string
   inputs?: Record<string, unknown>
-  context?: RequestContextDTO
 }
 
 export interface WorkflowRunResultDTO {
-  outputs?: Record<string, StandardResultDTO>
+  workflowId?: string
+  versionId?: string
+  status?: string
+  outputs?: Record<string, unknown>
+  traces?: NodeTraceDTO[]
+  variables?: Record<string, unknown>
 }
 
-export interface AsyncTaskStatusDTO {
-  taskId: string
-  taskType: string
-  status: ExecutionStatus
-  progress?: number
-  dataset?: DatasetDTO
-  result?: WorkflowRunResultDTO
-  error?: ErrorInfoDTO
-  createdAt?: number
-  updatedAt?: number
+export interface WorkflowExecutionResultDTO {
+  workflowId?: string
+  versionId?: string
+  status?: string
+  outputs?: Record<string, unknown>
+  traces?: NodeTraceDTO[]
 }
 
-export interface AsyncSubmitResponseDTO {
-  taskId: string
-  status: ExecutionStatus
-}
-
-export type DatasourceType = 'MYSQL' | 'CLICKHOUSE' | 'POSTGRES'
-export type DatasourceStatus = 'ACTIVE' | 'INACTIVE' | 'UNREACHABLE'
-
-export interface DatasourceDTO {
-  id: string
-  tenantId?: string
-  name: string
-  type: DatasourceType
-  host: string
-  port: number
-  database: string
-  username: string
-  jdbcOptions?: Record<string, string>
-  status?: DatasourceStatus
-  readonly?: boolean
-  createdAt?: number
-  updatedAt?: number
-  createdBy?: string
-}
-
-export interface DatasourceCreateRequestDTO {
-  name: string
-  type: DatasourceType
-  host: string
-  port: number
-  database: string
-  username: string
-  password: string
-  jdbcOptions?: Record<string, string>
-  readonly?: boolean
-  context?: RequestContextDTO
-}
-
-export interface DatasourceUpdateRequestDTO extends Partial<DatasourceCreateRequestDTO> {}
-
-export interface DatasourceQueryRequestDTO {
-  type?: string
-  keyword?: string
-  page?: number
-  pageSize?: number
-  context?: RequestContextDTO
-}
-
-export interface DatasourceTestConnectionResultDTO {
-  success: boolean
-  latencyMs?: number
-  message?: string
-  serverVersion?: string
-}
-
-// ---------------------------------------------------------------------------
-// Phase 8: 工作流执行历史
-// ---------------------------------------------------------------------------
-
-export interface NodeTraceDTO {
+export interface DryRunNodeDTO {
   nodeId: string
   nodeType: string
-  status: string
-  elapsedMs?: number
-  cached?: boolean
-  rowCount?: number
-  pushdown?: boolean
-  error?: string
+  config?: Record<string, unknown>
 }
 
-export interface WorkflowRunLogDTO {
-  runId: string
-  workflowId: string
-  versionId?: string
-  tenantId?: string
-  status: string
-  triggerType: string
-  nodeCount?: number
-  startedAt: number
-  finishedAt?: number
-  elapsedMs?: number
-  createdBy?: string
-  nodeTraces?: NodeTraceDTO[]
+export interface DryRunRequestDTO {
+  workflowId?: string
+  nodes: DryRunNodeDTO[]
+  edges?: WorkflowEdgeDTO[]
 }
 
-// ---------------------------------------------------------------------------
-// Phase 10: AI 辅助工作流
-// ---------------------------------------------------------------------------
+export interface DryRunResultDTO {
+  success: boolean
+  traces?: NodeTraceDTO[]
+  message?: string
+}
+
+export interface AiChatRequestDTO {
+  prompt: string
+  conversationId?: string
+  history?: Array<{ role: string, content: string }>
+}
 
 export interface AiSqlRequestDTO {
   datasourceId: string
   tableName: string
   description: string
+  conversationId?: string
+  knowledgeBaseId?: string
 }
 
 export interface AiChartRecommendRequestDTO {
@@ -721,15 +736,92 @@ export interface ChartRecommendationDTO {
   fieldMapping?: Record<string, string>
 }
 
+export type AiWorkflowBuildMode = 'DRAFT_ONLY' | 'RUN_AND_SAVE' | 'AGENT'
+export type AiWorkflowBuildResponseMode = 'LEGACY_DRAFT' | 'ENVELOPE'
+export type AiWorkflowBuildResponseType = 'DRAFT' | 'CLARIFICATION' | 'TASK_ACCEPTED'
+
+export interface AiClarificationAnswerDTO {
+  key: string
+  value: string
+}
+
+export interface AiClarificationQuestionDTO {
+  key: string
+  label: string
+  required?: boolean
+  hint?: string
+  inputType?: string
+  options?: Array<Record<string, string>>
+}
+
 export interface AiWorkflowBuildRequestDTO {
   datasourceId: string
   description: string
   workflowName?: string
+  buildMode?: AiWorkflowBuildMode
+  responseMode?: AiWorkflowBuildResponseMode
+  agentTaskId?: string
+  runAndSave?: boolean
+  conversationId?: string
+  clarificationAnswers?: AiClarificationAnswerDTO[]
 }
 
-// ---------------------------------------------------------------------------
-// 触发器（Trigger）
-// ---------------------------------------------------------------------------
+export interface AiWorkflowSaveRequestDTO {
+  workflowId: string
+}
+
+export interface AiWorkflowSaveResultDTO {
+  workflowId?: string
+  versionId?: string
+  saved?: boolean
+}
+
+export interface AiWorkflowLoadResultDTO {
+  workflowId?: string
+  workflowName?: string
+  draft?: WorkflowDefinitionDTO
+}
+
+export interface AiWorkflowExecuteRequestDTO {
+  workflowId: string
+  inputs?: Record<string, unknown>
+}
+
+export interface AiWorkflowDryRunRequestDTO {
+  workflowId: string
+  inputs?: Record<string, unknown>
+}
+
+export interface AiWorkflowDryRunResultDTO {
+  supported?: boolean
+  message?: string
+  draft?: WorkflowDefinitionDTO
+  execution?: AiWorkflowExecuteResultDTO
+}
+
+export interface AiWorkflowExecuteResultDTO {
+  supported: boolean
+  status?: string
+  message?: string
+  workflowId?: string
+  runId?: string
+  finalResult?: StandardResultDTO
+  finalResultNodeId?: string
+  datasetId?: string
+}
+
+export interface AiWorkflowBuildResultDTO {
+  responseType: AiWorkflowBuildResponseType
+  buildMode: AiWorkflowBuildMode
+  draft?: WorkflowDefinitionDTO
+  agentTaskId?: string
+  clarifications?: AiClarificationQuestionDTO[]
+  saved?: boolean
+  workflowId?: string
+  datasetId?: string
+  execution?: AiWorkflowExecuteResultDTO
+  metadata?: Record<string, unknown>
+}
 
 export type TriggerType = 'CRON' | 'WEBHOOK'
 export type TriggerStatus = 'ACTIVE' | 'PAUSED' | 'DELETED'
@@ -759,10 +851,6 @@ export interface CreateTriggerRequestDTO {
   context?: RequestContextDTO
 }
 
-// ---------------------------------------------------------------------------
-// 已保存数据集（SavedDataset）
-// ---------------------------------------------------------------------------
-
 export interface SavedDatasetSummaryDTO {
   datasetId: string
   tenantId?: string
@@ -782,10 +870,6 @@ export interface SavedDatasetDetailDTO extends SavedDatasetSummaryDTO {
   rows?: Array<Record<string, unknown>>
 }
 
-// ---------------------------------------------------------------------------
-// 导出（Export）
-// ---------------------------------------------------------------------------
-
 export interface ExportFileDTO {
   fileId: string
   tenantId?: string
@@ -802,10 +886,6 @@ export interface TriggerExportRequestDTO {
   format: 'csv' | 'xlsx' | 'json'
   fileName?: string
 }
-
-// ---------------------------------------------------------------------------
-// 运维指标（Ops）
-// ---------------------------------------------------------------------------
 
 export interface SlowQueryDTO {
   sql: string
@@ -827,4 +907,3 @@ export interface ActiveQueryDTO {
   sql: string
   startedAt: number
 }
-

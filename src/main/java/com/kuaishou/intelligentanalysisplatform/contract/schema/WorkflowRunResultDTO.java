@@ -13,4 +13,5 @@ public class WorkflowRunResultDTO {
     private ExecutionStatus status;
     private List<NodeResultDTO> nodeResults;
     private StandardResultDTO finalResult;
+    private String finalResultNodeId;
 }

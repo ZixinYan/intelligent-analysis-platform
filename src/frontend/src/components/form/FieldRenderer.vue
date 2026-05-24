@@ -16,7 +16,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: unknown]
 }>()
 
-const component = computed(() => resolveFieldComponent(props.field.componentType))
+const component = computed(() => resolveFieldComponent(props.field.componentType ?? 'INPUT'))
 const { visible, disabled } = useFieldState(props.field, () => props.model)
 </script>
 

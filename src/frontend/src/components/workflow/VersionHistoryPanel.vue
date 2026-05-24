@@ -20,7 +20,7 @@
           <span class="version-summary">{{ v.changeSummary || '无说明' }}</span>
           <span v-if="v.published" class="badge-published">已发布</span>
         </div>
-        <div class="version-meta">{{ formatTime(v.createdAt) }}</div>
+        <div class="version-meta">{{ formatTime(v.createdAt ?? 0) }}</div>
         <div class="version-actions">
           <button @click="viewVersion(v.versionNumber)">查看</button>
           <button @click="doPublish(v.versionNumber)">发布</button>

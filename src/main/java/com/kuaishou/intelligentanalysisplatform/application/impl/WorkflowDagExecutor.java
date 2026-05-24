@@ -11,7 +11,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -30,6 +30,7 @@ import com.kuaishou.intelligentanalysisplatform.contract.schema.WorkflowRunReque
 import com.kuaishou.intelligentanalysisplatform.contract.schema.WorkflowRunResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.spi.NodeExecuteContextDTO;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 /**
@@ -64,12 +65,15 @@ public class WorkflowDagExecutor {
 
     private final NodeExecuteDispatcher nodeExecuteDispatcher;
     private final MeterRegistry meterRegistry;
+    private final Executor workflowIoExecutor;
 
     public WorkflowDagExecutor(NodeExecuteDispatcher nodeExecuteDispatcher,
                                ObjectMapper objectMapper,
-                               MeterRegistry meterRegistry) {
+                               MeterRegistry meterRegistry,
+                               @Qualifier("workflowIoExecutor") Executor workflowIoExecutor) {
         this.nodeExecuteDispatcher = nodeExecuteDispatcher;
         this.meterRegistry = meterRegistry;
+        this.workflowIoExecutor = workflowIoExecutor;
     }
 
     /** 有条件边的元数据：记录边的源节点、目标节点和条件标签（"true"/"false"）*/
@@ -137,7 +141,7 @@ public class WorkflowDagExecutor {
             trigger.thenRunAsync(
                     () -> executeNode(finalNode, deps, futures, completedResults, nodeResultsMap,
                             request, runId, nodes, conditionalEdgesMap),
-                    ForkJoinPool.commonPool()
+                    workflowIoExecutor
             ).exceptionally(ex -> {
                 completeWithError(finalNode, futures, nodeResultsMap, ex.getMessage());
                 return null;
@@ -385,6 +389,7 @@ public class WorkflowDagExecutor {
                                              ConcurrentHashMap<String, NodeResultDTO> nodeResultsMap) {
         List<NodeResultDTO> orderedResults = new ArrayList<>();
         StandardResultDTO finalResult = null;
+        String finalResultNodeId = null;
         ExecutionStatus workflowStatus = ExecutionStatus.SUCCEEDED;
 
         for (WorkflowNodeDTO node : nodes) {
@@ -398,6 +403,7 @@ public class WorkflowDagExecutor {
             }
             if (result.getResult() != null) {
                 finalResult = result.getResult();
+                finalResultNodeId = node.getNodeId();
             }
         }
 
@@ -406,6 +412,7 @@ public class WorkflowDagExecutor {
                 .status(workflowStatus)
                 .nodeResults(orderedResults)
                 .finalResult(finalResult)
+                .finalResultNodeId(finalResultNodeId)
                 .build();
     }
 }

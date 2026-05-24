@@ -1,5 +1,6 @@
 package com.kuaishou.intelligentanalysisplatform.domain.task;
 
 public enum TaskType {
-    QUERY
+    QUERY,
+    AGENT
 }

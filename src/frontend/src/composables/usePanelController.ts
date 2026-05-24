@@ -7,7 +7,7 @@ import { useWorkflowStore } from '@/stores/workflow'
 import type { NodeConfigSchemaDTO, NodeMetaDTO } from '@/types/contract'
 import type { WorkflowNode } from '@/types/workflow'
 import { debounce } from '@/utils/debounce'
-import { getBusinessNodeType, getRawNodeType } from '@/adapters/workflow-graph'
+import { getBusinessNodeType } from '@/adapters/workflow-graph'
 
 function applyDefaults(config: Record<string, unknown>, schema?: NodeConfigSchemaDTO) {
   const nextConfig = { ...config }
@@ -54,7 +54,7 @@ export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | unde
     schemaLoading.value = true
     schemaError.value = undefined
     try {
-      meta.value = await getNodeDefinition(getRawNodeType(node))
+      meta.value = await getNodeDefinition(getBusinessNodeType(node))
       schema.value = meta.value.configSchema
     }
     catch (error) {

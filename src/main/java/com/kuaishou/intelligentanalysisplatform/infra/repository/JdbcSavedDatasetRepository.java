@@ -150,9 +150,9 @@ public class JdbcSavedDatasetRepository implements SavedDatasetRepository {
                 .name(rs.getString("name"))
                 .description(rs.getString("description"))
                 .createdBy(rs.getString("created_by"))
-                .schema(parseSchema(rs.getString("schema_json")))
-                .stat(parseStat(rs.getString("stat_json")))
-                .rows(includeRows ? parseRows(rs.getString("rows_json")) : null)
+                .schema(parseSchema(readText(rs, "schema_json")))
+                .stat(parseStat(readText(rs, "stat_json")))
+                .rows(includeRows ? parseRows(readText(rs, "rows_json")) : null)
                 .sourceWorkflowId(rs.getString("source_workflow_id"))
                 .sourceNodeId(rs.getString("source_node_id"))
                 .createdAt(rs.getLong("created_at"))
@@ -218,5 +218,13 @@ public class JdbcSavedDatasetRepository implements SavedDatasetRepository {
         } catch (JsonProcessingException e) {
             return Collections.emptyList();
         }
+    }
+
+    private String readText(ResultSet rs, String column) throws SQLException {
+        java.sql.Clob clob = rs.getClob(column);
+        if (clob == null) {
+            return rs.getString(column);
+        }
+        return clob.getSubString(1, (int) clob.length());
     }
 }

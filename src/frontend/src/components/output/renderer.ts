@@ -188,12 +188,15 @@ function buildChartModel(chart: ChartOutputDTO, mode: RendererMode): ChartRender
 
 function buildTableModel(table: TableOutputDTO, mode: RendererMode): TableRendererModel {
   const rows = table.rows ?? []
-  const columns = (table.columns ?? []).map((column) => ({
-    key: column.field,
-    label: column.label?.trim() || column.field,
-    format: column.format,
-    sortable: Boolean(column.sortable),
-  }))
+  const columns = (table.columns ?? []).map((column, index) => {
+    const record = column as unknown as Record<string, unknown>
+    return {
+      key: column.field ?? column.name ?? `col_${index}`,
+      label: record.label?.toString().trim() || column.description || column.name || column.field || `列${index + 1}`,
+      format: typeof record.format === 'string' ? record.format : undefined,
+      sortable: Boolean(record.sortable),
+    }
+  })
   const partial = Boolean(table.meta?.partial)
   const empty = !hasRows(rows)
   const fallback = empty

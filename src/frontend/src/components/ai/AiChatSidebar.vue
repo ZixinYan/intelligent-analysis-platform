@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
+import AppIcon from '@/components/icons/AppIcon.vue'
 import { streamChat } from '@/api/ai'
 
 interface Message {
@@ -13,6 +14,7 @@ const messages = ref<Message[]>([])
 const inputText = ref('')
 const sending = ref(false)
 const messagesEl = ref<HTMLElement>()
+const conversationId = ref<string | null>(null)
 
 let abortController: AbortController | null = null
 
@@ -39,7 +41,16 @@ async function send() {
 
   abortController = new AbortController()
   try {
-    for await (const token of streamChat(text, abortController.signal)) {
+    for await (const token of streamChat({
+      prompt: text,
+      conversationId: conversationId.value ?? undefined,
+      signal: abortController.signal,
+      onDone: ({ conversationId: nextConversationId }) => {
+        if (nextConversationId) {
+          conversationId.value = nextConversationId
+        }
+      },
+    })) {
       const msg = messages.value.find(m => m.id === assistantId)
       if (msg) {
         msg.content += token
@@ -66,6 +77,7 @@ function stop() {
 
 function clear() {
   messages.value = []
+  conversationId.value = null
 }
 
 function handleKeyDown(e: KeyboardEvent) {
@@ -83,16 +95,18 @@ function handleKeyDown(e: KeyboardEvent) {
     title="AI 助手"
     @click="open = !open"
   >
-    <span class="ai-chat-fab__icon">✦</span>
+    <span class="ai-chat-fab__icon"><AppIcon name="ai" :size="18" /></span>
   </button>
 
   <transition name="ai-sidebar-slide">
     <div v-if="open" class="ai-chat-sidebar">
       <header class="ai-chat-sidebar__header">
-        <span class="ai-chat-sidebar__title">✦ AI 助手</span>
+        <span class="ai-chat-sidebar__title"><AppIcon name="ai" :size="15" />AI 助手</span>
         <div class="ai-chat-sidebar__actions">
           <button class="ai-chat-sidebar__btn" @click="clear">清空</button>
-          <button class="ai-chat-sidebar__btn" @click="open = false">✕</button>
+          <button class="ai-chat-sidebar__btn ai-chat-sidebar__btn--icon" @click="open = false" aria-label="关闭">
+            <AppIcon name="close" :size="14" />
+          </button>
         </div>
       </header>
 
@@ -163,7 +177,7 @@ function handleKeyDown(e: KeyboardEvent) {
 }
 .ai-chat-fab:hover { background: var(--iap-ai-btn-hover); transform: scale(1.08); }
 .ai-chat-fab--active { background: var(--iap-ai-btn-hover); }
-.ai-chat-fab__icon { line-height: 1; }
+.ai-chat-fab__icon { display: grid; place-items: center; }
 
 .ai-chat-sidebar {
   position: fixed;
@@ -188,6 +202,9 @@ function handleKeyDown(e: KeyboardEvent) {
   flex-shrink: 0;
 }
 .ai-chat-sidebar__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
   font-weight: 600;
   color: var(--iap-ai-btn-text);
@@ -203,6 +220,12 @@ function handleKeyDown(e: KeyboardEvent) {
   cursor: pointer;
 }
 .ai-chat-sidebar__btn:hover { color: var(--iap-text-primary); border-color: var(--iap-divider-strong); }
+.ai-chat-sidebar__btn--icon {
+  width: 28px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
 
 .ai-chat-sidebar__messages {
   flex: 1;

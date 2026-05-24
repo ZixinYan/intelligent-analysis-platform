@@ -94,20 +94,20 @@ onMounted(() => {
           <p class="datasource-card__meta">{{ datasource.type }} · {{ datasource.host }}:{{ datasource.port }} / {{ datasource.database }}</p>
           <p class="datasource-card__meta">用户：{{ datasource.username }} · {{ datasource.readonly ? '只读' : '可写' }}</p>
 
-          <div v-if="testResults[datasource.id]" class="alert" :class="testResults[datasource.id]?.success ? 'alert--success' : 'alert--error'">
-            {{ testResults[datasource.id]?.message || (testResults[datasource.id]?.success ? '连接成功' : '连接失败') }}
-            <span v-if="testResults[datasource.id]?.latencyMs !== undefined"> · {{ testResults[datasource.id]?.latencyMs }}ms</span>
+          <div v-if="testResults[datasource.id ?? datasource.datasourceId]" class="alert" :class="testResults[datasource.id ?? datasource.datasourceId]?.success ? 'alert--success' : 'alert--error'">
+            {{ testResults[datasource.id ?? datasource.datasourceId]?.message || (testResults[datasource.id ?? datasource.datasourceId]?.success ? '连接成功' : '连接失败') }}
+            <span v-if="testResults[datasource.id ?? datasource.datasourceId]?.latencyMs !== undefined"> · {{ testResults[datasource.id ?? datasource.datasourceId]?.latencyMs }}ms</span>
           </div>
-          <div v-if="actionErrors[datasource.id]" class="alert alert--error">{{ actionErrors[datasource.id] }}</div>
+          <div v-if="actionErrors[datasource.id ?? datasource.datasourceId]" class="alert alert--error">{{ actionErrors[datasource.id ?? datasource.datasourceId] }}</div>
         </div>
 
         <div class="datasource-card__actions">
-          <button class="ghost-button" type="button" :disabled="testLoading[datasource.id] || deleteLoading[datasource.id]" @click="openEdit(datasource.id)">编辑</button>
-          <button class="ghost-button" type="button" :disabled="testLoading[datasource.id] || deleteLoading[datasource.id]" @click="handleTest(datasource.id)">
-            {{ testLoading[datasource.id] ? '测试中...' : '测试连接' }}
+          <button class="ghost-button" type="button" :disabled="testLoading[datasource.id ?? datasource.datasourceId] || deleteLoading[datasource.id ?? datasource.datasourceId]" @click="openEdit(datasource.id ?? datasource.datasourceId)">编辑</button>
+          <button class="ghost-button" type="button" :disabled="testLoading[datasource.id ?? datasource.datasourceId] || deleteLoading[datasource.id ?? datasource.datasourceId]" @click="handleTest(datasource.id ?? datasource.datasourceId)">
+            {{ testLoading[datasource.id ?? datasource.datasourceId] ? '测试中...' : '测试连接' }}
           </button>
-          <button class="danger-button" type="button" :disabled="deleteLoading[datasource.id] || testLoading[datasource.id]" @click="handleDelete(datasource.id)">
-            {{ deleteLoading[datasource.id] ? '删除中...' : '删除' }}
+          <button class="danger-button" type="button" :disabled="deleteLoading[datasource.id ?? datasource.datasourceId] || testLoading[datasource.id ?? datasource.datasourceId]" @click="handleDelete(datasource.id ?? datasource.datasourceId)">
+            {{ deleteLoading[datasource.id ?? datasource.datasourceId] ? '删除中...' : '删除' }}
           </button>
         </div>
       </article>

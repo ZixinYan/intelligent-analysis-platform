@@ -1,5 +1,7 @@
 package com.kuaishou.intelligentanalysisplatform.application.impl;
 
+import java.util.List;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kuaishou.intelligentanalysisplatform.common.error.BaseBusinessException;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceStatus;
@@ -12,7 +14,8 @@ import com.kuaishou.intelligentanalysisplatform.contract.schema.RequestContextDT
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.Connector;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.ConnectorFactory;
 import com.kuaishou.intelligentanalysisplatform.domain.query.connector.HealthCheckResult;
-import com.kuaishou.intelligentanalysisplatform.infra.repository.InMemoryDatasourceRepository;
+import com.kuaishou.intelligentanalysisplatform.infra.connector.pool.HikariPoolRegistry;
+import com.kuaishou.intelligentanalysisplatform.infra.repository.JdbcDatasourceRepository;
 import com.kuaishou.intelligentanalysisplatform.infra.security.AesGcmCredentialEncryptor;
 import com.kuaishou.intelligentanalysisplatform.infra.security.DefaultPermissionChecker;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,19 +28,18 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.jdbc.Sql;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
 @JdbcTest
-@Import({DatasourceApplicationServiceImpl.class, InMemoryDatasourceRepository.class, ObjectMapper.class, AesGcmCredentialEncryptor.class, DefaultPermissionChecker.class, DatasourceApplicationServiceTest.TestConfig.class})
+@Import({DatasourceApplicationServiceImpl.class, JdbcDatasourceRepository.class, ObjectMapper.class, AesGcmCredentialEncryptor.class, DefaultPermissionChecker.class, DatasourceApplicationServiceTest.TestConfig.class})
 @Sql("classpath:schema.sql")
 @TestPropertySource(properties = "datasource.credential.secret=0123456789abcdef0123456789abcdef")
 class DatasourceApplicationServiceTest {
@@ -54,6 +56,13 @@ class DatasourceApplicationServiceTest {
             ConnectorFactory factory = mock(ConnectorFactory.class);
             when(factory.create(any())).thenReturn(connector);
             return factory;
+        }
+
+        @Bean
+        HikariPoolRegistry hikariPoolRegistry() {
+            HikariPoolRegistry registry = mock(HikariPoolRegistry.class);
+            doNothing().when(registry).evict(any());
+            return registry;
         }
     }
 

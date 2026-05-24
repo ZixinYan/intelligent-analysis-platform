@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.kuaishou.intelligentanalysisplatform.application.DatasourceApplicationService;
+import com.kuaishou.intelligentanalysisplatform.application.ai.orchestration.sql.SchemaIntrospectionPort;
 import com.kuaishou.intelligentanalysisplatform.application.security.PermissionChecker;
 import com.kuaishou.intelligentanalysisplatform.common.error.BaseBusinessException;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
@@ -33,7 +34,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
-public class DatasourceApplicationServiceImpl implements DatasourceApplicationService {
+public class DatasourceApplicationServiceImpl implements DatasourceApplicationService, SchemaIntrospectionPort {
     private static final Logger log = LoggerFactory.getLogger(DatasourceApplicationServiceImpl.class);
 
     private final DatasourceRepository datasourceRepository;

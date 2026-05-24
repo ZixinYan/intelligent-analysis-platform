@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useNodeRegistryStore } from '@/stores/node-registry'
 import { useDatasourceStore } from '@/stores/datasource'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
@@ -10,31 +10,12 @@ import OpsView from '@/components/ops/OpsView.vue'
 const registry = useNodeRegistryStore()
 const datasourceStore = useDatasourceStore()
 const currentView = ref<'workflow' | 'datasource' | 'ops'>('workflow')
-const theme = ref<'light' | 'dark'>('dark')
-const THEME_KEY = 'iap-theme'
-
-function applyTheme(nextTheme: 'light' | 'dark') {
-  const root = document.documentElement
-  root.setAttribute('data-changing-theme', 'true')
-  root.setAttribute('data-theme', nextTheme)
-  window.localStorage.setItem(THEME_KEY, nextTheme)
-  window.setTimeout(() => root.removeAttribute('data-changing-theme'), 0)
-}
-
-function toggleTheme() {
-  theme.value = theme.value === 'dark' ? 'light' : 'dark'
-}
 
 onMounted(() => {
   registry.load().catch(() => undefined)
   datasourceStore.load().catch(() => undefined)
-
-  const savedTheme = window.localStorage.getItem(THEME_KEY)
-  theme.value = savedTheme === 'light' ? 'light' : 'dark'
-  applyTheme(theme.value)
+  document.documentElement.setAttribute('data-theme', 'light')
 })
-
-watch(theme, value => applyTheme(value))
 </script>
 
 <template>
@@ -51,9 +32,6 @@ watch(theme, value => applyTheme(value))
           运维监控
         </button>
       </div>
-      <button class="app-nav__button app-nav__button--theme" @click="toggleTheme">
-        {{ theme === 'dark' ? '浅色' : '深色' }}
-      </button>
     </header>
 
     <WorkflowEditor v-if="currentView === 'workflow'" />
@@ -105,8 +83,5 @@ watch(theme, value => applyTheme(value))
   background: var(--iap-btn-primary-bg);
   color: var(--iap-btn-primary-text);
   box-shadow: 0 8px 20px var(--iap-accent-ring);
-}
-.app-nav__button--theme {
-  min-width: 72px;
 }
 </style>

@@ -64,14 +64,20 @@ export function useWorkflowStream() {
       for await (const event of runWorkflowStream(workflowId, request, abortController.signal)) {
         switch (event.eventType) {
           case 'node_start': {
+            if (!event.nodeId) {
+              break
+            }
             const state = getOrCreate(event.nodeId)
             state.status = 'running'
             state.chunks = []
             break
           }
           case 'node_progress': {
+            if (!event.nodeId || event.chunkIndex === undefined) {
+              break
+            }
             const state = getOrCreate(event.nodeId)
-            state.chunks[event.chunkIndex] = event.rows
+            state.chunks[event.chunkIndex] = event.rows ?? []
             break
           }
           case 'node_result': {

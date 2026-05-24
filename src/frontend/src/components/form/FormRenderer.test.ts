@@ -159,13 +159,15 @@ describe('FormRenderer', () => {
       },
     })
 
+    const select = wrapper.find('select.field-picker__select')
     const selectOptions = wrapper.findAll('select.field-picker__select option').map(item => item.text())
     expect(selectOptions).toEqual(['请选择字段', 'city', 'dt'])
-    expect(wrapper.text()).toContain('候选字段：city, dt')
+    expect(select.find('option')?.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('候选字段：city、dt')
     expect(wrapper.text()).toContain('province')
     expect(wrapper.text()).toContain('channel')
 
-    await wrapper.find('select.field-picker__select').setValue('dt')
+    await select.setValue('dt')
 
     const updateEvents = wrapper.emitted('update:modelValue')
     expect(updateEvents).toBeTruthy()

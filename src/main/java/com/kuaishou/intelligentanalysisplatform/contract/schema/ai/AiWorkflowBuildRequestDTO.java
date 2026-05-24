@@ -1,5 +1,7 @@
 package com.kuaishou.intelligentanalysisplatform.contract.schema.ai;
 
+import java.util.List;
+
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
@@ -9,6 +11,11 @@ public class AiWorkflowBuildRequestDTO {
     private String datasourceId;
     @NotBlank
     private String description;
-    /** 工作流名称，不填时由 AI 生成 */
     private String workflowName;
+    private String buildMode;
+    private String responseMode;
+    private String agentTaskId;
+    private Boolean runAndSave;
+    private String conversationId;
+    private List<AiClarificationAnswerDTO> clarificationAnswers;
 }

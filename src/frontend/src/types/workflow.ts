@@ -37,7 +37,7 @@ export interface WorkflowEdge {
   targetHandle?: string | null
   animated?: boolean
   selected?: boolean
-  condition?: 'true' | 'false' | null
+  condition?: string | null
   conditionLabel?: string
 }
 

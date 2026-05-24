@@ -7,8 +7,8 @@ import type { WorkflowNode } from '@/types/workflow'
 
 function needsMappingCandidates(schema?: NodeConfigSchemaDTO) {
   return schema?.sections
-    ?.flatMap(section => section.fields)
-    .some(field => field.componentType === 'FIELD_PICKER' || field.componentType === 'FIELD_MULTI_SELECTOR') ?? false
+    ?.flatMap(section => section.fields ?? [])
+    .some(field => Boolean(field) && (field.componentType === 'FIELD_PICKER' || field.componentType === 'FIELD_MULTI_SELECTOR')) ?? false
 }
 
 export function useMappingCandidates(
@@ -45,6 +45,7 @@ export function useMappingCandidates(
       let result: FieldCandidateSlotDTO[]
       try {
         result = await getMappingCandidatesWithFields(nodeType, {
+          nodeType,
           renderer,
           upstreamFields: upstream.data.schema.fields,
         })

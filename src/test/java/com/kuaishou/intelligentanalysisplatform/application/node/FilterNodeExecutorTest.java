@@ -3,10 +3,15 @@ package com.kuaishou.intelligentanalysisplatform.application.node;
 import java.util.List;
 import java.util.Map;
 
+import com.kuaishou.intelligentanalysisplatform.application.DatasourceApplicationService;
 import com.kuaishou.intelligentanalysisplatform.application.NodeMetadataApplicationService;
+import com.kuaishou.intelligentanalysisplatform.application.QueryApplicationService;
+import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeCapabilityRegistry;
 import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeDatasetResolver;
 import com.kuaishou.intelligentanalysisplatform.application.compute.ComputeResultFactory;
 import com.kuaishou.intelligentanalysisplatform.application.compute.InMemoryFilterComputeService;
+import com.kuaishou.intelligentanalysisplatform.application.compute.pushdown.FilterSqlGenerator;
+import com.kuaishou.intelligentanalysisplatform.application.compute.pushdown.PushdownDecider;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.FilterOperator;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ResultKind;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasetDTO;
@@ -19,12 +24,32 @@ import com.kuaishou.intelligentanalysisplatform.contract.spi.NodeExecuteContextD
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class FilterNodeExecutorTest {
     @Test
     void shouldExposeFilterAudit() {
-        FilterNodeExecutor executor = new FilterNodeExecutor(mock(NodeMetadataApplicationService.class), new ComputeDatasetResolver(), new InMemoryFilterComputeService(), new ComputeResultFactory());
+        PushdownDecider pushdownDecider = mock(PushdownDecider.class);
+        ComputeCapabilityRegistry capabilityRegistry = mock(ComputeCapabilityRegistry.class);
+        FilterSqlGenerator filterSqlGenerator = mock(FilterSqlGenerator.class);
+        QueryApplicationService queryApplicationService = mock(QueryApplicationService.class);
+        DatasourceApplicationService datasourceApplicationService = mock(DatasourceApplicationService.class);
+        when(capabilityRegistry.getByCode("filter")).thenReturn(null);
+        when(pushdownDecider.canPushdown(any(), any(), isNull())).thenReturn(false);
+
+        FilterNodeExecutor executor = new FilterNodeExecutor(
+                mock(NodeMetadataApplicationService.class),
+                new ComputeDatasetResolver(),
+                new InMemoryFilterComputeService(),
+                new ComputeResultFactory(),
+                pushdownDecider,
+                capabilityRegistry,
+                filterSqlGenerator,
+                queryApplicationService,
+                datasourceApplicationService);
         var result = executor.execute(NodeExecuteContextDTO.builder()
                         .nodeId("filter1")
                         .requestContext(RequestContextDTO.builder().tenantId("t1").build())

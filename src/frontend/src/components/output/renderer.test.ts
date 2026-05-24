@@ -68,7 +68,7 @@ describe('resolveRendererModel', () => {
   it('maps query result wrapper payload', () => {
     const model = resolveRendererModel({
       queryId: 'q-1',
-      status: 'SUCCESS',
+      status: 'SUCCEEDED',
       result: {
         kind: 'TABLE',
         table: {

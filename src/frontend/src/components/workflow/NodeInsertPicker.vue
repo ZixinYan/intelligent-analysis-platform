@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import AppIcon from '@/components/icons/AppIcon.vue'
 import type { NodeMetaDTO } from '@/types/contract'
 import { useNodeRegistryStore } from '@/stores/node-registry'
-import { resolveNodeIcon } from '@/utils/node-preview'
+import { resolveNodeIconName } from '@/utils/node-icon'
 import type { InsertAnchor, WorkflowInsertTrigger } from './insert-types'
 import { groupNodeCatalog, shortNodeDesc } from './node-catalog'
 
@@ -58,7 +59,9 @@ watch(() => props.visible, (visible) => {
             <div class="picker__title">选择节点</div>
             <div class="picker__subtitle">点击后立即插入到当前加号位置</div>
           </div>
-          <button class="picker__close" @click="emit('close')">×</button>
+          <button class="picker__close" @click="emit('close')" aria-label="关闭">
+            <AppIcon name="close" :size="16" />
+          </button>
         </div>
         <input v-model="keyword" class="picker__search" placeholder="搜索节点类型" />
         <div v-if="loading" class="picker__state">加载中…</div>
@@ -77,7 +80,7 @@ watch(() => props.visible, (visible) => {
               :style="{ '--cat': group.meta.color }"
               @click="emit('select', meta)"
             >
-              <span class="picker__item-icon">{{ resolveNodeIcon(meta) }}</span>
+              <span class="picker__item-icon"><AppIcon :name="resolveNodeIconName(meta)" :size="16" /></span>
               <span class="picker__item-main">
                 <span class="picker__item-name">{{ meta.displayName }}</span>
                 <span class="picker__item-desc">{{ shortNodeDesc(meta.description) || meta.nodeType }}</span>
@@ -130,8 +133,9 @@ watch(() => props.visible, (visible) => {
   border: none;
   background: transparent;
   color: var(--iap-text-secondary);
-  font-size: 20px;
-  cursor: pointer;
+  color: var(--iap-text-secondary);
+  display: grid;
+  place-items: center;
 }
 .picker__search {
   margin: 0 16px 12px;
@@ -193,6 +197,7 @@ watch(() => props.visible, (visible) => {
   height: 32px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--cat) 10%, var(--iap-surface-secondary));
+  color: var(--cat);
 }
 .picker__item-main {
   display: flex;

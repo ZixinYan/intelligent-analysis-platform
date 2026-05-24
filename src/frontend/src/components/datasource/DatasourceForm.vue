@@ -54,12 +54,12 @@ function resetForm() {
 }
 
 function applyDatasource(datasource: DatasourceDTO) {
-  form.name = datasource.name
-  form.type = datasource.type
-  form.host = datasource.host
-  form.port = datasource.port
-  form.database = datasource.database
-  form.username = datasource.username
+  form.name = datasource.name ?? datasource.datasourceName ?? ''
+  form.type = ((datasource.type ?? datasource.datasourceType ?? 'MYSQL') as DatasourceType)
+  form.host = datasource.host ?? ''
+  form.port = datasource.port ?? 0
+  form.database = datasource.database ?? ''
+  form.username = datasource.username ?? ''
   form.password = ''
   form.readonly = Boolean(datasource.readonly)
   form.jdbcOptions = datasource.jdbcOptions ? JSON.stringify(datasource.jdbcOptions, null, 2) : ''

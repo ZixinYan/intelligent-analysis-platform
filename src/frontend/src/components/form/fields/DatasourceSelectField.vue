@@ -14,9 +14,11 @@ const emit = defineEmits<{
 }>()
 
 const store = useDatasourceStore()
+const singleValue = computed(() => String(props.modelValue ?? ''))
+const isPlaceholderVisible = computed(() => !singleValue.value)
 
 onMounted(() => {
-  store.load()
+  store.load().catch(() => undefined)
 })
 
 const selected = computed(() => store.datasources.find(ds => ds.id === props.modelValue))
@@ -31,11 +33,12 @@ function handleChange(event: Event) {
     <div class="ds-select__container" :class="{ 'is-loading': store.loading }">
       <select
         class="ds-select__input"
-        :value="String(modelValue ?? '')"
+        :class="{ 'ds-select__input--placeholder': isPlaceholderVisible }"
+        :value="singleValue"
         :disabled="disabled || store.loading"
         @change="handleChange"
       >
-        <option value="" disabled>
+        <option value="" disabled hidden>
           {{ store.loading ? '加载中...' : (field.placeholder ?? '请选择数据源') }}
         </option>
         <option
@@ -49,7 +52,6 @@ function handleChange(event: Event) {
       <span v-if="store.loading" class="ds-select__spinner" aria-hidden="true" />
     </div>
 
-    <!-- 选中数据源的详情卡片 -->
     <div v-if="selected" class="ds-select__card">
       <div class="ds-select__card-row">
         <span
@@ -71,7 +73,7 @@ function handleChange(event: Event) {
 <style scoped>
 .ds-select {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .ds-select__container {
@@ -80,49 +82,60 @@ function handleChange(event: Event) {
 
 .ds-select__input {
   width: 100%;
-  border: 1px solid #334155;
-  border-radius: 12px;
-  background: #020617;
-  color: inherit;
-  padding: 10px 36px 10px 12px;
+  min-height: 44px;
+  border: 1px solid var(--iap-input-border);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, var(--iap-input-bg-focus) 100%);
+  color: var(--iap-text-primary);
+  padding: 11px 44px 11px 14px;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='%2398a2b2' d='M7 9.25 2.5 4.75h9z'/%3E%3C/svg%3E"), linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, var(--iap-input-bg-focus) 100%);
+  background-repeat: no-repeat, no-repeat;
+  background-position: right 14px center, center;
+  background-size: 14px 14px, auto;
+  box-shadow: var(--iap-select-shadow);
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, transform 0.15s ease;
   font-size: 13px;
+  outline: none;
 }
 
 .ds-select__input:hover:not(:disabled) {
-  border-color: #475569;
+  border-color: var(--iap-divider-strong);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='%2398a2b2' d='M7 9.25 2.5 4.75h9z'/%3E%3C/svg%3E"), linear-gradient(180deg, #ffffff 0%, var(--iap-input-bg-hover) 100%);
+  transform: translateY(-1px);
 }
 
 .ds-select__input:focus {
-  outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  border-color: var(--iap-input-border-focus);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='%23155aef' d='M7 9.25 2.5 4.75h9z'/%3E%3C/svg%3E"), linear-gradient(180deg, #ffffff 0%, var(--iap-input-bg-focus) 100%);
+  box-shadow: var(--iap-select-shadow), var(--iap-select-shadow-focus);
 }
 
 .ds-select__input:disabled {
-  opacity: 0.55;
+  opacity: 0.62;
   cursor: not-allowed;
+  transform: none;
+}
+
+.ds-select__input--placeholder {
+  color: var(--iap-text-placeholder);
 }
 
 .is-loading .ds-select__input {
-  background-image: none;
-  padding-right: 40px;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, var(--iap-input-bg-focus) 100%);
+  padding-right: 44px;
 }
 
 .ds-select__spinner {
   position: absolute;
-  right: 12px;
+  right: 14px;
   top: 50%;
   transform: translateY(-50%);
-  width: 14px;
-  height: 14px;
-  border: 2px solid #334155;
-  border-top-color: #3b82f6;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--iap-divider-strong);
+  border-top-color: var(--iap-text-accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   pointer-events: none;
@@ -132,14 +145,14 @@ function handleChange(event: Event) {
   to { transform: translateY(-50%) rotate(360deg); }
 }
 
-/* 选中详情卡 */
 .ds-select__card {
-  padding: 10px 12px;
-  border: 1px solid #1e293b;
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.8);
+  padding: 12px 14px;
+  border: 1px solid var(--iap-card-border);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, var(--iap-card-bg) 100%);
   display: grid;
-  gap: 5px;
+  gap: 6px;
+  box-shadow: var(--iap-shadow-panel);
 }
 
 .ds-select__card-row {
@@ -153,20 +166,20 @@ function handleChange(event: Event) {
 }
 
 .ds-select__status {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.ds-select__status--active   { background: #22c55e; box-shadow: 0 0 5px rgba(34,197,94,0.5); }
-.ds-select__status--inactive { background: #475569; }
-.ds-select__status--unreachable { background: #ef4444; box-shadow: 0 0 5px rgba(239,68,68,0.5); }
+.ds-select__status--active { background: #17b26a; box-shadow: 0 0 0 4px rgba(23, 178, 106, 0.12); }
+.ds-select__status--inactive { background: var(--iap-text-disabled); }
+.ds-select__status--unreachable { background: #f04438; box-shadow: 0 0 0 4px rgba(240, 68, 56, 0.12); }
 
 .ds-select__name {
   font-size: 13px;
   font-weight: 600;
-  color: #e2e8f0;
+  color: var(--iap-text-primary);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -177,19 +190,19 @@ function handleChange(event: Event) {
 .ds-select__type-badge {
   font-size: 10px;
   font-weight: 700;
-  padding: 1px 7px;
-  border-radius: 4px;
-  letter-spacing: 0.05em;
-  background: rgba(56, 189, 248, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  color: #38bdf8;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  background: rgba(21, 90, 239, 0.08);
+  border: 1px solid rgba(21, 90, 239, 0.14);
+  color: var(--iap-text-accent);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .ds-select__meta {
   font-size: 11px;
-  color: #475569;
+  color: var(--iap-text-tertiary);
   font-family: 'SFMono-Regular', ui-monospace, monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -198,6 +211,6 @@ function handleChange(event: Event) {
 
 .ds-select__error {
   font-size: 12px;
-  color: #fca5a5;
+  color: var(--iap-error-text);
 }
 </style>

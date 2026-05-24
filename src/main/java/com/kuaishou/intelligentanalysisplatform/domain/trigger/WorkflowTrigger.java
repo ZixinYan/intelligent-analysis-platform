@@ -32,7 +32,7 @@ public class WorkflowTrigger {
     public Long calculateNextFireAt() {
         if (cronExpr == null) return null;
         CronExpression cron = CronExpression.parse(cronExpr);
-        ZonedDateTime next = cron.next(ZonedDateTime.now(ZoneId.of("Asia/Shanghai")));
+        ZonedDateTime next = cron.next(ZonedDateTime.now(ZoneId.systemDefault()));
         return next != null ? next.toInstant().toEpochMilli() : null;
     }
 

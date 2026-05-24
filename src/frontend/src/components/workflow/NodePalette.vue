@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
+import AppIcon from '@/components/icons/AppIcon.vue'
 import { useNodeRegistryStore } from '@/stores/node-registry'
-import { resolveNodeIcon } from '@/utils/node-preview'
+import { resolveNodeIconName } from '@/utils/node-icon'
 import type { NodeMetaDTO } from '@/types/contract'
 import { groupNodeCatalog, shortNodeDesc } from './node-catalog'
 
@@ -44,7 +45,7 @@ const groupedNodes = computed(() => groupNodeCatalog(sortedNodes.value))
           :title="meta.description ?? meta.displayName"
           @click="emit('add', meta)"
         >
-          <div class="palette__item-icon">{{ resolveNodeIcon(meta) }}</div>
+          <div class="palette__item-icon"><AppIcon :name="resolveNodeIconName(meta)" :size="16" /></div>
           <div class="palette__item-body">
             <div class="palette__item-name">{{ meta.displayName }}</div>
             <div v-if="meta.description" class="palette__item-desc">{{ shortNodeDesc(meta.description) }}</div>

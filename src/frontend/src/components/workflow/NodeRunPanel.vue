@@ -14,7 +14,7 @@ const props = defineProps<{
 
 // ---- 同步执行路径 ----
 const hasResult = computed(() => !!props.result)
-const isSucceeded = computed(() => props.result?.status === 'SUCCESS')
+const isSucceeded = computed(() => props.result?.status === 'SUCCEEDED')
 const isFailed = computed(() => props.result?.status === 'FAILED')
 const resultKind = computed(() => props.result?.result?.kind)
 const standardResult = computed(() => props.result?.result)

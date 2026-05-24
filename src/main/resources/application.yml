@@ -13,6 +13,17 @@ spring:
       mode: always
       continue-on-error: false
       separator: //
+  ai:
+    openai:
+      api-key: ${AI_API_KEY:sk-6ad391af1f354c1fa4ecafbc52e8eda9}
+      base-url: ${AI_BASE_URL:https://api.deepseek.com}
+      chat:
+        options:
+          model: ${AI_MODEL:deepseek-v4-pro}
+          max-tokens: 4096
+      embedding:
+        options:
+          model: ${AI_EMBEDDING_MODEL:deepseek-v4-pro}
 
 management:
   endpoints:
@@ -43,6 +54,11 @@ analysis:
       core-pool-size: 4
       max-pool-size: 8
       queue-capacity: 100
+    workflow:
+      core-pool-size: 16
+      max-pool-size: 64
+      queue-capacity: 200
+      thread-name-prefix: workflow-io-
   governance:
     slow-query-threshold-ms: 5000
     tenant-qps-limit: 20
@@ -69,22 +85,11 @@ sandbox:
     max-timeout-seconds: 30
     blacklisted-imports: java.io,java.net,java.nio.file,java.lang.reflect,sun.,com.sun.,java.lang.Runtime,java.lang.Process,java.lang.ProcessBuilder
   python:
-    mode: restricted          # restricted | firejail | sidecar
+    mode: restricted
     max-memory-mb: 256
     max-timeout-seconds: 30
     python-bin: python3
     blocked-modules: os,subprocess,socket,shutil,pathlib,tempfile,ctypes,multiprocessing,threading,concurrent,pty,signal,resource
-
-ai:
-  provider:
-    type: openai
-    base-url: ${AI_BASE_URL:https://api.deepseek.com}
-    api-key: ${AI_API_KEY:sk-6ad391af1f354c1fa4ecafbc52e8eda9}
-    model: ${AI_MODEL:deepseek-v4-pro}
-    embedding-model: ${AI_EMBEDDING_MODEL:deepseek-v4-pro}
-    timeout-seconds: 60
-    max-tokens: 4096
-    stream-threads: 20
 
 knowledge:
   es:

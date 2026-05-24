@@ -3,7 +3,14 @@ import { runQueryAsync } from '@/api/query'
 import { cancelTask, getTaskStatus } from '@/api/task'
 import type { AsyncTaskStatusDTO, DatasetDTO, ErrorInfoDTO, ExecutionStatus, QueryRequestDTO } from '@/types/contract'
 
-const TERMINAL_STATUS: ExecutionStatus[] = ['SUCCESS', 'FAILED', 'CANCELLED']
+const TERMINAL_STATUS: ExecutionStatus[] = ['SUCCEEDED', 'FAILED', 'CANCELLED']
+
+function normalizeExecutionStatus(status?: string): ExecutionStatus | undefined {
+  if (status === 'PENDING' || status === 'QUEUED' || status === 'RUNNING' || status === 'SUCCEEDED' || status === 'FAILED' || status === 'CANCELLED') {
+    return status
+  }
+  return undefined
+}
 
 export function useAsyncTask(pollInterval = 1500) {
   const taskId = ref<string>()
@@ -18,7 +25,7 @@ export function useAsyncTask(pollInterval = 1500) {
   let timer: ReturnType<typeof setTimeout> | undefined
   let currentRequestId = 0
 
-  const isRunning = computed(() => status.value === 'PENDING' || status.value === 'RUNNING')
+  const isRunning = computed(() => status.value === 'PENDING' || status.value === 'RUNNING' || status.value === 'QUEUED')
 
   function clearTimer() {
     if (timer !== undefined) {
@@ -30,7 +37,7 @@ export function useAsyncTask(pollInterval = 1500) {
   function applyTask(nextTask: AsyncTaskStatusDTO) {
     task.value = nextTask
     taskId.value = nextTask.taskId
-    status.value = nextTask.status
+    status.value = normalizeExecutionStatus(nextTask.status)
     progress.value = Number(nextTask.progress ?? 0)
     dataset.value = nextTask.dataset
     error.value = nextTask.error
@@ -51,7 +58,8 @@ export function useAsyncTask(pollInterval = 1500) {
       return nextTask
     }
     applyTask(nextTask)
-    if (TERMINAL_STATUS.includes(nextTask.status)) {
+    const nextStatus = normalizeExecutionStatus(nextTask.status)
+    if (nextStatus && TERMINAL_STATUS.includes(nextStatus)) {
       stopPolling()
       return nextTask
     }
@@ -80,7 +88,7 @@ export function useAsyncTask(pollInterval = 1500) {
       return
     }
     taskId.value = response.taskId
-    status.value = response.status
+    status.value = normalizeExecutionStatus(response.status)
     progress.value = 0
     polling.value = true
     await poll(requestId)

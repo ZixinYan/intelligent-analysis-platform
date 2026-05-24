@@ -1,5 +1,8 @@
 package com.kuaishou.intelligentanalysisplatform.infra.repository;
 
+import java.util.Map;
+import java.util.Optional;
+
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ExecutionStatus;
 import com.kuaishou.intelligentanalysisplatform.domain.query.execution.QueryExecution;
 import com.kuaishou.intelligentanalysisplatform.domain.query.execution.QueryExecutionRepository;
@@ -7,11 +10,10 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.util.Map;
-import java.util.Optional;
-
 @Repository
 public class JdbcQueryExecutionRepository implements QueryExecutionRepository {
+    private static final String TABLE_NAME = "\"query_execution\"";
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     public JdbcQueryExecutionRepository(NamedParameterJdbcTemplate jdbcTemplate) {
@@ -21,7 +23,7 @@ public class JdbcQueryExecutionRepository implements QueryExecutionRepository {
     @Override
     public void save(QueryExecution execution) {
         jdbcTemplate.update("""
-                INSERT INTO query_execution (
+                INSERT INTO "query_execution" (
                     query_id, tenant_id, datasource_id, sql_fingerprint, mode, status,
                     started_at, finished_at, elapsed_ms, cached, truncated, row_count,
                     error_code, error_message, operator_id, created_at
@@ -36,7 +38,7 @@ public class JdbcQueryExecutionRepository implements QueryExecutionRepository {
     @Override
     public void updateStatus(String queryId, ExecutionStatus status, Long finishedAt, String errorCode, String errorMessage) {
         jdbcTemplate.update("""
-                UPDATE query_execution
+                UPDATE "query_execution"
                 SET status = :status,
                     finished_at = :finishedAt,
                     error_code = :errorCode,
@@ -54,7 +56,7 @@ public class JdbcQueryExecutionRepository implements QueryExecutionRepository {
     public void updateResult(String queryId, ExecutionStatus status, Long finishedAt, Long elapsedMs,
                              boolean cached, boolean truncated, int rowCount) {
         jdbcTemplate.update("""
-                UPDATE query_execution
+                UPDATE "query_execution"
                 SET status = :status,
                     finished_at = :finishedAt,
                     elapsed_ms = :elapsedMs,
@@ -80,7 +82,7 @@ public class JdbcQueryExecutionRepository implements QueryExecutionRepository {
                 SELECT query_id, tenant_id, datasource_id, sql_fingerprint, mode, status,
                        started_at, finished_at, elapsed_ms, cached, truncated, row_count,
                        error_code, error_message, operator_id, created_at
-                FROM query_execution
+                FROM "query_execution"
                 WHERE query_id = :queryId
                 """, Map.of("queryId", queryId), rs -> {
             if (!rs.next()) {

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
+import AppIcon from '@/components/icons/AppIcon.vue'
+import type { AppIconName } from '@/components/icons/AppIcon.vue'
 import type { WorkflowNodeData } from '@/types/workflow'
 import { getBusinessNodeType } from '@/adapters/workflow-graph'
-import { resolveNodeIcon } from '@/utils/node-preview'
+import { resolveNodeIconName } from '@/utils/node-icon'
 import { useWorkflowStore } from '@/stores/workflow'
 import { resolveRendererModel } from '@/components/output/renderer'
 import type { WorkflowInsertTrigger } from './insert-types'
@@ -64,69 +66,69 @@ const statusConfig = computed(() => ({
   skipped: { color: '#94a3b8', label: '已跳过', dot: false },
 }[props.data.status] ?? { color: '#64748b', label: props.data.status, dot: false }))
 
-interface UsageHint { label: string; icon: string }
+interface UsageHint { label: string; icon: AppIconName }
 
 const usageHints = computed<UsageHint[]>(() => {
   const nodeType = businessType.value
   const hintMap: Record<string, UsageHint[]> = {
     sql_query: [
-      { label: '连接数据源，执行 SQL 查询', icon: '📝' },
-      { label: '支持 {{变量}} 参数化插值', icon: '⚡' },
-      { label: '可切换多个数据源', icon: '🔗' },
+      { label: '连接数据源，执行 SQL 查询', icon: 'search' },
+      { label: '支持 {{变量}} 参数化插值', icon: 'function' },
+      { label: '可切换多个数据源', icon: 'branch' },
     ],
     aggregate: [
-      { label: '按维度分组聚合数据', icon: '∑' },
-      { label: '支持 SUM / AVG / COUNT / MAX / MIN', icon: '📊' },
-      { label: '结果作为下游汇总输入', icon: '📤' },
+      { label: '按维度分组聚合数据', icon: 'sigma' },
+      { label: '支持 SUM / AVG / COUNT / MAX / MIN', icon: 'chart' },
+      { label: '结果作为下游汇总输入', icon: 'table' },
     ],
     time_series_compute: [
-      { label: '计算同比、环比增长率', icon: '📈' },
-      { label: '滚动均值、累计求和', icon: '〰' },
-      { label: '按天 / 周 / 月粒度对齐', icon: '📅' },
+      { label: '计算同比、环比增长率', icon: 'trend' },
+      { label: '滚动均值、累计求和', icon: 'analysis' },
+      { label: '按天 / 周 / 月粒度对齐', icon: 'table' },
     ],
     pivot: [
-      { label: '行列转换，生成交叉表', icon: '⊞' },
-      { label: '矩阵形式展示多维数据', icon: '🔢' },
-      { label: '将维度值展开为独立列', icon: '🔄' },
+      { label: '行列转换，生成交叉表', icon: 'pivot' },
+      { label: '矩阵形式展示多维数据', icon: 'table' },
+      { label: '将维度值展开为独立列', icon: 'branch' },
     ],
     filter: [
-      { label: '按条件筛选数据行', icon: '🔽' },
-      { label: '支持 AND / OR 多条件组合', icon: '⊕' },
-      { label: '处理空值、异常值', icon: '∅' },
+      { label: '按条件筛选数据行', icon: 'filter' },
+      { label: '支持 AND / OR 多条件组合', icon: 'branch' },
+      { label: '处理空值、异常值', icon: 'x' },
     ],
     sort: [
-      { label: '对结果集多字段排序', icon: '↕' },
-      { label: '支持升序 / 降序混合', icon: '🔀' },
-      { label: '设定排序优先级', icon: '🎯' },
+      { label: '对结果集多字段排序', icon: 'sort' },
+      { label: '支持升序 / 降序混合', icon: 'trend' },
+      { label: '设定排序优先级', icon: 'analysis' },
     ],
     formula: [
-      { label: '写表达式生成新计算列', icon: 'ƒ' },
-      { label: '引用已有列参与运算', icon: '➕' },
-      { label: '支持数学、字符串、日期函数', icon: '🔣' },
+      { label: '写表达式生成新计算列', icon: 'function' },
+      { label: '引用已有列参与运算', icon: 'code' },
+      { label: '支持数学、字符串、日期函数', icon: 'analysis' },
     ],
     python_script: [
-      { label: '统一 code 风格展示 Python 处理逻辑', icon: '🐍' },
-      { label: '突出输入变量、输出变量和代码摘要', icon: '📋' },
-      { label: '适合脚本型数据清洗与转换', icon: '⚙️' },
+      { label: '统一 code 风格展示 Python 处理逻辑', icon: 'code' },
+      { label: '突出输入变量、输出变量和代码摘要', icon: 'table' },
+      { label: '适合脚本型数据清洗与转换', icon: 'analysis' },
     ],
     java_code: [
-      { label: '统一 code 风格展示 Java 处理逻辑', icon: '☕' },
-      { label: '突出输入变量、输出变量和代码摘要', icon: '📋' },
-      { label: '适合较复杂或高性能处理场景', icon: '⚡' },
+      { label: '统一 code 风格展示 Java 处理逻辑', icon: 'code' },
+      { label: '突出输入变量、输出变量和代码摘要', icon: 'table' },
+      { label: '适合较复杂或高性能处理场景', icon: 'trend' },
     ],
     chart_output: [
-      { label: '将数据渲染为可视化图表', icon: '📊' },
-      { label: '支持折线、柱状、饼图等', icon: '📈' },
-      { label: '配置 X / Y 轴字段映射', icon: '🔗' },
+      { label: '将数据渲染为可视化图表', icon: 'chart' },
+      { label: '支持折线、柱状、饼图等', icon: 'trend' },
+      { label: '配置 X / Y 轴字段映射', icon: 'branch' },
     ],
     table_output: [
-      { label: '以分页表格展示数据', icon: '📋' },
-      { label: '自定义显示列与列宽', icon: '⚙️' },
-      { label: '支持数据导出下载', icon: '⬇️' },
+      { label: '以分页表格展示数据', icon: 'table' },
+      { label: '自定义显示列与列宽', icon: 'analysis' },
+      { label: '支持数据导出下载', icon: 'package' },
     ],
     condition: [
-      { label: '根据规则输出 true / false 分支', icon: '⎇' },
-      { label: '下游按条件边继续编排', icon: '➡️' },
+      { label: '根据规则输出 true / false 分支', icon: 'branch' },
+      { label: '下游按条件边继续编排', icon: 'play' },
     ],
   }
   return hintMap[nodeType] ?? []
@@ -142,8 +144,8 @@ const resultSummary = computed(() => {
   const debugResult = props.data.debugResult
   if (!debugResult?.result) return null
   const model = resolveRendererModel(debugResult.result, 'runtime')
-  if (model.kind === 'chart') return { icon: '📊', text: `${model.chartType} 图表已渲染` }
-  if (model.kind === 'table') return { icon: '📋', text: `${model.rows.length.toLocaleString()} 行数据` }
+  if (model.kind === 'chart') return { icon: 'chart' as AppIconName, text: `${model.chartType} 图表已渲染` }
+  if (model.kind === 'table') return { icon: 'table' as AppIconName, text: `${model.rows.length.toLocaleString()} 行数据` }
   return null
 })
 </script>
@@ -153,7 +155,7 @@ const resultSummary = computed(() => {
     <Transition name="tooltip-fade">
       <div v-if="showTooltip && usageHints.length" class="ans__tooltip" :style="{ '--cat': categoryColor }">
         <div class="ans__tooltip-header">
-          <span class="ans__tooltip-icon">{{ resolveNodeIcon(data.meta, businessType) }}</span>
+          <span class="ans__tooltip-icon"><AppIcon :name="resolveNodeIconName(data.meta, businessType)" :size="18" /></span>
           <div>
             <div class="ans__tooltip-name">{{ data.meta?.displayName ?? businessType }}</div>
             <div class="ans__tooltip-category">{{ categoryLabel }}节点</div>
@@ -165,7 +167,7 @@ const resultSummary = computed(() => {
         <div class="ans__tooltip-divider" />
         <div class="ans__tooltip-hints">
           <div v-for="hint in usageHints" :key="hint.label" class="ans__tooltip-hint">
-            <span class="ans__tooltip-hint-icon">{{ hint.icon }}</span>
+            <span class="ans__tooltip-hint-icon"><AppIcon :name="hint.icon" :size="14" /></span>
             <span class="ans__tooltip-hint-label">{{ hint.label }}</span>
           </div>
         </div>
@@ -211,7 +213,7 @@ const resultSummary = computed(() => {
       <div class="ans__top-line" />
       <div class="ans__accent" />
       <div class="ans__header">
-        <div class="ans__icon">{{ resolveNodeIcon(data.meta, businessType) }}</div>
+        <div class="ans__icon"><AppIcon :name="resolveNodeIconName(data.meta, businessType)" :size="20" /></div>
         <div class="ans__title-group">
           <div class="ans__title">{{ data.title }}</div>
           <div class="ans__meta-row">
@@ -226,7 +228,7 @@ const resultSummary = computed(() => {
             {{ statusConfig.label }}
           </div>
           <div class="ans__header-actions">
-            <button class="ans__run-btn" title="运行此节点" @click.stop="handleRun">▷</button>
+            <button class="ans__run-btn" title="运行此节点" @click.stop="handleRun"><AppIcon name="play" :size="12" /></button>
             <button v-if="usageHints.length" class="ans__info-btn" @mouseenter="showTooltip = true" @mouseleave="showTooltip = false">?</button>
           </div>
         </div>
@@ -259,7 +261,7 @@ const resultSummary = computed(() => {
         </div>
       </div>
       <div v-if="resultSummary" class="ans__result-badge">
-        <span class="ans__result-badge-icon">{{ resultSummary.icon }}</span>
+        <span class="ans__result-badge-icon"><AppIcon :name="resultSummary.icon" :size="14" /></span>
         <span class="ans__result-badge-text">{{ resultSummary.text }}</span>
       </div>
     </div>
@@ -270,14 +272,14 @@ const resultSummary = computed(() => {
 .ans-outer { position: relative; display: inline-block; }
 .ans__tooltip { position: absolute; left: calc(100% + 14px); top: 0; width: 240px; background: var(--iap-panel-bg); border: 1px solid color-mix(in srgb, var(--cat) 24%, var(--iap-divider)); border-radius: var(--iap-radius-lg); padding: 14px 15px; box-shadow: var(--iap-shadow-panel), 0 0 28px -14px var(--cat); z-index: 9999; pointer-events: none; }
 .ans__tooltip-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.ans__tooltip-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9px; background: color-mix(in srgb, var(--cat) 15%, var(--iap-surface-secondary)); border: 1px solid color-mix(in srgb, var(--cat) 28%, var(--iap-divider)); font-size: 17px; flex-shrink: 0; }
+.ans__tooltip-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9px; background: color-mix(in srgb, var(--cat) 15%, var(--iap-surface-secondary)); border: 1px solid color-mix(in srgb, var(--cat) 28%, var(--iap-divider)); color: var(--cat); flex-shrink: 0; }
 .ans__tooltip-name { font-size: 13px; font-weight: 700; color: var(--iap-text-primary); letter-spacing: 0.01em; }
 .ans__tooltip-category { font-size: 11px; color: var(--cat); margin-top: 2px; opacity: 0.8; }
 .ans__tooltip-desc { font-size: 12px; color: var(--iap-text-tertiary); line-height: 1.6; margin-bottom: 10px; }
 .ans__tooltip-divider { height: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--cat) 30%, var(--iap-divider)), transparent 70%); margin-bottom: 10px; }
 .ans__tooltip-hints { display: flex; flex-direction: column; gap: 6px; }
 .ans__tooltip-hint { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--iap-text-secondary); line-height: 1.4; }
-.ans__tooltip-hint-icon { font-size: 13px; flex-shrink: 0; width: 18px; text-align: center; margin-top: 1px; }
+.ans__tooltip-hint-icon { display: grid; place-items: center; color: var(--cat); flex-shrink: 0; width: 18px; margin-top: 1px; }
 .ans__tooltip-hint-label { flex: 1; }
 .tooltip-fade-enter-active, .tooltip-fade-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
 .tooltip-fade-enter-from, .tooltip-fade-leave-to { opacity: 0; transform: translateX(-4px); }
@@ -298,7 +300,7 @@ const resultSummary = computed(() => {
 .ans__insert-button--true { color: #22c55e; border-color: #22c55e; }
 .ans__insert-button--false { color: #ef4444; border-color: #ef4444; }
 .ans__header { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 10px; padding: 14px 12px 12px 18px; }
-.ans__icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: color-mix(in srgb, var(--cat) 14%, var(--iap-surface-secondary)); border: 1px solid color-mix(in srgb, var(--cat) 28%, var(--iap-divider)); font-size: 20px; line-height: 1; flex-shrink: 0; }
+.ans__icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: color-mix(in srgb, var(--cat) 14%, var(--iap-surface-secondary)); border: 1px solid color-mix(in srgb, var(--cat) 28%, var(--iap-divider)); color: var(--cat); flex-shrink: 0; }
 .ans__title-group { min-width: 0; }
 .ans__title { font-size: 13px; font-weight: 700; color: var(--iap-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.01em; }
 .ans__meta-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
@@ -307,7 +309,7 @@ const resultSummary = computed(() => {
 .ans__code-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; color: var(--iap-text-accent); background: color-mix(in srgb, var(--iap-text-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--iap-text-accent) 24%, transparent); }
 .ans__header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
 .ans__header-actions { display: flex; align-items: center; gap: 4px; }
-.ans__run-btn { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--cat) 35%, transparent); background: color-mix(in srgb, var(--cat) 10%, transparent); color: var(--cat); font-size: 11px; cursor: pointer; transition: all 0.15s; padding: 0; line-height: 1; font-family: inherit; }
+.ans__run-btn { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--cat) 35%, transparent); background: color-mix(in srgb, var(--cat) 10%, transparent); color: var(--cat); cursor: pointer; transition: all 0.15s; padding: 0; }
 .ans__run-btn:hover { background: var(--cat); color: #fff; border-color: transparent; box-shadow: 0 0 8px -2px var(--cat); }
 .ans__status { display: flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; color: var(--sc); background: color-mix(in srgb, var(--sc) 12%, transparent); border: 1px solid color-mix(in srgb, var(--sc) 28%, transparent); }
 .ans__status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--sc); animation: pulse 1.4s ease-in-out infinite; }
@@ -333,4 +335,5 @@ const resultSummary = computed(() => {
 .ans__tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .ans__tag { border-radius: 999px; border: 1px solid var(--iap-divider); background: var(--iap-surface-secondary); color: var(--iap-text-secondary); font-size: 11px; padding: 3px 8px; }
 .ans__result-badge { display: flex; align-items: center; gap: 6px; margin: 0 14px 14px 18px; border-radius: 10px; border: 1px solid var(--iap-success-border); background: var(--iap-success-bg); color: var(--iap-success-text); padding: 8px 10px; font-size: 12px; font-weight: 600; }
+.ans__result-badge-icon { display: grid; place-items: center; }
 </style>

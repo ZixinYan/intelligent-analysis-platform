@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kuaishou.intelligentanalysisplatform.application.WorkflowVersionApplicationService;
 import com.kuaishou.intelligentanalysisplatform.common.error.BaseBusinessException;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
 import com.kuaishou.intelligentanalysisplatform.common.response.PageResult;
@@ -28,7 +29,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,7 +39,9 @@ class DefaultWorkflowApplicationServiceTest {
     @Test
     void shouldCreateAndReadWorkflow() {
         WorkflowDefinitionRepository repository = mock(WorkflowDefinitionRepository.class);
-        DefaultWorkflowApplicationService service = new DefaultWorkflowApplicationService(repository, new ObjectMapper());
+        WorkflowVersionApplicationService workflowVersionApplicationService = mock(WorkflowVersionApplicationService.class);
+        DefaultWorkflowApplicationService service = new DefaultWorkflowApplicationService(
+                repository, workflowVersionApplicationService, new ObjectMapper());
         WorkflowSaveRequestDTO request = buildRequest();
 
         WorkflowDefinitionDTO created = service.create(request);
@@ -51,12 +56,15 @@ class DefaultWorkflowApplicationServiceTest {
         assertEquals(1, loaded.getEdges().size());
         assertEquals(80.0, loaded.getPositions().get("node-1").getX());
         assertInstanceOf(SqlQueryNodeConfigDTO.class, loaded.getNodes().get(0).getConfig());
+        verify(workflowVersionApplicationService, never()).snapshot(any(), any(), any());
     }
 
     @Test
     void shouldSerializeAndListWorkflow() {
         WorkflowDefinitionRepository repository = mock(WorkflowDefinitionRepository.class);
-        DefaultWorkflowApplicationService service = new DefaultWorkflowApplicationService(repository, new ObjectMapper());
+        WorkflowVersionApplicationService workflowVersionApplicationService = mock(WorkflowVersionApplicationService.class);
+        DefaultWorkflowApplicationService service = new DefaultWorkflowApplicationService(
+                repository, workflowVersionApplicationService, new ObjectMapper());
         WorkflowSaveRequestDTO request = buildRequest();
 
         service.create(request);
@@ -75,16 +83,32 @@ class DefaultWorkflowApplicationServiceTest {
     @Test
     void shouldUpdateWorkflow() {
         WorkflowDefinitionRepository repository = mock(WorkflowDefinitionRepository.class);
-        DefaultWorkflowApplicationService service = new DefaultWorkflowApplicationService(repository, new ObjectMapper());
+        WorkflowVersionApplicationService workflowVersionApplicationService = mock(WorkflowVersionApplicationService.class);
+        DefaultWorkflowApplicationService service = new DefaultWorkflowApplicationService(
+                repository, workflowVersionApplicationService, new ObjectMapper());
         WorkflowSaveRequestDTO request = buildRequest();
 
         service.create(request);
         WorkflowDefinition stored = captureSaved(repository);
-        when(repository.findByIdAndTenantId(stored.getWorkflowId(), "tenant-a")).thenReturn(Optional.of(stored));
+        WorkflowDefinition updatedStored = WorkflowDefinition.builder()
+                .workflowId(stored.getWorkflowId())
+                .tenantId(stored.getTenantId())
+                .workflowName("分析流程")
+                .definitionJson(stored.getDefinitionJson())
+                .operatorId(stored.getOperatorId())
+                .createdAt(stored.getCreatedAt())
+                .updatedAt(stored.getUpdatedAt() + 1)
+                .currentVersionId(stored.getCurrentVersionId())
+                .publishedVersionId(stored.getPublishedVersionId())
+                .build();
+        when(repository.findByIdAndTenantId(stored.getWorkflowId(), "tenant-a"))
+                .thenReturn(Optional.of(stored))
+                .thenReturn(Optional.of(updatedStored));
 
         WorkflowDefinitionDTO updated = service.update(stored.getWorkflowId(), buildRequest());
 
         verify(repository).update(any(WorkflowDefinition.class));
+        verify(workflowVersionApplicationService).snapshot(eq(stored.getWorkflowId()), eq("auto-save"), eq(request.getContext()));
         assertEquals("分析流程", updated.getWorkflowName());
         assertInstanceOf(SqlQueryNodeConfigDTO.class, updated.getNodes().get(0).getConfig());
     }
@@ -92,7 +116,9 @@ class DefaultWorkflowApplicationServiceTest {
     @Test
     void shouldReadWorkflowWithUnknownNodeType() {
         WorkflowDefinitionRepository repository = mock(WorkflowDefinitionRepository.class);
-        DefaultWorkflowApplicationService service = new DefaultWorkflowApplicationService(repository, new ObjectMapper());
+        WorkflowVersionApplicationService workflowVersionApplicationService = mock(WorkflowVersionApplicationService.class);
+        DefaultWorkflowApplicationService service = new DefaultWorkflowApplicationService(
+                repository, workflowVersionApplicationService, new ObjectMapper());
         WorkflowDefinition stored = WorkflowDefinition.builder()
                 .workflowId("wf-legacy")
                 .tenantId("tenant-a")
@@ -133,7 +159,9 @@ class DefaultWorkflowApplicationServiceTest {
     @Test
     void shouldRejectUnknownWorkflow() {
         WorkflowDefinitionRepository repository = mock(WorkflowDefinitionRepository.class);
-        DefaultWorkflowApplicationService service = new DefaultWorkflowApplicationService(repository, new ObjectMapper());
+        WorkflowVersionApplicationService workflowVersionApplicationService = mock(WorkflowVersionApplicationService.class);
+        DefaultWorkflowApplicationService service = new DefaultWorkflowApplicationService(
+                repository, workflowVersionApplicationService, new ObjectMapper());
         when(repository.findByIdAndTenantId("wf-404", "tenant-a")).thenReturn(Optional.empty());
         BaseBusinessException exception = assertThrows(BaseBusinessException.class,
                 () -> service.getById("wf-404", RequestContextDTO.builder().tenantId("tenant-a").userId("user-a").build()));

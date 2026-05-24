@@ -3,18 +3,22 @@ import type {
   AiChartRecommendRequestDTO,
   AiSqlRequestDTO,
   AiWorkflowBuildRequestDTO,
+  AiWorkflowBuildResultDTO,
+  AiWorkflowDryRunRequestDTO,
+  AiWorkflowDryRunResultDTO,
+  AiWorkflowExecuteRequestDTO,
+  AiWorkflowExecuteResultDTO,
+  AiWorkflowLoadResultDTO,
+  AiWorkflowSaveRequestDTO,
+  AiWorkflowSaveResultDTO,
   ChartRecommendationDTO,
   WorkflowDefinitionDTO,
 } from '@/types/contract'
 
-/**
- * AI SQL 生成（SSE 流式）。
- * 返回 AsyncIterable<string>（每次 yield 一个文字 token）。
- * 调用方负责 for-await-of 消费，收到 error 事件时 throw。
- */
 export async function* generateSqlStream(
   request: AiSqlRequestDTO,
   signal?: AbortSignal,
+  onDone?: (payload: { conversationId?: string }) => void,
 ): AsyncIterable<string> {
   const response = await fetch('/api/v1/ai/sql/generate', {
     method: 'POST',
@@ -49,7 +53,10 @@ export async function* generateSqlStream(
         const eventName = eventLine ? eventLine.slice('event:'.length).trim() : 'token'
         const data = dataLine ? dataLine.slice('data:'.length).trim() : ''
         if (eventName === 'error') throw new Error(data || 'AI generation error')
-        if (eventName === 'done') return
+        if (eventName === 'done') {
+          onDone?.(parseDonePayload(data))
+          return
+        }
         if (eventName === 'token' && data) yield data
       }
     }
@@ -58,33 +65,76 @@ export async function* generateSqlStream(
   }
 }
 
-/**
- * AI 图表类型推荐（同步）。
- */
 export function recommendChart(request: AiChartRecommendRequestDTO, signal?: AbortSignal) {
   return unwrapResponse<ChartRecommendationDTO[]>(
     client.post('/api/v1/ai/chart/recommend', request, { signal }),
   )
 }
 
-/**
- * AI 工作流自动构建（同步）。
- */
 export function buildWorkflowDraft(request: AiWorkflowBuildRequestDTO) {
   return unwrapResponse<WorkflowDefinitionDTO>(
-    client.post('/api/v1/ai/workflow/build', request),
+    client.post('/api/v1/ai/workflow/build', {
+      ...request,
+      buildMode: request.buildMode ?? 'DRAFT_ONLY',
+      responseMode: 'LEGACY_DRAFT',
+    }),
   )
 }
 
-/**
- * AI 通用对话（SSE 流式）。
- * 调用 /api/v1/ai/chat，接收 prompt 和可选历史。
- */
-export async function* streamChat(
-  prompt: string,
-  signal?: AbortSignal,
-  history?: Array<{ role: string; content: string }>,
-): AsyncIterable<string> {
+export function buildWorkflow(request: AiWorkflowBuildRequestDTO) {
+  return unwrapResponse<AiWorkflowBuildResultDTO>(
+    client.post('/api/v1/ai/workflow/build', {
+      ...request,
+      buildMode: request.buildMode ?? 'DRAFT_ONLY',
+      responseMode: 'ENVELOPE',
+    }),
+  )
+}
+
+export function saveWorkflow(request: AiWorkflowSaveRequestDTO) {
+  return unwrapResponse<AiWorkflowSaveResultDTO>(
+    client.post('/api/v1/ai/workflow/save', request),
+  )
+}
+
+export function loadWorkflow(workflowId: string) {
+  return unwrapResponse<AiWorkflowLoadResultDTO>(
+    client.post('/api/v1/ai/workflow/load', { workflowId }),
+  )
+}
+
+export function executeWorkflow(request: AiWorkflowExecuteRequestDTO) {
+  return unwrapResponse<AiWorkflowExecuteResultDTO>(
+    client.post('/api/v1/ai/workflow/execute', request),
+  )
+}
+
+export function dryRunWorkflow(request: AiWorkflowDryRunRequestDTO) {
+  return unwrapResponse<AiWorkflowDryRunResultDTO>(
+    client.post('/api/v1/ai/workflow/dry-run', request),
+  )
+}
+
+interface ChatHistoryItem {
+  role: string
+  content: string
+}
+
+interface StreamChatOptions {
+  prompt: string
+  conversationId?: string
+  signal?: AbortSignal
+  history?: ChatHistoryItem[]
+  onDone?: (payload: { conversationId?: string }) => void
+}
+
+export async function* streamChat({
+  prompt,
+  conversationId,
+  signal,
+  history,
+  onDone,
+}: StreamChatOptions): AsyncIterable<string> {
   const response = await fetch('/api/v1/ai/chat', {
     method: 'POST',
     headers: {
@@ -92,7 +142,7 @@ export async function* streamChat(
       Accept: 'text/event-stream',
       ...requestContextHeaders,
     },
-    body: JSON.stringify({ prompt, history }),
+    body: JSON.stringify({ prompt, conversationId, history }),
     signal,
   })
 
@@ -118,12 +168,28 @@ export async function* streamChat(
         const eventName = eventLine ? eventLine.slice('event:'.length).trim() : 'token'
         const data = dataLine ? dataLine.slice('data:'.length).trim() : ''
         if (eventName === 'error') throw new Error(data || 'AI chat error')
-        if (eventName === 'done') return
+        if (eventName === 'done') {
+          onDone?.(parseDonePayload(data))
+          return
+        }
         if (eventName === 'token' && data) yield data
       }
     }
   }
   finally {
     reader.releaseLock()
+  }
+}
+
+function parseDonePayload(data: string): { conversationId?: string } {
+  if (!data) return {}
+  try {
+    const parsed = JSON.parse(data) as { conversationId?: string }
+    return parsed && typeof parsed.conversationId === 'string'
+      ? { conversationId: parsed.conversationId }
+      : {}
+  }
+  catch {
+    return {}
   }
 }

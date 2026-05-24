@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import AppIcon from '@/components/icons/AppIcon.vue'
 import { validateQuery, previewQuery, inferQuerySchema } from '@/api/query'
 import { useAsyncTask } from '@/composables/useAsyncTask'
 import { useWorkflowStore } from '@/stores/workflow'
@@ -20,7 +21,6 @@ const emit = defineEmits<{
 
 const workflow = useWorkflowStore()
 
-// ── 构建请求 ────────────────────────────────────────────────
 function buildRequest(): QueryRequestDTO {
   return {
     datasourceId: props.datasourceId,
@@ -31,8 +31,6 @@ function buildRequest(): QueryRequestDTO {
 }
 
 const canRun = computed(() => !!props.datasourceId && !!props.sqlTemplate.trim())
-
-// ── AI 生成 ─────────────────────────────────────────────────
 const showAiDialog = ref(false)
 
 function onAiAccepted(sql: string) {
@@ -40,7 +38,6 @@ function onAiAccepted(sql: string) {
   showAiDialog.value = false
 }
 
-// ── SQL 校验 ─────────────────────────────────────────────────
 type ValidateState = 'idle' | 'loading' | 'ok' | 'fail'
 
 const validateState = ref<ValidateState>('idle')
@@ -69,7 +66,6 @@ async function handleValidate() {
   }
 }
 
-// ── 预览 ──────────────────────────────────────────────────────
 const previewing = ref(false)
 const previewResult = ref<QueryResultDTO | null>(null)
 const previewError = ref<string>()
@@ -93,7 +89,6 @@ async function handlePreview() {
     const result = await previewQuery(buildRequest())
     previewResult.value = result
 
-    // 预览成功后推断 schema，更新节点输出变量
     try {
       const schema = await inferQuerySchema(buildRequest())
       if (schema?.fields?.length) {
@@ -102,7 +97,6 @@ async function handlePreview() {
       }
     }
     catch {
-      // schema 推断失败不影响预览展示
     }
   }
   catch (e: unknown) {
@@ -113,7 +107,6 @@ async function handlePreview() {
   }
 }
 
-// ── 异步执行 ──────────────────────────────────────────────────
 const asyncTask = useAsyncTask()
 const execError = ref<string>()
 
@@ -140,18 +133,16 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
 
 <template>
   <div class="qab">
-    <!-- ── 按钮行 ────────────────────────────────── -->
     <div class="qab__actions">
-      <!-- AI 生成 -->
       <button
         class="qab__btn qab__btn--ai"
         :disabled="!datasourceId"
         @click="showAiDialog = true"
       >
-        ✦ AI 生成
+        <AppIcon name="ai" :size="13" />
+        AI 生成
       </button>
 
-      <!-- 校验 SQL -->
       <button
         class="qab__btn"
         :disabled="!canRun || validateState === 'loading'"
@@ -159,13 +150,12 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
       >
         <span v-if="validateState === 'loading'" class="qab__spin" />
         <template v-else>
-          <span v-if="validateState === 'ok'" class="qab__icon qab__icon--ok">✓</span>
-          <span v-else-if="validateState === 'fail'" class="qab__icon qab__icon--fail">✗</span>
+          <span v-if="validateState === 'ok'" class="qab__icon qab__icon--ok"><AppIcon name="check" :size="12" /></span>
+          <span v-else-if="validateState === 'fail'" class="qab__icon qab__icon--fail"><AppIcon name="x" :size="12" /></span>
         </template>
         校验 SQL
       </button>
 
-      <!-- 预览 -->
       <button
         class="qab__btn"
         :disabled="!canRun || previewing"
@@ -175,7 +165,6 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
         预览（前 100 行）
       </button>
 
-      <!-- 取消 / 异步执行 -->
       <button
         v-if="isPolling"
         class="qab__btn qab__btn--cancel"
@@ -194,42 +183,47 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
       </button>
     </div>
 
-    <!-- ── 校验错误 ──────────────────────────────── -->
     <div v-if="validateState === 'fail' && validateErrors.length" class="qab__errors">
-      <div v-for="(err, i) in validateErrors" :key="i" class="qab__error-line">✗ {{ err }}</div>
+      <div v-for="(err, i) in validateErrors" :key="i" class="qab__error-line">
+        <span class="qab__error-icon"><AppIcon name="x" :size="12" /></span>
+        <span>{{ err }}</span>
+      </div>
     </div>
 
-    <!-- ── 校验通过提示 ───────────────────────────── -->
-    <div v-if="validateState === 'ok'" class="qab__ok">✓ SQL 语法校验通过</div>
+    <div v-if="validateState === 'ok'" class="qab__ok">
+      <AppIcon name="check" :size="12" />
+      <span>SQL 语法校验通过</span>
+    </div>
 
-    <!-- ── 执行错误 ──────────────────────────────── -->
     <div v-if="execError" class="qab__errors">
-      <div class="qab__error-line">✗ {{ execError }}</div>
+      <div class="qab__error-line">
+        <span class="qab__error-icon"><AppIcon name="x" :size="12" /></span>
+        <span>{{ execError }}</span>
+      </div>
     </div>
 
-    <!-- ── 预览错误 ──────────────────────────────── -->
     <div v-if="previewError" class="qab__errors">
-      <div class="qab__error-line">✗ {{ previewError }}</div>
+      <div class="qab__error-line">
+        <span class="qab__error-icon"><AppIcon name="x" :size="12" /></span>
+        <span>{{ previewError }}</span>
+      </div>
     </div>
 
-    <!-- ── 轮询状态 ──────────────────────────────── -->
     <div v-if="isPolling" class="qab__polling">
       <span class="qab__spin" />
       执行中{{ asyncTask.progress.value ? ` · ${asyncTask.progress.value}%` : '' }}
     </div>
 
-    <!-- ── 取消状态 ──────────────────────────────── -->
     <div v-if="asyncTask.status.value === 'CANCELLED'" class="qab__cancelled">已取消</div>
 
-    <!-- ── 执行成功 ──────────────────────────────── -->
-    <div v-if="asyncTask.status.value === 'SUCCESS'" class="qab__success">
-      ✓ 执行成功
+    <div v-if="asyncTask.status.value === 'SUCCEEDED'" class="qab__success">
+      <AppIcon name="check" :size="12" />
+      <span>执行成功</span>
       <template v-if="asyncTask.dataset.value?.rows?.length">
-        · {{ asyncTask.dataset.value.rows.length }} 行
+        <span>· {{ asyncTask.dataset.value.rows.length }} 行</span>
       </template>
     </div>
 
-    <!-- ── 预览结果表格 ───────────────────────────── -->
     <template v-if="previewResult?.dataset">
       <div class="qab__preview">
         <div class="qab__preview-meta">
@@ -268,7 +262,6 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
       </div>
     </template>
 
-    <!-- ── AI SQL 对话框 ─────────────────────────── -->
     <AiSqlDialog
       v-if="showAiDialog && datasourceId"
       :datasource-id="datasourceId"
@@ -289,7 +282,6 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
   margin-top: 4px;
 }
 
-/* ── 按钮行 ─────────────────────────────────────── */
 .qab__actions {
   display: flex;
   flex-wrap: wrap;
@@ -353,7 +345,11 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
   background: rgba(239, 68, 68, 0.2);
 }
 
-/* ── 状态指示器 ─────────────────────────────────── */
+.qab__icon {
+  display: grid;
+  place-items: center;
+}
+
 .qab__icon--ok  { color: #4ade80; }
 .qab__icon--fail { color: #f87171; }
 
@@ -370,8 +366,10 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
 
 @keyframes qab-spin { to { transform: rotate(360deg); } }
 
-/* ── 校验 / 错误 ────────────────────────────────── */
 .qab__ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: #4ade80;
   padding: 6px 10px;
@@ -391,12 +389,21 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
 }
 
 .qab__error-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
   font-size: 12px;
   color: #fca5a5;
   line-height: 1.5;
 }
 
-/* ── 轮询 / 取消 / 成功 ─────────────────────────── */
+.qab__error-icon {
+  display: grid;
+  place-items: center;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
 .qab__polling {
   display: flex;
   align-items: center;
@@ -411,11 +418,13 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
 }
 
 .qab__success {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: #4ade80;
 }
 
-/* ── 预览结果 ────────────────────────────────────── */
 .qab__preview {
   border: 1px solid #1e293b;
   border-radius: 10px;

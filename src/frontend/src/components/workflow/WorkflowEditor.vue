@@ -6,6 +6,7 @@ import { VueFlow, SelectionMode } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
+import AppIcon from '@/components/icons/AppIcon.vue'
 import type { NodeMetaDTO, WorkflowDefinitionDTO } from '@/types/contract'
 import type { WorkflowInsertTrigger } from './insert-types'
 import NodePalette from './NodePalette.vue'
@@ -17,11 +18,24 @@ import WorkflowNodePanelRenderer from './WorkflowNodePanelRenderer.vue'
 import WorkflowInsertEdge from './WorkflowInsertEdge.vue'
 import AiWorkflowDialog from '@/components/ai/AiWorkflowDialog.vue'
 import { useWorkflowStore } from '@/stores/workflow'
-import { storeToRefs } from 'pinia'
+import type { WorkflowNode } from '@/types/workflow'
 import { getBusinessNodeType } from '@/adapters/workflow-graph'
 
 const workflow = useWorkflowStore()
-const { nodes, edges, selectedNode, workflowName, workflowId, saving, workflowList, loading, viewport } = storeToRefs(workflow)
+const nodes = computed(() => workflow.nodes)
+const edges = computed(() => workflow.edges)
+const selectedNode = computed(() => workflow.selectedNode)
+const workflowName = computed({
+  get: () => workflow.workflowName,
+  set: value => {
+    workflow.workflowName = value
+  },
+})
+const workflowId = computed(() => workflow.workflowId)
+const saving = computed(() => workflow.saving)
+const workflowList = computed(() => workflow.workflowList)
+const loading = computed(() => workflow.loading)
+const viewport = computed(() => workflow.viewport)
 
 type RightPanel = 'config' | 'versions' | 'triggers'
 const rightPanel = ref<RightPanel>('config')
@@ -29,12 +43,12 @@ const rightPanelVisible = ref(true)
 const showAiDialog = ref(false)
 const insertTrigger = ref<WorkflowInsertTrigger | null>(null)
 const insertPickerVisible = ref(false)
-const canvasPatternColor = ref('rgba(133, 133, 173, 0.12)')
+const canvasPatternColor = ref('rgba(103, 111, 131, 0.18)')
 
 function updateWorkflowThemeVars() {
   const styles = getComputedStyle(document.documentElement)
-  const edgeColor = styles.getPropertyValue('--iap-workflow-link-active').trim() || '#5289ff'
-  const dotColor = styles.getPropertyValue('--iap-canvas-dot-color').trim() || 'rgba(133, 133, 173, 0.12)'
+  const edgeColor = styles.getPropertyValue('--iap-workflow-link-active').trim() || '#296dff'
+  const dotColor = styles.getPropertyValue('--iap-canvas-dot-color').trim() || 'rgba(103, 111, 131, 0.18)'
   defaultEdgeOptions.value = {
     type: 'smoothstep',
     animated: true,
@@ -48,7 +62,7 @@ function togglePanel(panel: Exclude<RightPanel, 'config'>) {
 }
 
 const aiDatasourceId = computed(() => {
-  const sqlNode = nodes.value.find(n => getBusinessNodeType(n) === 'sql_query' && n.data.config?.datasourceId)
+  const sqlNode = nodes.value.find((n: WorkflowNode) => getBusinessNodeType(n) === 'sql_query' && n.data.config?.datasourceId)
   const id = sqlNode?.data.config?.datasourceId
   return typeof id === 'string' && id ? id : undefined
 })
@@ -56,7 +70,7 @@ const aiDatasourceId = computed(() => {
 const defaultEdgeOptions = ref({
   type: 'smoothstep',
   animated: true,
-  style: { stroke: '#5289ff', strokeWidth: 2 },
+  style: { stroke: '#296dff', strokeWidth: 2 },
 })
 
 function shouldIgnoreDeleteShortcut(target: EventTarget | null) {
@@ -163,9 +177,12 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
         {{ saving ? '保存中...' : '保存工作流' }}
       </button>
       <button class="workflow-editor__button" @click="handleReset">新建画布</button>
-      <button class="workflow-editor__button workflow-editor__button--ai" @click="showAiDialog = true">✦ AI 创建</button>
-      <select class="workflow-editor__select" :disabled="loading" :value="workflowId ?? ''" @change="handleSelectWorkflow">
-        <option value="">选择已保存工作流</option>
+      <button class="workflow-editor__button workflow-editor__button--ai" @click="showAiDialog = true">
+        <AppIcon name="ai" :size="14" />
+        <span>AI 创建</span>
+      </button>
+      <select class="workflow-editor__select" :class="{ 'workflow-editor__select--placeholder': !workflowId }" :disabled="loading" :value="workflowId ?? ''" @change="handleSelectWorkflow">
+        <option value="" disabled hidden>选择已保存工作流</option>
         <option v-for="item in workflowList" :key="item.workflowId" :value="item.workflowId">
           {{ item.workflowName }}
         </option>
@@ -191,7 +208,7 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
         :title="rightPanelVisible ? '隐藏右侧面板' : '显示右侧面板'"
         @click="rightPanelVisible = !rightPanelVisible"
       >
-        {{ rightPanelVisible ? '▶' : '◀' }}
+        <AppIcon :name="rightPanelVisible ? 'chevron-right' : 'chevron-left'" :size="14" />
       </button>
     </header>
     <AiWorkflowDialog
@@ -274,29 +291,49 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
 .workflow-editor__name-input,
 .workflow-editor__select {
   border: 1px solid var(--iap-input-border);
-  border-radius: 10px;
-  background: var(--iap-input-bg);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, var(--iap-input-bg-focus) 100%);
   color: var(--iap-text-primary);
-  padding: 10px 12px;
+  padding: 10px 14px;
   outline: none;
+  box-shadow: var(--iap-select-shadow);
 }
 .workflow-editor__name-input:hover,
 .workflow-editor__select:hover {
-  background: var(--iap-input-bg-hover);
+  background: linear-gradient(180deg, #ffffff 0%, var(--iap-input-bg-hover) 100%);
+  border-color: var(--iap-divider-strong);
 }
 .workflow-editor__name-input:focus,
 .workflow-editor__select:focus {
   border-color: var(--iap-input-border-focus);
-  background: var(--iap-input-bg-focus);
-  box-shadow: 0 0 0 3px var(--iap-accent-ring);
+  background: linear-gradient(180deg, #ffffff 0%, var(--iap-input-bg-focus) 100%);
+  box-shadow: var(--iap-select-shadow), var(--iap-select-shadow-focus);
 }
 .workflow-editor__name-input {
   min-width: 220px;
 }
 .workflow-editor__select {
   min-width: 220px;
+  padding-right: 44px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='%2398a2b2' d='M7 9.25 2.5 4.75h9z'/%3E%3C/svg%3E"), linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, var(--iap-input-bg-focus) 100%);
+  background-repeat: no-repeat, no-repeat;
+  background-position: right 14px center, center;
+  background-size: 14px 14px, auto;
+}
+.workflow-editor__select:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='%2398a2b2' d='M7 9.25 2.5 4.75h9z'/%3E%3C/svg%3E"), linear-gradient(180deg, #ffffff 0%, var(--iap-input-bg-hover) 100%);
+}
+.workflow-editor__select:focus {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath fill='%23155aef' d='M7 9.25 2.5 4.75h9z'/%3E%3C/svg%3E"), linear-gradient(180deg, #ffffff 0%, var(--iap-input-bg-focus) 100%);
+}
+.workflow-editor__select--placeholder {
+  color: var(--iap-text-placeholder);
 }
 .workflow-editor__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid var(--iap-btn-secondary-border);
   border-radius: 10px;
   background: var(--iap-btn-secondary-bg);
@@ -321,10 +358,13 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
   color: var(--iap-text-accent);
 }
 .workflow-editor__button--icon {
-  padding: 10px 10px;
-  min-width: 36px;
-  font-size: 11px;
   margin-left: auto;
+  justify-content: center;
+  min-width: 40px;
+}
+.workflow-editor__button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .workflow-editor__button--ai {
   border-color: var(--iap-ai-btn-border);
@@ -334,33 +374,36 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
 .workflow-editor__button--ai:hover:not(:disabled) {
   background: var(--iap-ai-btn-hover);
 }
-.workflow-editor__button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
 .workflow-editor__canvas {
   position: relative;
-  background: var(--iap-canvas-overlay), var(--iap-canvas-bg);
+  background: var(--iap-canvas-bg);
+  background-image: var(--iap-canvas-overlay);
 }
+
 :deep(.vue-flow__pane) {
-  background: transparent;
+  cursor: default;
 }
-:deep(.vue-flow__edge-path) {
-  stroke: var(--iap-workflow-link-active);
+
+:deep(.vue-flow__background) {
+  background-color: transparent;
 }
+
 :deep(.vue-flow__controls) {
-  border: 1px solid var(--iap-divider);
-  border-radius: var(--iap-radius-lg);
-  background: var(--iap-panel-bg);
+  border-radius: 14px;
+  overflow: hidden;
   box-shadow: var(--iap-shadow-panel);
 }
+
 :deep(.vue-flow__controls-button) {
-  border-bottom: 1px solid var(--iap-divider);
-  background: var(--iap-panel-bg);
-  color: var(--iap-text-secondary);
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--iap-divider) !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: var(--iap-text-secondary) !important;
 }
+
 :deep(.vue-flow__controls-button:hover) {
-  background: var(--iap-surface-hover);
-  color: var(--iap-text-primary);
+  background: #ffffff !important;
+  color: var(--iap-text-primary) !important;
 }
 </style>

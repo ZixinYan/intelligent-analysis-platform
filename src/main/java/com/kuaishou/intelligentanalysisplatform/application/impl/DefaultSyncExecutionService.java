@@ -45,16 +45,15 @@ public class DefaultSyncExecutionService implements SyncExecutionService {
         }
         String runId = UUID.randomUUID().toString();
 
-        // Use DAG parallel executor when edges are explicitly provided
         if (request.getEdges() != null && !request.getEdges().isEmpty()) {
             return workflowDagExecutor.execute(request, runId);
         }
 
-        // Legacy sequential execution (no edges provided)
         Map<String, StandardResultDTO> upstreamResults = new LinkedHashMap<>();
         List<NodeResultDTO> nodeResults = new ArrayList<>();
         ExecutionStatus workflowStatus = ExecutionStatus.SUCCEEDED;
         StandardResultDTO finalResult = null;
+        String finalResultNodeId = null;
         for (WorkflowNodeDTO node : request.getNodes()) {
             NodeExecuteContextDTO context = NodeExecuteContextDTO.builder()
                     .workflowId(request.getWorkflowId())
@@ -68,6 +67,7 @@ public class DefaultSyncExecutionService implements SyncExecutionService {
             if (result.getResult() != null) {
                 upstreamResults.put(node.getNodeId(), result.getResult());
                 finalResult = result.getResult();
+                finalResultNodeId = node.getNodeId();
             }
             if (result.getStatus() != ExecutionStatus.SUCCEEDED && result.getStatus() != ExecutionStatus.QUEUED) {
                 workflowStatus = result.getStatus();
@@ -82,6 +82,7 @@ public class DefaultSyncExecutionService implements SyncExecutionService {
                 .status(workflowStatus)
                 .nodeResults(nodeResults)
                 .finalResult(finalResult)
+                .finalResultNodeId(finalResultNodeId)
                 .build();
     }
 

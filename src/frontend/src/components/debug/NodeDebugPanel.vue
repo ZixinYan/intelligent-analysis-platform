@@ -36,7 +36,7 @@ async function handleValidate() {
 
 async function handlePreview() {
   const result = await debug.runPreview(activeNode.value)
-  const nextStatus = result.status === 'SUCCESS'
+  const nextStatus = result.status === 'SUCCEEDED'
     ? 'success'
     : result.status === 'FAILED' || result.status === 'CANCELLED'
       ? 'error'

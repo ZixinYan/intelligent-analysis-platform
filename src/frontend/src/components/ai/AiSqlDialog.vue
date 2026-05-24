@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import AppIcon from '@/components/icons/AppIcon.vue'
 import { generateSqlStream } from '@/api/ai'
 
 const props = defineProps<{
@@ -69,9 +70,9 @@ const canAccept = computed(() => generatedSql.value.trim().length > 0 && !isStre
     <div class="ai-sql-dialog__backdrop" @click="cancel" />
     <div class="ai-sql-dialog__panel">
       <header class="ai-sql-dialog__header">
-        <span class="ai-sql-dialog__icon">✦</span>
+        <span class="ai-sql-dialog__icon"><AppIcon name="ai" :size="16" /></span>
         <span>AI 生成 SQL</span>
-        <button class="ai-sql-dialog__close" @click="cancel" aria-label="关闭">✕</button>
+        <button class="ai-sql-dialog__close" @click="cancel" aria-label="关闭"><AppIcon name="close" :size="14" /></button>
       </header>
 
       <div class="ai-sql-dialog__body">
@@ -157,7 +158,8 @@ const canAccept = computed(() => generatedSql.value.trim().length > 0 && !isStre
 }
 .ai-sql-dialog__icon {
   color: #818cf8;
-  font-size: 16px;
+  display: grid;
+  place-items: center;
 }
 .ai-sql-dialog__close {
   margin-left: auto;
@@ -165,7 +167,8 @@ const canAccept = computed(() => generatedSql.value.trim().length > 0 && !isStre
   border: none;
   color: #64748b;
   cursor: pointer;
-  font-size: 14px;
+  display: grid;
+  place-items: center;
   padding: 2px 6px;
   border-radius: 6px;
   transition: color 0.15s;
