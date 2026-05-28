@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { inferNodeSchema } from '@/api/node-definition'
-import { inferQuerySchema, previewQuery, validateQuery } from '@/api/query'
-import type { QueryRequestDTO, QueryResultDTO, SchemaInferResultDTO, ValidateResultDTO } from '@/types/contract'
+import { inferQuerySchema, validateQuery } from '@/api/query'
+import type { QueryRequestDTO, SchemaInferResultDTO, ValidateResultDTO } from '@/types/contract'
 import type { WorkflowNode } from '@/types/workflow'
 import { getBusinessNodeType } from '@/adapters/workflow-graph'
 
@@ -33,7 +33,6 @@ export function buildQueryRequest(node: WorkflowNode): QueryRequestDTO {
 export function useNodeDebug() {
   const loading = ref(false)
   const validation = ref<ValidateResultDTO>()
-  const preview = ref<QueryResultDTO>()
   const schema = ref<SchemaInferResultDTO>()
   const error = ref<string>()
 
@@ -49,25 +48,6 @@ export function useNodeDebug() {
       const message = err instanceof Error ? err.message : '校验失败'
       error.value = message
       console.error('SQL validation failed:', err)
-      throw err
-    }
-    finally {
-      loading.value = false
-    }
-  }
-
-  async function runPreview(node: WorkflowNode) {
-    loading.value = true
-    error.value = undefined
-    try {
-      const request = buildQueryRequest(node)
-      preview.value = await previewQuery(request)
-      return preview.value
-    }
-    catch (err) {
-      const message = err instanceof Error ? err.message : '预览失败'
-      error.value = message
-      console.error('SQL preview failed:', err)
       throw err
     }
     finally {
@@ -96,11 +76,9 @@ export function useNodeDebug() {
   return {
     loading,
     validation,
-    preview,
     schema,
     error,
     runValidate,
-    runPreview,
     runSchemaInfer,
   }
 }

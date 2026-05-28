@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import TablePreview from '@/components/output/TablePreview.vue'
 import ChartPreview from '@/components/output/ChartPreview.vue'
 import { getBusinessNodeType } from '@/adapters/workflow-graph'
 import { useWorkflowStore } from '@/stores/workflow'
-import type { QueryResultDTO, StandardResultDTO } from '@/types/contract'
 import type { WorkflowNode } from '@/types/workflow'
 import { useMappingCandidates } from '@/composables/useMappingCandidates'
 import { useNodeDebug } from '@/composables/useNodeDebug'
@@ -19,10 +17,6 @@ const activeNode = computed(() => props.node)
 const nodeData = computed(() => activeNode.value.data)
 const businessNodeType = computed(() => getBusinessNodeType(activeNode.value))
 const validationResult = computed(() => debug.validation.value)
-const previewResult = computed(() => debug.preview.value)
-const previewRendererResult = computed<StandardResultDTO | QueryResultDTO | undefined>(() => {
-  return previewResult.value
-})
 const { loadCandidates } = useMappingCandidates(activeNode)
 
 // Check if SQL Query node has required configuration
@@ -56,17 +50,6 @@ async function handleValidate() {
   workflow.updateNodeStatus(activeNode.value.id, validationResult.value?.valid ? 'valid' : 'error')
 }
 
-async function handlePreview() {
-  if (!canDebugSqlQuery.value) return
-  const result = await debug.runPreview(activeNode.value)
-  const nextStatus = result.status === 'SUCCEEDED'
-    ? 'success'
-    : result.status === 'FAILED' || result.status === 'CANCELLED'
-      ? 'error'
-      : 'running'
-  workflow.updateNodeStatus(activeNode.value.id, nextStatus)
-}
-
 async function handleSchema() {
   const schema = await debug.runSchemaInfer(activeNode.value)
   workflow.updateNodeSchema(activeNode.value.id, schema)
@@ -91,14 +74,6 @@ async function handleSchema() {
         {{ debug.loading ? '校验中...' : 'Validate' }}
       </button>
       <button
-        v-if="businessNodeType === 'sql_query'"
-        :disabled="!canDebugSqlQuery || debug.loading"
-        :title="debugDisabledReason"
-        @click="handlePreview"
-      >
-        {{ debug.loading ? '预览中...' : 'Preview' }}
-      </button>
-      <button
         :disabled="debug.loading"
         @click="handleSchema"
       >
@@ -114,8 +89,7 @@ async function handleSchema() {
       <strong>Schema</strong>
       <span>{{ nodeData.schema.fields.map(item => item.name).join(', ') }}</span>
     </div>
-    <TablePreview v-if="previewRendererResult && businessNodeType !== 'chart_output'" :result="previewRendererResult" mode="preview" />
-    <ChartPreview v-if="businessNodeType === 'chart_output'" :result="previewRendererResult ?? { kind: 'EMPTY' }" mode="preview" />
+    <ChartPreview v-if="businessNodeType === 'chart_output'" :result="{ kind: 'EMPTY' }" mode="preview" />
   </section>
 </template>
 

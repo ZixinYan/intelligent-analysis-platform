@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import AppIcon from '@/components/icons/AppIcon.vue'
-import { validateQuery, previewQuery, inferQuerySchema } from '@/api/query'
-import { useAsyncTask } from '@/composables/useAsyncTask'
-import { useWorkflowStore } from '@/stores/workflow'
+import { validateQuery } from '@/api/query'
 import AiSqlDialog from '@/components/ai/AiSqlDialog.vue'
-import type { DatasetDTO, QueryResultDTO, QueryRequestDTO } from '@/types/contract'
+import type { QueryRequestDTO } from '@/types/contract'
 import type { WorkflowNode } from '@/types/workflow'
 
 const props = defineProps<{
@@ -18,8 +16,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   'sql-update': [sql: string]
 }>()
-
-const workflow = useWorkflowStore()
 
 function buildRequest(): QueryRequestDTO {
   return {
@@ -65,70 +61,6 @@ async function handleValidate() {
     validateErrors.value = [(e instanceof Error ? e.message : String(e)) || 'SQL 校验失败']
   }
 }
-
-const previewing = ref(false)
-const previewResult = ref<QueryResultDTO | null>(null)
-const previewError = ref<string>()
-
-function getColumnKeys(dataset: DatasetDTO): string[] {
-  if (dataset.columns?.length) {
-    return dataset.columns.map(c => String(c.field ?? c.name ?? Object.values(c)[0] ?? ''))
-  }
-  if (dataset.rows?.length) {
-    return Object.keys(dataset.rows[0])
-  }
-  return []
-}
-
-async function handlePreview() {
-  if (!canRun.value) return
-  previewing.value = true
-  previewResult.value = null
-  previewError.value = undefined
-  try {
-    const result = await previewQuery(buildRequest())
-    previewResult.value = result
-
-    try {
-      const schema = await inferQuerySchema(buildRequest())
-      if (schema?.fields?.length) {
-        workflow.updateNodeSchema(props.node.id, schema)
-        workflow.propagateSchemaFrom(props.node.id)
-      }
-    }
-    catch {
-    }
-  }
-  catch (e: unknown) {
-    previewError.value = (e instanceof Error ? e.message : String(e)) || '预览失败'
-  }
-  finally {
-    previewing.value = false
-  }
-}
-
-const asyncTask = useAsyncTask()
-const execError = ref<string>()
-
-async function handleSubmitAsync() {
-  if (!canRun.value) return
-  execError.value = undefined
-  try {
-    await asyncTask.submit(buildRequest())
-    if (asyncTask.status.value === 'FAILED') {
-      execError.value = asyncTask.error.value?.message ?? '执行失败'
-    }
-  }
-  catch (e: unknown) {
-    execError.value = (e instanceof Error ? e.message : String(e)) || '执行失败'
-  }
-}
-
-async function handleCancel() {
-  await asyncTask.cancel()
-}
-
-const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.value)
 </script>
 
 <template>
@@ -155,32 +87,6 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
         </template>
         校验 SQL
       </button>
-
-      <button
-        class="qab__btn"
-        :disabled="!canRun || previewing"
-        @click="handlePreview"
-      >
-        <span v-if="previewing" class="qab__spin" />
-        预览（前 100 行）
-      </button>
-
-      <button
-        v-if="isPolling"
-        class="qab__btn qab__btn--cancel"
-        @click="handleCancel"
-      >
-        取消执行
-      </button>
-      <button
-        v-else
-        class="qab__btn qab__btn--primary"
-        :disabled="!canRun || asyncTask.loading.value"
-        @click="handleSubmitAsync"
-      >
-        <span v-if="asyncTask.loading.value" class="qab__spin" />
-        异步执行
-      </button>
     </div>
 
     <div v-if="validateState === 'fail' && validateErrors.length" class="qab__errors">
@@ -194,73 +100,6 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
       <AppIcon name="check" :size="12" />
       <span>SQL 语法校验通过</span>
     </div>
-
-    <div v-if="execError" class="qab__errors">
-      <div class="qab__error-line">
-        <span class="qab__error-icon"><AppIcon name="x" :size="12" /></span>
-        <span>{{ execError }}</span>
-      </div>
-    </div>
-
-    <div v-if="previewError" class="qab__errors">
-      <div class="qab__error-line">
-        <span class="qab__error-icon"><AppIcon name="x" :size="12" /></span>
-        <span>{{ previewError }}</span>
-      </div>
-    </div>
-
-    <div v-if="isPolling" class="qab__polling">
-      <span class="qab__spin" />
-      执行中{{ asyncTask.progress.value ? ` · ${asyncTask.progress.value}%` : '' }}
-    </div>
-
-    <div v-if="asyncTask.status.value === 'CANCELLED'" class="qab__cancelled">已取消</div>
-
-    <div v-if="asyncTask.status.value === 'SUCCEEDED'" class="qab__success">
-      <AppIcon name="check" :size="12" />
-      <span>执行成功</span>
-      <template v-if="asyncTask.dataset.value?.rows?.length">
-        <span>· {{ asyncTask.dataset.value.rows.length }} 行</span>
-      </template>
-    </div>
-
-    <template v-if="previewResult?.dataset">
-      <div class="qab__preview">
-        <div class="qab__preview-meta">
-          <span>{{ previewResult.dataset.rows?.length ?? 0 }} 行</span>
-          <span v-if="previewResult.executionMeta?.durationMs != null">
-            {{ previewResult.executionMeta.durationMs }}ms
-          </span>
-          <span v-if="previewResult.executionMeta?.cacheHit" class="qab__preview-cached">缓存命中</span>
-        </div>
-        <div class="qab__preview-scroll">
-          <table class="qab__table">
-            <thead>
-              <tr>
-                <th
-                  v-for="col in getColumnKeys(previewResult.dataset)"
-                  :key="col"
-                  class="qab__th"
-                >{{ col }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="(row, i) in (previewResult.dataset.rows ?? [])"
-                :key="i"
-                class="qab__tr"
-              >
-                <td
-                  v-for="col in getColumnKeys(previewResult.dataset)"
-                  :key="col"
-                  class="qab__td"
-                >{{ row[col] ?? '' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </template>
 
     <AiSqlDialog
       v-if="showAiDialog && datasourceId"
@@ -325,26 +164,6 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
   background: rgba(99, 102, 241, 0.25);
 }
 
-.qab__btn--primary {
-  border-color: rgba(59, 130, 246, 0.45);
-  background: rgba(59, 130, 246, 0.12);
-  color: #93c5fd;
-}
-
-.qab__btn--primary:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.25);
-}
-
-.qab__btn--cancel {
-  border-color: rgba(239, 68, 68, 0.4);
-  background: rgba(239, 68, 68, 0.1);
-  color: #fca5a5;
-}
-
-.qab__btn--cancel:hover {
-  background: rgba(239, 68, 68, 0.2);
-}
-
 .qab__icon {
   display: grid;
   place-items: center;
@@ -402,81 +221,5 @@ const isPolling = computed(() => asyncTask.polling.value || asyncTask.loading.va
   place-items: center;
   margin-top: 2px;
   flex-shrink: 0;
-}
-
-.qab__polling {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.qab__cancelled {
-  font-size: 12px;
-  color: #f59e0b;
-}
-
-.qab__success {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #4ade80;
-}
-
-.qab__preview {
-  border: 1px solid #1e293b;
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.qab__preview-meta {
-  display: flex;
-  gap: 12px;
-  padding: 6px 10px;
-  background: #0a0f1e;
-  border-bottom: 1px solid #1e293b;
-  font-size: 11px;
-  color: #475569;
-}
-
-.qab__preview-cached { color: #38bdf8; }
-
-.qab__preview-scroll {
-  overflow-x: auto;
-  max-height: 240px;
-  overflow-y: auto;
-}
-
-.qab__table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-.qab__th {
-  padding: 6px 10px;
-  text-align: left;
-  font-weight: 600;
-  color: #64748b;
-  background: #0a0f1e;
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
-  border-bottom: 1px solid #1e293b;
-}
-
-.qab__tr:nth-child(even) { background: rgba(15, 23, 42, 0.4); }
-
-.qab__td {
-  padding: 5px 10px;
-  color: #94a3b8;
-  white-space: nowrap;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border-bottom: 1px solid rgba(30, 41, 59, 0.5);
-  font-family: 'SFMono-Regular', ui-monospace, monospace;
 }
 </style>

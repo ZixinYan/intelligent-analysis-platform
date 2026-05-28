@@ -119,14 +119,29 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
 
     @Override
     public ValidateResultDTO validate(QueryRequestDTO request) {
-        GuardedRequest guardedRequest = guard(request, false, false);
+        String queryId = resolveQueryId(request);
+        QueryGuardContext context = buildContext(request, false, queryId);
+        SqlGuardDecision decision = sqlGuard.validate(context);
+        if (!decision.isAllowed()) {
+            List<String> codes = decision.getViolationCodes() == null ? List.of()
+                    : decision.getViolationCodes().stream().map(GuardViolationCode::name).toList();
+            return ValidateResultDTO.builder()
+                    .queryId(queryId)
+                    .valid(false)
+                    .normalizedSql(decision.getNormalizedSql())
+                    .sqlFingerprint(decision.getSqlFingerprint())
+                    .violationCodes(codes)
+                    .message(decision.getMessage())
+                    .validatedAt(System.currentTimeMillis())
+                    .build();
+        }
         return ValidateResultDTO.builder()
-                .queryId(guardedRequest.queryId())
+                .queryId(queryId)
                 .valid(true)
-                .normalizedSql(guardedRequest.decision().getNormalizedSql())
-                .sqlFingerprint(guardedRequest.decision().getSqlFingerprint())
+                .normalizedSql(decision.getNormalizedSql())
+                .sqlFingerprint(decision.getSqlFingerprint())
                 .violationCodes(List.of())
-                .message(guardedRequest.decision().getMessage())
+                .message(decision.getMessage())
                 .validatedAt(System.currentTimeMillis())
                 .build();
     }
@@ -286,15 +301,6 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         return schemaInferService.infer(guardedRequest.datasource(), guardedRequest.decision().getNormalizedSql(), guardedRequest.queryId());
     }
 
-    /**
-     * 查询前置卫兵：SQL 校验 + 数据源校验。
-     *
-     * @param request                 查询请求
-     * @param preview                 是否预览模式（影响 SQL 校验策略）
-     * @param tolerateValidationFailure 是否允许 SQL 校验失败继续（用于仅语法检查场景）
-     * @return 封装了 queryId、tenantId、数据源、卫兵决策的不可变记录
-     * @throws BaseBusinessException 数据源不存在、状态异常或 SQL 被拦截时抛出
-     */
     private GuardedRequest guard(QueryRequestDTO request, boolean preview, boolean tolerateValidationFailure) {
         String queryId = resolveQueryId(request);
         QueryGuardContext context = buildContext(request, preview, queryId);
@@ -312,12 +318,6 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         return new GuardedRequest(queryId, tenantId, requestContext == null ? null : requestContext.getUserId(), datasource, decision);
     }
 
-    /**
-     * 根据请求参数和卫兵决策构建 {@link QueryCommand}。
-     *
-     * <p>分页策略（pageSize / offset / cursor）和超时时间在此统一解析，
-     * 由治理策略上限和请求参数取最小值，防止请求方绕过治理阈值。
-     */
     private QueryCommand buildCommand(QueryRequestDTO request, SqlGuardDecision decision, String queryId, boolean preview) {
         QueryOptionDTO option = request == null ? null : request.getOption();
         QueryGovernancePolicy policy = QueryGovernancePolicy.defaultPolicy();
@@ -386,12 +386,6 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
                 .build();
     }
 
-    /**
-     * 将执行结果写入审计日志并更新查询指标。
-     *
-     * <p>慢查询判定：elapsedMs &ge; slowQueryThresholdMs（默认 5000ms）时标记为慢查询，
-     * 同时触发 metrics 计数器，便于告警和排查。
-     */
     private void recordExecution(QueryExecution execution) {
         boolean slowQuery = execution.getElapsedMs() != null && execution.getElapsedMs() >= slowQueryThresholdMs;
         queryAuditLogService.logQuery(execution, slowQuery);
@@ -536,12 +530,6 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         return "task-" + queryId;
     }
 
-    /**
-     * 将 JDBC 层抛出的 {@link IllegalStateException} 映射为业务异常。
-     *
-     * <p>JDBC 驱动在超时、取消时均以 IllegalStateException 包装，
-     * 通过 cause 类型和错误信息关键词进行区分，映射为对应错误码。
-     */
     private BaseBusinessException mapExecutionException(IllegalStateException e) {
         if (e.getCause() instanceof SQLTimeoutException) {
             return new BaseBusinessException(ErrorCode.QUERY_TIMEOUT, "query timeout", e.getMessage(), null, false);
@@ -552,10 +540,6 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         return new BaseBusinessException(ErrorCode.DOWNSTREAM_ERROR, "query execution failed", e.getMessage(), null, false);
     }
 
-    /**
-     * 将 SQL 卫兵违规码列表映射为精确的业务错误码，方便前端展示具体原因。
-     * 优先级：解析失败 > 多语句 > 禁止语句 > 加锁子句 > 非只读 > 行数超限 > 通用校验失败。
-     */
     private ErrorCode mapErrorCode(List<GuardViolationCode> violations) {
         if (violations == null || violations.isEmpty()) {
             return ErrorCode.SQL_SECURITY_REJECTED;
@@ -581,15 +565,6 @@ public class DefaultQueryApplicationService implements QueryApplicationService {
         return ErrorCode.QUERY_VALIDATION_FAILED;
     }
 
-    /**
-     * 卫兵检查通过后的不可变上下文，贯穿整个查询生命周期（preview / runAsync / cancel）。
-     *
-     * @param queryId    本次查询唯一 ID（来自请求或随机生成）
-     * @param tenantId   租户 ID，用于限流隔离和缓存键
-     * @param operatorId 操作人 ID，写入审计日志
-     * @param datasource 已验证的数据源实体
-     * @param decision   SQL 卫兵的校验决策（含标准化 SQL 和指纹）
-     */
     private record GuardedRequest(String queryId, String tenantId, String operatorId, AnalysisDatasource datasource,
                                   SqlGuardDecision decision) {
     }
