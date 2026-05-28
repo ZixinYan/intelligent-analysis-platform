@@ -17,14 +17,15 @@ import WorkflowNodeRenderer from './WorkflowNodeRenderer.vue'
 import WorkflowNodePanelRenderer from './WorkflowNodePanelRenderer.vue'
 import WorkflowInsertEdge from './WorkflowInsertEdge.vue'
 import AiWorkflowDialog from '@/components/ai/AiWorkflowDialog.vue'
-import { useWorkflowStore } from '@/stores/workflow'
+import { useWorkflowStore, useWorkflowGraphStore } from '@/stores/workflow'
 import type { WorkflowNode } from '@/types/workflow'
 import { getBusinessNodeType } from '@/adapters/workflow-graph'
 
 const workflow = useWorkflowStore()
-const nodes = computed(() => workflow.nodes)
-const edges = computed(() => workflow.edges)
-const selectedNode = computed(() => workflow.selectedNode)
+const graphStore = useWorkflowGraphStore()
+const nodes = computed(() => graphStore.nodes)
+const edges = computed(() => graphStore.edges)
+const selectedNode = computed(() => graphStore.selectedNode)
 const workflowName = computed({
   get: () => workflow.workflowName,
   set: value => {
@@ -35,7 +36,7 @@ const workflowId = computed(() => workflow.workflowId)
 const saving = computed(() => workflow.saving)
 const workflowList = computed(() => workflow.workflowList)
 const loading = computed(() => workflow.loading)
-const viewport = computed(() => workflow.viewport)
+const viewport = computed(() => graphStore.viewport)
 
 const LEFT_PANEL_WIDTH = 280
 const RIGHT_PANEL_DEFAULT_WIDTH = 360
