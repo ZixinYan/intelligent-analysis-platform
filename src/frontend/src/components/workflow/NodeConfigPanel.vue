@@ -7,7 +7,7 @@ import QueryActionsBar from '@/components/query/QueryActionsBar.vue'
 import AiRecommendBadge from '@/components/ai/AiRecommendBadge.vue'
 import type { WorkflowNode } from '@/types/workflow'
 import { usePanelController } from '@/composables/usePanelController'
-import { useWorkflowStore, useWorkflowDebugStore } from '@/stores/workflow'
+import { useWorkflowStore, useWorkflowDebugStore, useWorkflowGraphStore } from '@/stores/workflow'
 import { recommendChart } from '@/api/ai'
 import type { ChartRecommendationDTO } from '@/types/contract'
 import { getBusinessNodeType } from '@/adapters/workflow-graph'
@@ -17,12 +17,41 @@ const props = defineProps<{
 }>()
 
 const workflow = useWorkflowStore()
+const graphStore = useWorkflowGraphStore()
 const debugStore = useWorkflowDebugStore()
 const { debugActiveTab, debugLoadingNodeId } = storeToRefs(debugStore)
 const activeNode = computed(() => props.node)
 const nodeData = computed(() => activeNode.value?.data)
 const nodeType = computed(() => activeNode.value ? getBusinessNodeType(activeNode.value) : '')
 const { draft, meta, schema, schemaLoading, schemaError, candidateSlots, handleUpdate, handleValid } = usePanelController(activeNode)
+
+// ── 节点命名 ──────────────────────────────────────────────────────
+const titleEditing = ref(false)
+const titleDraft = ref('')
+
+watch(() => props.node?.id, () => { titleEditing.value = false })
+
+function startEditTitle() {
+  titleDraft.value = activeNode.value?.data.title ?? ''
+  titleEditing.value = true
+}
+
+function commitTitle() {
+  titleEditing.value = false
+  const node = activeNode.value
+  const next = titleDraft.value.trim()
+  if (!node || !next || next === node.data.title) return
+  graphStore.updateNode(node.id, n => ({ ...n, data: { ...n.data, title: next } }))
+}
+
+function cancelEditTitle() {
+  titleEditing.value = false
+}
+
+function onTitleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter') commitTitle()
+  if (e.key === 'Escape') cancelEditTitle()
+}
 
 const categoryLabel: Record<string, string> = {
   QUERY: '取数', COMPUTE: '计算', OUTPUT: '输出', GOVERNANCE: '治理', ANALYSIS: '分析',
@@ -65,25 +94,6 @@ const nodeCategoryColor = computed(() => categoryColor[meta.value?.category ?? '
 const mockInputRaw = ref('{}')
 const mockInputError = ref<string>()
 
-watch(() => activeNode.value?.data.mockInputs, (v) => {
-  mockInputRaw.value = v ? JSON.stringify(v, null, 2) : '{}'
-}, { immediate: true })
-
-function onMockInputChange(e: Event) {
-  const text = (e.target as HTMLTextAreaElement).value
-  mockInputRaw.value = text
-  mockInputError.value = undefined
-  try {
-    const parsed = JSON.parse(text)
-    if (activeNode.value) {
-      workflow.setNodeMockInputs(activeNode.value.id, parsed)
-    }
-  }
-  catch {
-    mockInputError.value = 'JSON 格式错误'
-  }
-}
-
 const isDebugLoading = computed(() => activeNode.value ? debugLoadingNodeId.value === activeNode.value.id : false)
 
 function handleRunNode() {
@@ -120,6 +130,52 @@ const upstreamFields = computed(() => {
   return upstream?.data.schema?.fields ?? []
 })
 
+/** 当前节点的所有直接上游节点（可能多个） */
+const upstreamNodes = computed(() => {
+  if (!activeNode.value) return []
+  const graphStore = useWorkflowGraphStore()
+  const edges = graphStore.edges.filter(e => e.target === activeNode.value!.id)
+  return edges.map(e => graphStore.getNodeById(e.source)).filter(Boolean)
+})
+
+/** 用户编辑 mock 时，将节点 title 反查为 nodeId 存储 */
+function onMockInputChange(e: Event) {
+  const text = (e.target as HTMLTextAreaElement).value
+  mockInputRaw.value = text
+  mockInputError.value = undefined
+  try {
+    const parsed = JSON.parse(text)
+    if (activeNode.value) {
+      // 尝试将 title 转回 nodeId
+      const graphStore = useWorkflowGraphStore()
+      const titleToId: Record<string, string> = {}
+      graphStore.nodes.forEach(n => { titleToId[n.data.title] = n.id })
+      const normalized: Record<string, unknown> = {}
+      for (const [key, val] of Object.entries(parsed)) {
+        normalized[titleToId[key] ?? key] = val
+      }
+      workflow.setNodeMockInputs(activeNode.value.id, normalized)
+    }
+  }
+  catch {
+    mockInputError.value = 'JSON 格式错误'
+  }
+}
+
+watch(() => activeNode.value?.data.mockInputs, (v) => {
+  const graphStore = useWorkflowGraphStore()
+  if (!v || Object.keys(v).length === 0) {
+    mockInputRaw.value = '{}'
+    return
+  }
+  const translated: Record<string, unknown> = {}
+  for (const [nodeId, val] of Object.entries(v)) {
+    const node = graphStore.getNodeById(nodeId)
+    translated[node ? node.data.title : nodeId] = val
+  }
+  mockInputRaw.value = JSON.stringify(translated, null, 2)
+}, { immediate: true })
+
 async function requestChartRecommend() {
   if (chartRecommendLoading.value || upstreamFields.value.length === 0) return
   chartRecommendLoading.value = true
@@ -149,7 +205,18 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
         <div class="ncp__header-left">
           <div class="ncp__cat-bar" />
           <div class="ncp__title-wrap">
-            <div class="ncp__title">{{ nodeData.title }}</div>
+            <div class="ncp__title-row">
+              <input
+                v-if="titleEditing"
+                v-model="titleDraft"
+                class="ncp__title-input"
+                autofocus
+                @blur="commitTitle"
+                @keydown="onTitleKeydown"
+              />
+              <div v-else class="ncp__title" :title="'点击重命名'" @click="startEditTitle">{{ nodeData.title }}</div>
+              <button v-if="!titleEditing" class="ncp__rename-btn" title="重命名节点" @click="startEditTitle">✎</button>
+            </div>
             <div class="ncp__meta">
               <span v-if="nodeCategoryLabel" class="ncp__category">{{ nodeCategoryLabel }}</span>
               <span class="ncp__type">{{ nodeType }}</span>
@@ -197,14 +264,26 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
         </template>
         <template v-if="debugActiveTab === 'input'">
           <div class="ncp__mock">
-            <div class="ncp__section-label">上游 Mock 输入</div>
-            <p class="ncp__mock-hint">填写 JSON，模拟上游节点的输出，格式为 <code>{ "nodeId": { "rows": [...] } }</code></p>
+            <div class="ncp__section-label">上游节点</div>
+            <div v-if="upstreamNodes.length === 0" class="ncp__mock-hint">当前节点无上游连接</div>
+            <div v-else class="ncp__upstream-list">
+              <div v-for="up in upstreamNodes" :key="up!.id" class="ncp__upstream-item">
+                <span class="ncp__upstream-name">{{ up!.data.title }}</span>
+                <span class="ncp__upstream-type">{{ up!.data.meta?.displayName ?? up!.data.type }}</span>
+                <span v-if="up!.data.schema?.fields?.length" class="ncp__upstream-fields">
+                  {{ up!.data.schema!.fields.map((f: any) => f.name ?? f.fieldId).join(', ') }}
+                </span>
+                <span v-else class="ncp__upstream-no-schema">未运行（字段待推断）</span>
+              </div>
+            </div>
+            <div class="ncp__section-label" style="margin-top: 12px">Mock 输入</div>
+            <p class="ncp__mock-hint">填写 JSON 模拟上游输出，可用节点名称作为 key：<code>{ "节点名称": { "rows": [...] } }</code></p>
             <textarea class="ncp__mock-textarea" :value="mockInputRaw" spellcheck="false" placeholder="{}" @input="onMockInputChange" />
             <div v-if="mockInputError" class="ncp__mock-error">{{ mockInputError }}</div>
           </div>
         </template>
         <template v-if="debugActiveTab === 'output'">
-          <NodeRunPanel :result="nodeData.debugResult" :loading="isDebugLoading" />
+          <NodeRunPanel :result="nodeData.debugResult" :loading="isDebugLoading" :node-type="nodeType" />
         </template>
       </div>
     </template>
@@ -221,7 +300,13 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
 .ncp__header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .ncp__cat-bar { width: 3px; height: 32px; border-radius: 2px; background: var(--cat, #64748b); flex-shrink: 0; }
 .ncp__title-wrap { min-width: 0; }
-.ncp__title { font-size: 14px; font-weight: 700; color: var(--iap-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ncp__title-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.ncp__title { font-size: 14px; font-weight: 700; color: var(--iap-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.ncp__title:hover { color: var(--iap-text-accent); }
+.ncp__title-input { font-size: 14px; font-weight: 700; color: var(--iap-text-primary); background: var(--iap-input-bg-focus, #f8fafc); border: 1px solid var(--iap-input-border-focus); border-radius: 6px; padding: 1px 6px; outline: none; min-width: 0; flex: 1; max-width: 180px; }
+.ncp__rename-btn { display: grid; place-items: center; width: 18px; height: 18px; border: none; background: transparent; color: var(--iap-text-tertiary); cursor: pointer; border-radius: 4px; font-size: 12px; flex-shrink: 0; opacity: 0; transition: opacity 0.15s; padding: 0; }
+.ncp__title-wrap:hover .ncp__rename-btn { opacity: 1; }
+.ncp__rename-btn:hover { color: var(--iap-text-accent); background: color-mix(in srgb, var(--iap-text-accent) 10%, transparent); }
 .ncp__meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
 .ncp__category { font-size: 10px; font-weight: 700; color: var(--cat, #64748b); background: color-mix(in srgb, var(--cat, #64748b) 12%, transparent); border: 1px solid color-mix(in srgb, var(--cat, #64748b) 30%, transparent); border-radius: 4px; padding: 1px 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
 .ncp__type { font-size: 11px; color: var(--iap-text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -245,6 +330,12 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
 .ncp__mock-textarea { width: 100%; min-height: 160px; resize: vertical; background: var(--iap-code-bg); border: 1px solid var(--iap-input-border); border-radius: 8px; padding: 10px 12px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: var(--iap-text-secondary); line-height: 1.6; outline: none; transition: border-color 0.15s, box-shadow 0.15s; box-sizing: border-box; }
 .ncp__mock-textarea:focus { border-color: var(--iap-input-border-focus); box-shadow: 0 0 0 3px var(--iap-accent-ring); }
 .ncp__mock-error { font-size: 11px; color: var(--iap-error-text); }
+.ncp__upstream-list { display: flex; flex-direction: column; gap: 6px; }
+.ncp__upstream-item { padding: 8px 10px; border: 1px solid var(--iap-divider); border-radius: 8px; background: var(--iap-surface-secondary); display: grid; gap: 3px; }
+.ncp__upstream-name { font-size: 12px; font-weight: 600; color: var(--iap-text-primary); }
+.ncp__upstream-type { font-size: 11px; color: var(--iap-text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.ncp__upstream-fields { font-size: 11px; color: var(--iap-text-accent); word-break: break-all; line-height: 1.5; }
+.ncp__upstream-no-schema { font-size: 11px; color: var(--iap-text-disabled); font-style: italic; }
 .ncp__empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--iap-text-placeholder); font-size: 13px; }
 .ncp__empty-icon { font-size: 28px; color: var(--iap-text-disabled); }
 .ncp__code-summary { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--iap-divider); border-radius: 10px; background: var(--iap-code-bg); }

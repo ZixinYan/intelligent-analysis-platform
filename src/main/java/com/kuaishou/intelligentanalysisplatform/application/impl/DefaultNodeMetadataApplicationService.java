@@ -186,6 +186,18 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                             candidate("sales_amount", 0.97, "table default column"),
                             candidate("order_count", 0.95, "table default column"))));
         }
+        // Compute nodes: return upstream fields as candidates for each field picker slot
+        if (NodeType.AGGREGATE.getCode().equals(nodeType)
+                || NodeType.FILTER.getCode().equals(nodeType)
+                || NodeType.SORT.getCode().equals(nodeType)
+                || NodeType.FORMULA.getCode().equals(nodeType)
+                || NodeType.PIVOT.getCode().equals(nodeType)
+                || NodeType.TIME_SERIES_COMPUTE.getCode().equals(nodeType)) {
+            if (hasUpstreamFields) {
+                return buildComputeNodeCandidates(nodeType, upstreamFields);
+            }
+            return List.of();
+        }
         throw new BaseBusinessException(ErrorCode.NODE_NOT_FOUND, "mapping candidates not found");
     }
 
@@ -735,6 +747,70 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 .category(NodeCategory.COMPUTE)
                 .description("聚合计算节点")
                 .tags(List.of("aggregate", "compute"))
+                .defaults(Map.of())
+                .configSchema(NodeConfigSchemaDTO.builder()
+                        .schemaType("panel")
+                        .schemaVersion("1.0")
+                        .panelId("analysis.aggregate")
+                        .layout(Map.of("type", "section-list"))
+                        .sections(List.of(
+                                PanelSectionDTO.builder()
+                                        .key("groupBy")
+                                        .title("分组字段")
+                                        .order(1)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("groupByFields")
+                                                        .label("GROUP BY 字段")
+                                                        .componentType(FieldComponentType.FIELD_MULTI_SELECTOR)
+                                                        .required(false)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.ARRAY_STRING)
+                                                        .placeholder("选择分组字段（可多选）")
+                                                        .build()))
+                                        .build(),
+                                PanelSectionDTO.builder()
+                                        .key("metrics")
+                                        .title("聚合指标")
+                                        .order(2)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("metricField")
+                                                        .label("聚合字段")
+                                                        .componentType(FieldComponentType.FIELD_PICKER)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("选择聚合字段")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择聚合字段").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("aggregateFunc")
+                                                        .label("聚合函数")
+                                                        .componentType(FieldComponentType.SELECT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(2)
+                                                        .valueType(ValueType.STRING)
+                                                        .defaultValue("SUM")
+                                                        .options(List.of(
+                                                                OptionDTO.builder().value("SUM").label("SUM（求和）").build(),
+                                                                OptionDTO.builder().value("COUNT").label("COUNT（计数）").build(),
+                                                                OptionDTO.builder().value("AVG").label("AVG（平均值）").build(),
+                                                                OptionDTO.builder().value("MAX").label("MAX（最大值）").build(),
+                                                                OptionDTO.builder().value("MIN").label("MIN（最小值）").build()))
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择聚合函数").build()))
+                                                        .build()))
+                                        .build()))
+                        .rules(List.of())
+                        .build())
                 .inputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("数据集").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .outputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("聚合结果").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .capabilities(List.of(NodeCapabilityDTO.builder().code("COMPUTE_AGGREGATE").name("聚合计算").build()))
@@ -751,6 +827,84 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 .category(NodeCategory.COMPUTE)
                 .description("同比环比等时序计算节点")
                 .tags(List.of("time-series", "compute"))
+                .defaults(Map.of("computeType", "YOY", "timeGrain", "DAY"))
+                .configSchema(NodeConfigSchemaDTO.builder()
+                        .schemaType("panel")
+                        .schemaVersion("1.0")
+                        .panelId("analysis.time-series-compute")
+                        .layout(Map.of("type", "section-list"))
+                        .sections(List.of(
+                                PanelSectionDTO.builder()
+                                        .key("basic")
+                                        .title("时序配置")
+                                        .order(1)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("timeField")
+                                                        .label("时间字段")
+                                                        .componentType(FieldComponentType.FIELD_PICKER)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("选择时间维度字段")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择时间字段").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("metricField")
+                                                        .label("指标字段")
+                                                        .componentType(FieldComponentType.FIELD_PICKER)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(2)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("选择数值指标字段")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择指标字段").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("computeType")
+                                                        .label("计算类型")
+                                                        .componentType(FieldComponentType.SELECT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(3)
+                                                        .valueType(ValueType.STRING)
+                                                        .defaultValue("YOY")
+                                                        .options(List.of(
+                                                                OptionDTO.builder().value("YOY").label("同比（Year-over-Year）").build(),
+                                                                OptionDTO.builder().value("MOM").label("环比（Month-over-Month）").build(),
+                                                                OptionDTO.builder().value("DOD").label("日环比（Day-over-Day）").build(),
+                                                                OptionDTO.builder().value("CUMSUM").label("累计求和").build()))
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择计算类型").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("timeGrain")
+                                                        .label("时间粒度")
+                                                        .componentType(FieldComponentType.SELECT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(4)
+                                                        .valueType(ValueType.STRING)
+                                                        .defaultValue("DAY")
+                                                        .options(List.of(
+                                                                OptionDTO.builder().value("DAY").label("日").build(),
+                                                                OptionDTO.builder().value("WEEK").label("周").build(),
+                                                                OptionDTO.builder().value("MONTH").label("月").build(),
+                                                                OptionDTO.builder().value("QUARTER").label("季度").build(),
+                                                                OptionDTO.builder().value("YEAR").label("年").build()))
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择时间粒度").build()))
+                                                        .build()))
+                                        .build()))
+                        .rules(List.of())
+                        .build())
                 .inputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("数据集").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .outputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("时序结果").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .capabilities(List.of(NodeCapabilityDTO.builder().code("COMPUTE_TIME_SERIES").name("时序计算").build()))
@@ -767,6 +921,79 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 .category(NodeCategory.COMPUTE)
                 .description("透视计算节点")
                 .tags(List.of("pivot", "compute"))
+                .defaults(Map.of("aggregateFunc", "SUM"))
+                .configSchema(NodeConfigSchemaDTO.builder()
+                        .schemaType("panel")
+                        .schemaVersion("1.0")
+                        .panelId("analysis.pivot")
+                        .layout(Map.of("type", "section-list"))
+                        .sections(List.of(
+                                PanelSectionDTO.builder()
+                                        .key("pivot")
+                                        .title("透视配置")
+                                        .order(1)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("rowFields")
+                                                        .label("行维度")
+                                                        .componentType(FieldComponentType.FIELD_MULTI_SELECTOR)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.ARRAY_STRING)
+                                                        .placeholder("选择行维度字段")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择至少一个行维度").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("columnField")
+                                                        .label("列维度")
+                                                        .componentType(FieldComponentType.FIELD_PICKER)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(2)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("选择列维度字段（值将展开为列）")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择列维度").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("valueField")
+                                                        .label("值字段")
+                                                        .componentType(FieldComponentType.FIELD_PICKER)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(3)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("选择聚合值字段")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择值字段").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("aggregateFunc")
+                                                        .label("聚合函数")
+                                                        .componentType(FieldComponentType.SELECT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(4)
+                                                        .valueType(ValueType.STRING)
+                                                        .defaultValue("SUM")
+                                                        .options(List.of(
+                                                                OptionDTO.builder().value("SUM").label("SUM（求和）").build(),
+                                                                OptionDTO.builder().value("COUNT").label("COUNT（计数）").build(),
+                                                                OptionDTO.builder().value("AVG").label("AVG（平均值）").build(),
+                                                                OptionDTO.builder().value("MAX").label("MAX（最大值）").build(),
+                                                                OptionDTO.builder().value("MIN").label("MIN（最小值）").build()))
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择聚合函数").build()))
+                                                        .build()))
+                                        .build()))
+                        .rules(List.of())
+                        .build())
                 .inputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("数据集").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .outputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("透视结果").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .capabilities(List.of(NodeCapabilityDTO.builder().code("COMPUTE_PIVOT").name("透视计算").build()))
@@ -783,6 +1010,69 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 .category(NodeCategory.COMPUTE)
                 .description("过滤节点")
                 .tags(List.of("filter", "compute"))
+                .defaults(Map.of("operator", "EQ"))
+                .configSchema(NodeConfigSchemaDTO.builder()
+                        .schemaType("panel")
+                        .schemaVersion("1.0")
+                        .panelId("analysis.filter")
+                        .layout(Map.of("type", "section-list"))
+                        .sections(List.of(
+                                PanelSectionDTO.builder()
+                                        .key("filter")
+                                        .title("过滤条件")
+                                        .order(1)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("filterField")
+                                                        .label("过滤字段")
+                                                        .componentType(FieldComponentType.FIELD_PICKER)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("选择用于过滤的字段")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择过滤字段").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("operator")
+                                                        .label("运算符")
+                                                        .componentType(FieldComponentType.SELECT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(2)
+                                                        .valueType(ValueType.STRING)
+                                                        .defaultValue("EQ")
+                                                        .options(List.of(
+                                                                OptionDTO.builder().value(ConditionOperator.EQ.name()).label("等于").build(),
+                                                                OptionDTO.builder().value(ConditionOperator.NEQ.name()).label("不等于").build(),
+                                                                OptionDTO.builder().value(ConditionOperator.GT.name()).label("大于").build(),
+                                                                OptionDTO.builder().value(ConditionOperator.GTE.name()).label("大于等于").build(),
+                                                                OptionDTO.builder().value(ConditionOperator.LT.name()).label("小于").build(),
+                                                                OptionDTO.builder().value(ConditionOperator.LTE.name()).label("小于等于").build(),
+                                                                OptionDTO.builder().value(ConditionOperator.CONTAINS.name()).label("包含").build(),
+                                                                OptionDTO.builder().value(ConditionOperator.NOT_CONTAINS.name()).label("不包含").build(),
+                                                                OptionDTO.builder().value(ConditionOperator.IS_EMPTY.name()).label("为空").build(),
+                                                                OptionDTO.builder().value(ConditionOperator.IS_NOT_EMPTY.name()).label("不为空").build()))
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择运算符").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("filterValue")
+                                                        .label("过滤值")
+                                                        .componentType(FieldComponentType.INPUT)
+                                                        .required(false)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(3)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("IS_EMPTY / IS_NOT_EMPTY 无需填写")
+                                                        .build()))
+                                        .build()))
+                        .rules(List.of())
+                        .build())
                 .inputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("数据集").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .outputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("过滤结果").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .capabilities(List.of(NodeCapabilityDTO.builder().code("COMPUTE_FILTER").name("过滤计算").build()))
@@ -799,6 +1089,63 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 .category(NodeCategory.COMPUTE)
                 .description("排序节点")
                 .tags(List.of("sort", "compute"))
+                .defaults(Map.of("sortOrder", "ASC", "limit", 0))
+                .configSchema(NodeConfigSchemaDTO.builder()
+                        .schemaType("panel")
+                        .schemaVersion("1.0")
+                        .panelId("analysis.sort")
+                        .layout(Map.of("type", "section-list"))
+                        .sections(List.of(
+                                PanelSectionDTO.builder()
+                                        .key("sort")
+                                        .title("排序配置")
+                                        .order(1)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("sortField")
+                                                        .label("排序字段")
+                                                        .componentType(FieldComponentType.FIELD_PICKER)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("选择排序字段")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择排序字段").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("sortOrder")
+                                                        .label("排序方向")
+                                                        .componentType(FieldComponentType.SELECT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(2)
+                                                        .valueType(ValueType.STRING)
+                                                        .defaultValue("ASC")
+                                                        .options(List.of(
+                                                                OptionDTO.builder().value("ASC").label("升序（ASC）").build(),
+                                                                OptionDTO.builder().value("DESC").label("降序（DESC）").build()))
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择排序方向").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("limit")
+                                                        .label("取 TOP N（0 表示不限制）")
+                                                        .componentType(FieldComponentType.NUMBER_INPUT)
+                                                        .required(false)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(3)
+                                                        .valueType(ValueType.INTEGER)
+                                                        .defaultValue(0)
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("min").min(0).message("不能为负数").build()))
+                                                        .build()))
+                                        .build()))
+                        .rules(List.of())
+                        .build())
                 .inputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("数据集").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .outputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("排序结果").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .capabilities(List.of(NodeCapabilityDTO.builder().code("COMPUTE_SORT").name("排序计算").build()))
@@ -815,6 +1162,49 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 .category(NodeCategory.COMPUTE)
                 .description("派生指标节点")
                 .tags(List.of("formula", "compute"))
+                .defaults(Map.of())
+                .configSchema(NodeConfigSchemaDTO.builder()
+                        .schemaType("panel")
+                        .schemaVersion("1.0")
+                        .panelId("analysis.formula")
+                        .layout(Map.of("type", "section-list"))
+                        .sections(List.of(
+                                PanelSectionDTO.builder()
+                                        .key("formula")
+                                        .title("派生字段")
+                                        .order(1)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("outputField")
+                                                        .label("新字段名称")
+                                                        .componentType(FieldComponentType.INPUT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("如 profit_margin")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请填写新字段名称").build(),
+                                                                ValidationRuleDTO.builder().type("maxLength").maxLength(64).message("字段名最长 64 字符").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("expression")
+                                                        .label("计算表达式")
+                                                        .componentType(FieldComponentType.TEXTAREA)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(2)
+                                                        .valueType(ValueType.STRING)
+                                                        .placeholder("如 sales_amount / order_count")
+                                                        .description("支持四则运算及字段引用，字段名直接输入即可")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请填写计算表达式").build()))
+                                                        .build()))
+                                        .build()))
+                        .rules(List.of())
+                        .build())
                 .inputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("数据集").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .outputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("派生结果").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .capabilities(List.of(NodeCapabilityDTO.builder().code("COMPUTE_FORMULA").name("公式计算").build()))
@@ -1235,6 +1625,58 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 .score(score)
                 .reason(reason)
                 .build();
+    }
+
+    private List<FieldCandidateSlotDTO> buildComputeNodeCandidates(String nodeType, List<FieldSchemaDTO> upstreamFields) {
+        List<FieldMappingCandidateDTO> allCandidates = upstreamFields.stream()
+                .map(f -> candidate(f.getName(), 1.0, "upstream field"))
+                .toList();
+        List<FieldMappingCandidateDTO> metricCandidates = upstreamFields.stream()
+                .filter(f -> f.getSemanticType() == FieldSemanticType.METRIC
+                        || f.getValueType() == ValueType.INTEGER
+                        || f.getValueType() == ValueType.LONG
+                        || f.getValueType() == ValueType.DECIMAL)
+                .map(f -> candidate(f.getName(), 1.0, "metric field"))
+                .toList();
+        List<FieldMappingCandidateDTO> timeCandidates = upstreamFields.stream()
+                .filter(f -> f.getSemanticType() == FieldSemanticType.TIME_DIMENSION
+                        || f.getValueType() == ValueType.DATE
+                        || f.getValueType() == ValueType.DATETIME)
+                .map(f -> candidate(f.getName(), 1.0, "time field"))
+                .toList();
+        if (!metricCandidates.isEmpty() && timeCandidates.isEmpty()) {
+            timeCandidates = allCandidates;
+        }
+        if (!timeCandidates.isEmpty() && metricCandidates.isEmpty()) {
+            metricCandidates = allCandidates;
+        }
+
+        if (NodeType.AGGREGATE.getCode().equals(nodeType)) {
+            return List.of(
+                    buildSlot("groupByFields", false, List.of("ANY"), List.of("GROUPABLE"), allCandidates),
+                    buildSlot("metricField", true, List.of("ANY"), List.of("AGGREGATABLE"), metricCandidates.isEmpty() ? allCandidates : metricCandidates));
+        }
+        if (NodeType.FILTER.getCode().equals(nodeType)) {
+            return List.of(buildSlot("filterField", true, List.of("ANY"), List.of("SELECTABLE"), allCandidates));
+        }
+        if (NodeType.SORT.getCode().equals(nodeType)) {
+            return List.of(buildSlot("sortField", true, List.of("ANY"), List.of("SELECTABLE"), allCandidates));
+        }
+        if (NodeType.FORMULA.getCode().equals(nodeType)) {
+            return List.of();
+        }
+        if (NodeType.PIVOT.getCode().equals(nodeType)) {
+            return List.of(
+                    buildSlot("rowFields", true, List.of("ANY"), List.of("GROUPABLE"), allCandidates),
+                    buildSlot("columnField", true, List.of("ANY"), List.of("GROUPABLE"), allCandidates),
+                    buildSlot("valueField", true, List.of("ANY"), List.of("AGGREGATABLE"), metricCandidates.isEmpty() ? allCandidates : metricCandidates));
+        }
+        if (NodeType.TIME_SERIES_COMPUTE.getCode().equals(nodeType)) {
+            return List.of(
+                    buildSlot("timeField", true, List.of("ANY"), List.of("X_AXIS_CANDIDATE"), timeCandidates.isEmpty() ? allCandidates : timeCandidates),
+                    buildSlot("metricField", true, List.of("ANY"), List.of("AGGREGATABLE"), metricCandidates.isEmpty() ? allCandidates : metricCandidates));
+        }
+        return List.of();
     }
 
     private NodeMetaDTO buildDataJoinDefinition() {

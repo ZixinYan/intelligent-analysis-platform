@@ -13,16 +13,20 @@ import NodePalette from './NodePalette.vue'
 import NodeInsertPicker from './NodeInsertPicker.vue'
 import VersionHistoryPanel from './VersionHistoryPanel.vue'
 import TriggerPanel from './TriggerPanel.vue'
+import WorkflowRunPanel from './WorkflowRunPanel.vue'
 import WorkflowNodeRenderer from './WorkflowNodeRenderer.vue'
 import WorkflowNodePanelRenderer from './WorkflowNodePanelRenderer.vue'
 import WorkflowInsertEdge from './WorkflowInsertEdge.vue'
 import AiWorkflowDialog from '@/components/ai/AiWorkflowDialog.vue'
-import { useWorkflowStore, useWorkflowGraphStore } from '@/stores/workflow'
+import { storeToRefs } from 'pinia'
+import { useWorkflowStore, useWorkflowGraphStore, useWorkflowDebugStore } from '@/stores/workflow'
 import type { WorkflowNode } from '@/types/workflow'
 import { getBusinessNodeType } from '@/adapters/workflow-graph'
 
 const workflow = useWorkflowStore()
 const graphStore = useWorkflowGraphStore()
+const debugStore = useWorkflowDebugStore()
+const { isStreaming } = storeToRefs(debugStore)
 const nodes = computed(() => graphStore.nodes)
 const edges = computed(() => graphStore.edges)
 const selectedNode = computed(() => graphStore.selectedNode)
@@ -44,7 +48,7 @@ const RIGHT_PANEL_MIN_WIDTH = 280
 const RIGHT_PANEL_HANDLE_WIDTH = 10
 const CANVAS_MIN_WIDTH = 520
 
-type RightPanel = 'config' | 'versions' | 'triggers'
+type RightPanel = 'config' | 'versions' | 'triggers' | 'run'
 const rightPanel = ref<RightPanel>('config')
 const rightPanelVisible = ref(true)
 const rightPanelWidth = ref(RIGHT_PANEL_DEFAULT_WIDTH)
@@ -300,6 +304,16 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
         触发器
       </button>
       <button
+        class="workflow-editor__button"
+        :class="{ 'workflow-editor__button--run': rightPanel === 'run' || isStreaming, 'workflow-editor__button--active': rightPanel === 'run' }"
+        :disabled="!workflowId"
+        @click="togglePanel('run')"
+      >
+        <span v-if="isStreaming" class="workflow-editor__run-spinner" />
+        <span v-else>▷</span>
+        运行
+      </button>
+      <button
         class="workflow-editor__button workflow-editor__button--icon"
         :title="rightPanelVisible ? '隐藏右侧面板' : '显示右侧面板'"
         @click="rightPanelVisible = !rightPanelVisible"
@@ -364,6 +378,9 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
     </div>
     <aside v-if="rightPanelVisible" class="workflow-editor__side-panel">
       <WorkflowNodePanelRenderer v-if="rightPanel === 'config'" :node="selectedNode" />
+      <WorkflowRunPanel
+        v-else-if="rightPanel === 'run'"
+      />
       <VersionHistoryPanel
         v-else-if="rightPanel === 'versions' && workflowId"
         :workflow-id="workflowId"
@@ -514,6 +531,20 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
 .workflow-editor--resizing .workflow-editor__resizer-line {
   background: var(--iap-input-border-focus);
 }
+.workflow-editor__button--run {
+  border-color: var(--iap-btn-primary-bg, #296dff);
+  color: var(--iap-btn-primary-bg, #296dff);
+}
+.workflow-editor__run-spinner {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 2px solid rgba(41, 109, 255, 0.25);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: wf-spin 0.7s linear infinite;
+}
+@keyframes wf-spin { to { transform: rotate(360deg); } }
 .workflow-editor__side-panel {
   min-width: 0;
   height: 100%;

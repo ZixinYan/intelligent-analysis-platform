@@ -19,9 +19,16 @@ import { useWorkflowGraphStore } from './workflowGraph'
 export { useWorkflowDefinitionStore, useWorkflowGraphStore, useWorkflowDebugStore }
 
 type WorkflowStoreFacade =
-  ReturnType<typeof useWorkflowDefinitionStore> &
-  ReturnType<typeof useWorkflowGraphStore> &
-  ReturnType<typeof useWorkflowDebugStore>
+  Omit<ReturnType<typeof useWorkflowDefinitionStore>, '$id' | 'hydrate'> &
+  Omit<ReturnType<typeof useWorkflowGraphStore>, '$id' | 'onNodeClick' | 'setViewport' | 'serialize'> &
+  Omit<ReturnType<typeof useWorkflowDebugStore>, '$id'> &
+  {
+    $id: string
+    hydrate: (definition: WorkflowDefinitionDTO) => void
+    onNodeClick: (payload: { node: WorkflowNode }) => void
+    serialize: () => ReturnType<ReturnType<typeof useWorkflowGraphStore>['serialize']>
+    setViewport: (nextViewport: WorkflowViewport) => void
+  }
 
 export function useWorkflowStore(): WorkflowStoreFacade {
   const def = useWorkflowDefinitionStore()
@@ -53,5 +60,5 @@ export function useWorkflowStore(): WorkflowStoreFacade {
     graph.setViewport(nextViewport, def.workflowId)
   }
 
-  return { ...def, ...graph, ...debug, onNodeClick, hydrate, serialize, setViewport, reset: def.reset } as WorkflowStoreFacade
+  return { ...def, ...graph, ...debug, onNodeClick, hydrate, serialize, setViewport, reset: def.reset } as unknown as WorkflowStoreFacade
 }

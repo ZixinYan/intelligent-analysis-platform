@@ -10,6 +10,8 @@ const props = defineProps<{
   loading?: boolean
   /** 流式执行时的当前节点状态（useWorkflowStream 提供） */
   streamState?: StreamNodeState
+  /** 当前节点类型，用于决定结果的渲染方式 */
+  nodeType?: string
 }>()
 
 // ---- 同步执行路径 ----
@@ -140,7 +142,11 @@ const streamingMode = computed(() => !!props.streamState)
 
         <!-- DATASET / TABLE / CHART 结果 -->
         <div v-if="(resultKind === 'DATASET' || resultKind === 'TABLE' || resultKind === 'CHART') && standardResult" class="nrp__result-block">
-          <OutputRenderer :result="standardResult" mode="preview" />
+          <template v-if="nodeType === 'sql_query' && (resultKind === 'DATASET' || resultKind === 'TABLE')">
+            <div class="nrp__section-label">原始输出数据</div>
+            <pre class="nrp__json">{{ JSON.stringify(standardResult, null, 2) }}</pre>
+          </template>
+          <OutputRenderer v-else :result="standardResult" mode="preview" />
         </div>
 
         <!-- VARIABLES result -->

@@ -67,17 +67,17 @@ async function handleSchema() {
     <div class="node-debug-panel__actions">
       <button
         v-if="businessNodeType === 'sql_query'"
-        :disabled="!canDebugSqlQuery || debug.loading"
+        :disabled="!canDebugSqlQuery || debug.loading.value"
         :title="debugDisabledReason"
         @click="handleValidate"
       >
-        {{ debug.loading ? '校验中...' : 'Validate' }}
+        {{ debug.loading.value ? '校验中...' : 'Validate' }}
       </button>
       <button
-        :disabled="debug.loading"
+        :disabled="debug.loading.value"
         @click="handleSchema"
       >
-        {{ debug.loading ? '推断中...' : 'Schema' }}
+        {{ debug.loading.value ? '推断中...' : 'Schema' }}
       </button>
     </div>
     <div v-if="debug.error" class="node-debug-panel__error">{{ debug.error }}</div>
