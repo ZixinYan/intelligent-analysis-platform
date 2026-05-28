@@ -25,16 +25,39 @@ const previewRendererResult = computed<StandardResultDTO | QueryResultDTO | unde
 })
 const { loadCandidates } = useMappingCandidates(activeNode)
 
+// Check if SQL Query node has required configuration
+const canDebugSqlQuery = computed(() => {
+  if (businessNodeType.value !== 'sql_query') return true
+  const config = nodeData.value.config
+  const hasDatasource = config.datasourceId && String(config.datasourceId).trim() !== ''
+  const hasSql = config.sqlTemplate && String(config.sqlTemplate).trim() !== ''
+  return hasDatasource && hasSql
+})
+
+const debugDisabledReason = computed(() => {
+  if (businessNodeType.value !== 'sql_query') return ''
+  const config = nodeData.value.config
+  if (!config.datasourceId || String(config.datasourceId).trim() === '') {
+    return '请先选择数据源'
+  }
+  if (!config.sqlTemplate || String(config.sqlTemplate).trim() === '') {
+    return '请先输入SQL语句'
+  }
+  return ''
+})
+
 watch(() => nodeData.value.config.chartType, () => {
   loadCandidates().catch(() => undefined)
 })
 
 async function handleValidate() {
+  if (!canDebugSqlQuery.value) return
   await debug.runValidate(activeNode.value)
   workflow.updateNodeStatus(activeNode.value.id, validationResult.value?.valid ? 'valid' : 'error')
 }
 
 async function handlePreview() {
+  if (!canDebugSqlQuery.value) return
   const result = await debug.runPreview(activeNode.value)
   const nextStatus = result.status === 'SUCCEEDED'
     ? 'success'
@@ -55,10 +78,32 @@ async function handleSchema() {
 <template>
   <section class="node-debug-panel">
     <header class="node-debug-panel__header">调试</header>
+    <div v-if="debugDisabledReason" class="node-debug-panel__warning">
+      {{ debugDisabledReason }}
+    </div>
     <div class="node-debug-panel__actions">
-      <button v-if="businessNodeType === 'sql_query'" @click="handleValidate">Validate</button>
-      <button v-if="businessNodeType === 'sql_query'" @click="handlePreview">Preview</button>
-      <button @click="handleSchema">Schema</button>
+      <button
+        v-if="businessNodeType === 'sql_query'"
+        :disabled="!canDebugSqlQuery || debug.loading"
+        :title="debugDisabledReason"
+        @click="handleValidate"
+      >
+        {{ debug.loading ? '校验中...' : 'Validate' }}
+      </button>
+      <button
+        v-if="businessNodeType === 'sql_query'"
+        :disabled="!canDebugSqlQuery || debug.loading"
+        :title="debugDisabledReason"
+        @click="handlePreview"
+      >
+        {{ debug.loading ? '预览中...' : 'Preview' }}
+      </button>
+      <button
+        :disabled="debug.loading"
+        @click="handleSchema"
+      >
+        {{ debug.loading ? '推断中...' : 'Schema' }}
+      </button>
     </div>
     <div v-if="debug.error" class="node-debug-panel__error">{{ debug.error }}</div>
     <div v-if="validationResult" class="node-debug-panel__block">
@@ -86,6 +131,14 @@ async function handleSchema() {
 .node-debug-panel__header {
   font-weight: 700;
 }
+.node-debug-panel__warning {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+  font-size: 12px;
+}
 .node-debug-panel__actions {
   display: flex;
   gap: 8px;
@@ -97,6 +150,15 @@ async function handleSchema() {
   color: inherit;
   padding: 8px 10px;
   cursor: pointer;
+  transition: all 0.2s ease;
+}
+.node-debug-panel__actions button:hover:not(:disabled) {
+  background: #1e293b;
+  border-color: #475569;
+}
+.node-debug-panel__actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .node-debug-panel__block {
   display: grid;
@@ -105,6 +167,10 @@ async function handleSchema() {
   font-size: 12px;
 }
 .node-debug-panel__error {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
   color: #fca5a5;
   font-size: 12px;
 }

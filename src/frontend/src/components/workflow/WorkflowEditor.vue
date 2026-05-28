@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { VueFlow, SelectionMode } from '@vue-flow/core'
@@ -37,9 +37,18 @@ const workflowList = computed(() => workflow.workflowList)
 const loading = computed(() => workflow.loading)
 const viewport = computed(() => workflow.viewport)
 
+const LEFT_PANEL_WIDTH = 280
+const RIGHT_PANEL_DEFAULT_WIDTH = 360
+const RIGHT_PANEL_MIN_WIDTH = 280
+const RIGHT_PANEL_HANDLE_WIDTH = 10
+const CANVAS_MIN_WIDTH = 520
+
 type RightPanel = 'config' | 'versions' | 'triggers'
 const rightPanel = ref<RightPanel>('config')
 const rightPanelVisible = ref(true)
+const rightPanelWidth = ref(RIGHT_PANEL_DEFAULT_WIDTH)
+const isResizingPanel = ref(false)
+const editorRef = ref<HTMLElement | null>(null)
 const showAiDialog = ref(false)
 const insertTrigger = ref<WorkflowInsertTrigger | null>(null)
 const insertPickerVisible = ref(false)
@@ -73,6 +82,68 @@ const defaultEdgeOptions = ref({
   style: { stroke: '#296dff', strokeWidth: 2 },
 })
 
+const panelLayoutStyle = computed(() => ({
+  '--workflow-right-panel-width': rightPanelVisible.value ? `${rightPanelWidth.value}px` : '0px',
+  '--workflow-right-panel-handle-width': rightPanelVisible.value ? `${RIGHT_PANEL_HANDLE_WIDTH}px` : '0px',
+}))
+
+let resizeStartX = 0
+let resizeStartWidth = RIGHT_PANEL_DEFAULT_WIDTH
+
+function getAvailableRightPanelWidth() {
+  const editorWidth = editorRef.value?.clientWidth ?? 0
+  const availableWidth = editorWidth - LEFT_PANEL_WIDTH - RIGHT_PANEL_HANDLE_WIDTH - CANVAS_MIN_WIDTH
+  return Math.max(0, availableWidth)
+}
+
+function getMinRightPanelWidth() {
+  const availableWidth = getAvailableRightPanelWidth()
+  if (availableWidth >= RIGHT_PANEL_MIN_WIDTH) {
+    return RIGHT_PANEL_MIN_WIDTH
+  }
+  return Math.max(0, Math.min(RIGHT_PANEL_DEFAULT_WIDTH, availableWidth))
+}
+
+function getMaxRightPanelWidth() {
+  const availableWidth = getAvailableRightPanelWidth()
+  return Math.max(getMinRightPanelWidth(), availableWidth)
+}
+
+function clampRightPanelWidth(nextWidth: number) {
+  const minWidth = getMinRightPanelWidth()
+  const maxWidth = getMaxRightPanelWidth()
+  return Math.min(Math.max(nextWidth, minWidth), maxWidth)
+}
+
+function stopPanelResize() {
+  isResizingPanel.value = false
+  window.removeEventListener('pointermove', handlePanelResize)
+  window.removeEventListener('pointerup', stopPanelResize)
+  window.removeEventListener('pointercancel', stopPanelResize)
+}
+
+function handlePanelResize(event: PointerEvent) {
+  if (!isResizingPanel.value) {
+    return
+  }
+  const delta = event.clientX - resizeStartX
+  rightPanelWidth.value = clampRightPanelWidth(resizeStartWidth - delta)
+}
+
+function startPanelResize(event: PointerEvent) {
+  if (!rightPanelVisible.value) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  resizeStartX = event.clientX
+  resizeStartWidth = rightPanelWidth.value
+  isResizingPanel.value = true
+  window.addEventListener('pointermove', handlePanelResize)
+  window.addEventListener('pointerup', stopPanelResize)
+  window.addEventListener('pointercancel', stopPanelResize)
+}
+
 function shouldIgnoreDeleteShortcut(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
     return false
@@ -94,15 +165,30 @@ function handleWindowKeydown(event: KeyboardEvent) {
   if (shouldIgnoreDeleteShortcut(event.target)) {
     return
   }
+  // Check if there's actually something selected to delete
+  const hasSelection = workflow.selectedNodeIds.length > 0 || workflow.selectedEdgeIds.length > 0
+  if (!hasSelection) {
+    return
+  }
   event.preventDefault()
+  event.stopPropagation()
   workflow.deleteSelection()
 }
 
 let themeObserver: MutationObserver | undefined
 
+watch(editorRef, async (element) => {
+  if (!element) {
+    return
+  }
+  await nextTick()
+  rightPanelWidth.value = clampRightPanelWidth(rightPanelWidth.value)
+}, { flush: 'post' })
+
 onMounted(() => {
   workflow.loadList().catch(() => undefined)
   updateWorkflowThemeVars()
+  rightPanelWidth.value = clampRightPanelWidth(RIGHT_PANEL_DEFAULT_WIDTH)
   themeObserver = new MutationObserver(() => updateWorkflowThemeVars())
   themeObserver.observe(document.documentElement, {
     attributes: true,
@@ -114,6 +200,7 @@ onMounted(() => {
 onUnmounted(() => {
   themeObserver?.disconnect()
   window.removeEventListener('keydown', handleWindowKeydown)
+  stopPanelResize()
 })
 
 function handleAddNode(meta: NodeMetaDTO) {
@@ -170,7 +257,15 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
 </script>
 
 <template>
-  <div class="workflow-editor" :class="{ 'workflow-editor--panel-hidden': !rightPanelVisible }">
+  <div
+    ref="editorRef"
+    class="workflow-editor"
+    :class="{
+      'workflow-editor--panel-hidden': !rightPanelVisible,
+      'workflow-editor--resizing': isResizingPanel,
+    }"
+    :style="panelLayoutStyle"
+  >
     <header class="workflow-editor__toolbar">
       <input v-model="workflowName" class="workflow-editor__name-input" placeholder="工作流名称" />
       <button class="workflow-editor__button workflow-editor__button--primary" :disabled="saving" @click="workflow.save()">
@@ -255,28 +350,46 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
         <Controls />
       </VueFlow>
     </div>
-    <WorkflowNodePanelRenderer v-if="rightPanelVisible && rightPanel === 'config'" :node="selectedNode" />
-    <VersionHistoryPanel
-      v-else-if="rightPanelVisible && rightPanel === 'versions' && workflowId"
-      :workflow-id="workflowId"
-      @rollback="workflow.load(workflowId!)"
-    />
-    <TriggerPanel
-      v-else-if="rightPanelVisible && rightPanel === 'triggers' && workflowId"
-      :workflow-id="workflowId"
-    />
+    <div
+      v-if="rightPanelVisible"
+      class="workflow-editor__resizer"
+      role="separator"
+      aria-label="调整右侧面板宽度"
+      aria-orientation="vertical"
+      @pointerdown="startPanelResize"
+    >
+      <span class="workflow-editor__resizer-line" />
+    </div>
+    <aside v-if="rightPanelVisible" class="workflow-editor__side-panel">
+      <WorkflowNodePanelRenderer v-if="rightPanel === 'config'" :node="selectedNode" />
+      <VersionHistoryPanel
+        v-else-if="rightPanel === 'versions' && workflowId"
+        :workflow-id="workflowId"
+        @rollback="workflow.load(workflowId!)"
+      />
+      <TriggerPanel
+        v-else-if="rightPanel === 'triggers' && workflowId"
+        :workflow-id="workflowId"
+      />
+    </aside>
   </div>
 </template>
 
 <style scoped>
 .workflow-editor {
+  --workflow-right-panel-width: 360px;
+  --workflow-right-panel-handle-width: 10px;
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 280px 1fr 360px;
+  grid-template-columns: 280px minmax(0, 1fr) var(--workflow-right-panel-handle-width) var(--workflow-right-panel-width);
   grid-template-rows: auto 1fr;
 }
 .workflow-editor--panel-hidden {
-  grid-template-columns: 280px 1fr 0px;
+  grid-template-columns: 280px minmax(0, 1fr) 0px 0px;
+}
+.workflow-editor--resizing {
+  user-select: none;
+  cursor: col-resize;
 }
 .workflow-editor__toolbar {
   grid-column: 1 / -1;
@@ -376,8 +489,33 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
 }
 .workflow-editor__canvas {
   position: relative;
+  min-width: 0;
   background: var(--iap-canvas-bg);
   background-image: var(--iap-canvas-overlay);
+}
+.workflow-editor__resizer {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+.workflow-editor__resizer-line {
+  width: 1px;
+  height: 100%;
+  background: var(--iap-divider);
+  transition: background 0.15s ease;
+}
+.workflow-editor__resizer:hover .workflow-editor__resizer-line,
+.workflow-editor--resizing .workflow-editor__resizer-line {
+  background: var(--iap-input-border-focus);
+}
+.workflow-editor__side-panel {
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 :deep(.vue-flow__pane) {

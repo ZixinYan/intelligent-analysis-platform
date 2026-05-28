@@ -15,6 +15,12 @@ const client = axios.create({
 })
 
 client.interceptors.response.use((response) => response, (error) => {
+  // Extract error message from API response
+  if (error.response?.data?.message) {
+    const apiError = new Error(error.response.data.message)
+    apiError.name = error.response.data.code || 'ApiError'
+    return Promise.reject(apiError)
+  }
   return Promise.reject(error)
 })
 

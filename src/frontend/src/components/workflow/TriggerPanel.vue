@@ -76,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import type { TriggerDTO, TriggerType } from '@/types/contract'
 import {
   listTriggers,
@@ -158,6 +158,11 @@ function formatTime(ts: number) {
   return new Date(ts).toLocaleString()
 }
 
+watch(() => props.workflowId, () => {
+  showCreateModal.value = false
+  load()
+})
+
 onMounted(load)
 </script>
 
@@ -167,10 +172,12 @@ onMounted(load)
   flex-direction: column;
   gap: 8px;
   padding: 12px;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  box-sizing: border-box;
   background: #fff;
   border-left: 1px solid #e5e7eb;
-  min-width: 280px;
-  max-height: 100%;
   overflow-y: auto;
 }
 .panel-header {

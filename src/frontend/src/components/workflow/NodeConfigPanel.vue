@@ -216,7 +216,7 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
 </template>
 
 <style scoped>
-.ncp { display: flex; flex-direction: column; height: 100%; border-left: 1px solid var(--iap-divider); background: var(--iap-panel-bg); overflow: hidden; }
+.ncp { display: flex; flex-direction: column; width: 100%; min-width: 0; height: 100%; border-left: 1px solid var(--iap-divider); background: var(--iap-panel-bg); overflow: hidden; }
 .ncp__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 12px; border-bottom: 1px solid var(--iap-divider); flex-shrink: 0; background: var(--iap-panel-bg); }
 .ncp__header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .ncp__cat-bar { width: 3px; height: 32px; border-radius: 2px; background: var(--cat, #64748b); flex-shrink: 0; }
