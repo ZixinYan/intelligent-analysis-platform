@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
-import { VueFlow, SelectionMode } from '@vue-flow/core'
+import { VueFlow, SelectionMode, ConnectionMode } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -167,7 +167,7 @@ function handleWindowKeydown(event: KeyboardEvent) {
     return
   }
   // Check if there's actually something selected to delete
-  const hasSelection = workflow.selectedNodeIds.length > 0 || workflow.selectedEdgeIds.length > 0
+  const hasSelection = graphStore.selectedNodeIds.length > 0 || graphStore.selectedEdgeIds.length > 0
   if (!hasSelection) {
     return
   }
@@ -334,6 +334,7 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
         :selection-mode="SelectionMode.Partial as any"
         :multi-selection-key-code="['Meta', 'Control']"
         :delete-key-code="null"
+        :connection-mode="ConnectionMode.Strict"
         @nodes-change="workflow.onNodesChange"
         @edges-change="workflow.onEdgesChange"
         @connect="workflow.onConnect"
