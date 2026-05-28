@@ -7,7 +7,7 @@ import QueryActionsBar from '@/components/query/QueryActionsBar.vue'
 import AiRecommendBadge from '@/components/ai/AiRecommendBadge.vue'
 import type { WorkflowNode } from '@/types/workflow'
 import { usePanelController } from '@/composables/usePanelController'
-import { useWorkflowStore } from '@/stores/workflow'
+import { useWorkflowStore, useWorkflowDebugStore } from '@/stores/workflow'
 import { recommendChart } from '@/api/ai'
 import type { ChartRecommendationDTO } from '@/types/contract'
 import { getBusinessNodeType } from '@/adapters/workflow-graph'
@@ -17,7 +17,8 @@ const props = defineProps<{
 }>()
 
 const workflow = useWorkflowStore()
-const { debugActiveTab, debugLoadingNodeId } = storeToRefs(workflow)
+const debugStore = useWorkflowDebugStore()
+const { debugActiveTab, debugLoadingNodeId } = storeToRefs(debugStore)
 const activeNode = computed(() => props.node)
 const nodeData = computed(() => activeNode.value?.data)
 const nodeType = computed(() => activeNode.value ? getBusinessNodeType(activeNode.value) : '')
