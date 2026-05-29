@@ -35,7 +35,7 @@ function toWorkflowNode(definition: WorkflowDefinitionDTO, node: WorkflowDefinit
   const config = (node.config ?? {}) as Record<string, unknown>
   const metadata = node.metadata
   const meta = metadata && typeof metadata === 'object' && 'nodeType' in metadata && 'displayName' in metadata
-    ? metadata as import('@/types/contract').NodeMetaDTO
+    ? { ...(metadata as import('@/types/contract').NodeMetaDTO), configSchema: undefined }
     : undefined
   const position = definition.positions?.[node.nodeId] ?? DEFAULT_NODE_POSITION
   const rawType = toRawNodeType(node.nodeType || meta?.nodeType || '')
