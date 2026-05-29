@@ -11,6 +11,7 @@ export const ANALYSIS_NODE_TYPES = {
   PIVOT:        'analysis-pivot',
   CHART_OUTPUT: 'analysis-chart-output',
   TABLE_OUTPUT: 'analysis-table-output',
+  DATA_JOIN:    'data_join',
 } as const
 
 export type AnalysisNodeType = typeof ANALYSIS_NODE_TYPES[keyof typeof ANALYSIS_NODE_TYPES]

@@ -34,6 +34,8 @@ const { visible, disabled } = useFieldState(props.field, () => props.model)
       :disabled="disabled"
       :candidates="candidates"
       :schema="model.__schema"
+      :left-fields="(model.__leftFields as string[] | undefined)"
+      :right-fields="(model.__rightFields as string[] | undefined)"
       @update:model-value="emit('update:modelValue', $event)"
     />
     <div v-if="field.description" class="field-renderer__description">{{ field.description }}</div>

@@ -15,5 +15,6 @@ public enum FieldComponentType {
     DATASET_MAPPING,
     CHART_MAPPING,
     TABLE_MAPPING,
-    OUTPUT_VAR_LIST
+    OUTPUT_VAR_LIST,
+    JOIN_CONDITION_LIST
 }

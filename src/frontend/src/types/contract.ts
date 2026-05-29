@@ -241,6 +241,7 @@ export type FieldComponentType =
   | 'FIELD_MULTI_SELECTOR'
   | 'DATASOURCE_SELECT'
   | 'OUTPUT_VAR_LIST'
+  | 'JOIN_CONDITION_LIST'
 
 export type ConditionOperator = 'EQ' | 'NE' | 'IN' | 'NOT_IN' | 'GT' | 'LT' | 'CONTAINS' | 'IS_EMPTY' | 'IS_NOT_EMPTY'
 

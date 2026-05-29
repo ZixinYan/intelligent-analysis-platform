@@ -1779,6 +1779,61 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 .category(NodeCategory.COMPUTE)
                 .description("跨数据源 JOIN 节点，支持 INNER/LEFT/RIGHT/FULL JOIN；同源数据集自动下推 SQL JOIN")
                 .tags(List.of("join", "compute", "cross-source"))
+                .defaults(Map.of("joinType", "INNER"))
+                .configSchema(NodeConfigSchemaDTO.builder()
+                        .schemaType("panel")
+                        .schemaVersion("1.0")
+                        .panelId("analysis.data-join")
+                        .layout(Map.of("type", "section-list"))
+                        .sections(List.of(
+                                PanelSectionDTO.builder()
+                                        .key("join")
+                                        .title("JOIN 配置")
+                                        .order(1)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("joinType")
+                                                        .label("JOIN 类型")
+                                                        .componentType(FieldComponentType.SELECT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.STRING)
+                                                        .defaultValue("INNER")
+                                                        .options(List.of(
+                                                                OptionDTO.builder().value("INNER").label("INNER JOIN").build(),
+                                                                OptionDTO.builder().value("LEFT").label("LEFT JOIN").build(),
+                                                                OptionDTO.builder().value("RIGHT").label("RIGHT JOIN").build(),
+                                                                OptionDTO.builder().value("FULL").label("FULL JOIN").build()))
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择 JOIN 类型").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("on")
+                                                        .label("JOIN 条件")
+                                                        .componentType(FieldComponentType.JOIN_CONDITION_LIST)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(2)
+                                                        .description("指定左表与右表的关联字段（可添加多个条件，AND 关系）")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请至少配置一个 JOIN 条件").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("selectColumns")
+                                                        .label("输出字段")
+                                                        .componentType(FieldComponentType.FIELD_MULTI_SELECTOR)
+                                                        .required(false)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(3)
+                                                        .description("选择 JOIN 结果中需要保留的字段（留空表示保留全部字段）")
+                                                        .build()))
+                                        .build()))
+                        .rules(List.of())
+                        .build())
                 .inputPorts(List.of(
                         NodePortMetaDTO.builder()
                                 .name("leftDataset")

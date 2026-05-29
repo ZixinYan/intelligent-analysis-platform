@@ -16,6 +16,7 @@ export const NodeComponentMap = {
   table_output: AnalysisNodeShell,
   condition: AnalysisNodeShell,
   iteration: AnalysisNodeShell,
+  data_join: AnalysisNodeShell,
 } as const
 
 export const PanelComponentMap = {
@@ -31,6 +32,7 @@ export const PanelComponentMap = {
   table_output: NodeConfigPanel,
   condition: NodeConfigPanel,
   iteration: NodeConfigPanel,
+  data_join: NodeConfigPanel,
 } as const
 
 export function resolveNodeComponent(node: { data: unknown }) {

@@ -22,7 +22,7 @@ function applyDefaults(config: Record<string, unknown>, schema?: NodeConfigSchem
 }
 
 function sanitizeDraftValue(value: Record<string, unknown>) {
-  return Object.fromEntries(Object.entries(value).filter(([key]) => key !== '__schema'))
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !key.startsWith('__')))
 }
 
 export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | undefined>) {
@@ -96,12 +96,51 @@ export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | unde
     }
     await ensureMeta(node)
     currentStatus.value = node.data.status === 'error' ? 'error' : 'draft'
-    resetDraft(node.data.config ?? {}, schema.value)
+    let baseConfig: Record<string, unknown> = { ...(node.data.config ?? {}) }
+    if (getBusinessNodeType(node) === 'data_join') {
+      const { leftRef, rightRef, leftFields, rightFields } = resolveDataJoinInputs(node)
+      if (leftRef) baseConfig = { ...baseConfig, leftDatasetRef: leftRef }
+      if (rightRef) baseConfig = { ...baseConfig, rightDatasetRef: rightRef }
+      baseConfig.__leftFields = leftFields
+      baseConfig.__rightFields = rightFields
+      const refsChanged = (leftRef && node.data.config?.leftDatasetRef !== leftRef)
+        || (rightRef && node.data.config?.rightDatasetRef !== rightRef)
+      if (refsChanged) {
+        scheduleSync(node.id, sanitizeDraftValue(baseConfig), currentStatus.value)
+      }
+    }
+    resetDraft(baseConfig, schema.value)
     await loadCandidates()
     if (autoInferTimer) clearTimeout(autoInferTimer)
     autoInferTimer = setTimeout(() => {
       tryAutoInferSchema(node).catch(() => undefined)
     }, 500)
+  }
+
+  function getNodeFieldNames(node: WorkflowNode): string[] {
+    if (node.data.schema?.fields?.length) {
+      return node.data.schema.fields.map(f => f.name ?? f.fieldId ?? '').filter(Boolean)
+    }
+    const dataset = node.data.debugResult?.result?.dataset
+    if (dataset?.schema?.fields?.length) {
+      return dataset.schema.fields.map((f: { name?: string, fieldId?: string }) => f.name ?? f.fieldId ?? '').filter(Boolean)
+    }
+    if (dataset?.rows?.length) return Object.keys(dataset.rows[0])
+    return []
+  }
+
+  function resolveDataJoinInputs(node: WorkflowNode) {
+    const edges = graphStore.edges.filter(e => e.target === node.id)
+    const leftEdge = edges.find(e => e.targetHandle === 'leftDataset')
+    const rightEdge = edges.find(e => e.targetHandle === 'rightDataset')
+    const leftNode = leftEdge ? graphStore.getNodeById(leftEdge.source) : undefined
+    const rightNode = rightEdge ? graphStore.getNodeById(rightEdge.source) : undefined
+    return {
+      leftRef: leftEdge?.source,
+      rightRef: rightEdge?.source,
+      leftFields: leftNode ? getNodeFieldNames(leftNode) : [],
+      rightFields: rightNode ? getNodeFieldNames(rightNode) : [],
+    }
   }
 
   function syncNode(nextConfig: Record<string, unknown>) {
@@ -162,6 +201,19 @@ export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | unde
     return upstreams.map(u => u.data.schema?.schemaId).join(',')
   }, () => {
     loadCandidates().catch(() => undefined)
+  })
+
+  // data_join 节点：监听连边变化，自动刷新 leftDatasetRef / rightDatasetRef
+  watch(() => {
+    const node = toValue(nodeRef)
+    if (!node || getBusinessNodeType(node) !== 'data_join') return undefined
+    return graphStore.edges
+      .filter(e => e.target === node.id)
+      .map(e => `${e.source}:${e.targetHandle ?? ''}`)
+      .sort()
+      .join(',')
+  }, async () => {
+    await refresh()
   })
 
   return {
