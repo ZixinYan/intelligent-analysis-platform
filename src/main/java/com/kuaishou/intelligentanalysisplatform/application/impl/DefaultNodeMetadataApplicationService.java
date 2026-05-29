@@ -815,7 +815,7 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                                         .build()))
                         .rules(List.of())
                         .build())
-                .inputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("数据集").valueType(ValueType.DATASET).required(true).multiple(false).build()))
+                .inputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("数据集（支持多个）").valueType(ValueType.DATASET).required(true).multiple(true).build()))
                 .outputPorts(List.of(NodePortMetaDTO.builder().name("dataset").label("聚合结果").valueType(ValueType.DATASET).required(true).multiple(false).build()))
                 .capabilities(List.of(NodeCapabilityDTO.builder().code("COMPUTE_AGGREGATE").name("聚合计算").build()))
                 .build();

@@ -76,13 +76,22 @@ public class AggregateNodeExecutor implements NodeExecutor<AggregateNodeConfigDT
     public NodeResultDTO execute(NodeExecuteContextDTO context, AggregateNodeConfigDTO config) {
         long start = System.currentTimeMillis();
         AggregateNodeConfigDTO normalized = normalizeMetrics(config);
-        DatasetDTO input = computeDatasetResolver.resolve(normalized.getDatasetRef(), context.getUpstreamResults());
 
-        DatasourceType dsType = resolveDatasourceType(input, context);
-        boolean pushdown = pushdownDecider.canPushdown(capabilityRegistry.getByCode("aggregate"), input, dsType);
+        // 解析所有上游数据集；若指定了 datasetRef 则只取该节点的数据集
+        List<DatasetDTO> allInputs = computeDatasetResolver.resolveAll(normalized.getDatasetRef(), context.getUpstreamResults());
+        // 多数据集时合并（UNION ALL），单数据集直接使用
+        DatasetDTO input = computeDatasetResolver.mergeDatasets(allInputs);
+
+        // 多数据集合并后无法下推（来源不同），强制走内存计算
+        boolean pushdown = false;
+        if (allInputs.size() == 1) {
+            DatasourceType dsType = resolveDatasourceType(input, context);
+            pushdown = pushdownDecider.canPushdown(capabilityRegistry.getByCode("aggregate"), input, dsType);
+        }
 
         DatasetDTO output;
         if (pushdown) {
+            DatasourceType dsType = resolveDatasourceType(input, context);
             DatasourceDialect dialect = DatasourceDialect.from(dsType);
             String pushdownSql = aggregateSqlGenerator.generate(input.getSourceSql(), normalized, dialect);
             QueryRequestDTO queryReq = buildPushdownRequest(input.getSourceDatasourceId(), pushdownSql, context);

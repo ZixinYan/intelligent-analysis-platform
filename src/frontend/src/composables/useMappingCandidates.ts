@@ -108,14 +108,19 @@ export function useMappingCandidates(
     // 取第一个有 schema 的上游节点用于后端 API 调用
     const upstreamWithSchema = upstreamNodes.find(u => u.data.schema?.fields?.length)
     if (upstreamWithSchema?.data.schema?.fields) {
-      // 合并所有上游的 schema fields
-      const mergedFields = Array.from(
-        new Map(
-          upstreamNodes
-            .flatMap(u => u.data.schema?.fields ?? [])
-            .map(f => [f.name ?? f.fieldId ?? '', f]),
-        ).values(),
-      ).filter(f => f.name ?? f.fieldId)
+      // 合并所有上游的 schema fields（优先使用 schema 中的类型信息）
+      const schemaFieldMap = new Map(
+        upstreamNodes
+          .flatMap(u => u.data.schema?.fields ?? [])
+          .map(f => [f.name ?? f.fieldId ?? '', f]),
+      )
+      // 将 allFieldNames 中有但 schema 没有的字段也补充进来（来自 debugResult/sqlTemplate）
+      for (const fieldName of allFieldNames) {
+        if (fieldName && !schemaFieldMap.has(fieldName)) {
+          schemaFieldMap.set(fieldName, { name: fieldName, fieldId: fieldName, valueType: 'STRING' as const, nullable: true, displayName: fieldName })
+        }
+      }
+      const mergedFields = Array.from(schemaFieldMap.values()).filter(f => f.name ?? f.fieldId)
 
       loading.value = true
       const currentRequestId = ++requestId
@@ -131,7 +136,7 @@ export function useMappingCandidates(
               renderer,
               upstreamFields: mergedFields,
             })
-            if (currentRequestId === requestId) {
+            if (currentRequestId === requestId && result.length > 0) {
               candidateSlots.value = result
               return
             }
