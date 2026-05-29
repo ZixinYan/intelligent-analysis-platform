@@ -420,6 +420,7 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
   border-bottom: 1px solid var(--iap-divider);
   background: var(--iap-toolbar-bg);
   backdrop-filter: blur(18px);
+  overflow-x: auto;
 }
 .workflow-editor__name-input,
 .workflow-editor__select {
@@ -430,6 +431,7 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
   padding: 10px 14px;
   outline: none;
   box-shadow: var(--iap-select-shadow);
+  flex-shrink: 0;
 }
 .workflow-editor__name-input:hover,
 .workflow-editor__select:hover {
@@ -473,6 +475,8 @@ function handleViewportChange(payload: { x: number; y: number; zoom: number }) {
   color: var(--iap-btn-secondary-text);
   padding: 10px 14px;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .workflow-editor__button:hover:not(:disabled) {
   background: var(--iap-btn-secondary-hover);
