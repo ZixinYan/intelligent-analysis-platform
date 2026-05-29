@@ -5,11 +5,15 @@ import java.util.Map;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorInfoDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ExecutionStatus;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.ai.AiClarificationQuestionDTO;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.NoArgsConstructor;
 import lombok.Data;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class AsyncTaskStatusDTO {
     private String taskId;
     private String agentTaskId;

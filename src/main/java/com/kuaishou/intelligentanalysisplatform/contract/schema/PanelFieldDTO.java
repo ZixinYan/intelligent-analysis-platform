@@ -6,11 +6,15 @@ import java.util.Map;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.FieldComponentType;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.FieldSemanticType;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ValueType;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class PanelFieldDTO {
     private String field;
     private String label;
