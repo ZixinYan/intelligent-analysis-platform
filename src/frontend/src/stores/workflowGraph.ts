@@ -390,6 +390,13 @@ export const useWorkflowGraphStore = defineStore('workflowGraph', () => {
     return graph.value.nodes.find(item => item.id === edge.source)
   }
 
+  function getUpstreamNodes(nodeId: string) {
+    const sourceIds = graph.value.edges
+      .filter(item => item.target === nodeId)
+      .map(item => item.source)
+    return graph.value.nodes.filter(item => sourceIds.includes(item.id))
+  }
+
   function buildUpstreamInputs(nodeId: string): Record<string, unknown> {
     const collected: Record<string, unknown> = {}
     for (const edge of graph.value.edges) {
@@ -453,6 +460,7 @@ export const useWorkflowGraphStore = defineStore('workflowGraph', () => {
     getNodeById,
     getEdgeById,
     getUpstreamNode,
+    getUpstreamNodes,
     propagateSchemaFrom,
     buildUpstreamInputs,
     serialize,

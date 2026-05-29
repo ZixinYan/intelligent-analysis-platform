@@ -13,6 +13,8 @@ import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorInfoDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ExecutionStatus;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.BaseNodeConfigDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasetSchemaDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.FieldSchemaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeDebugRequestDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeRunMetaDTO;
@@ -61,6 +63,7 @@ public class NodeExecuteDispatcher {
             NodeResultDTO result = execute(executor, context, config);
             result.setNodeId(nodeId);
             result.setNodeType(nodeType);
+            injectDeclaredOutputSchema(config, result);
             long elapsed = System.currentTimeMillis() - start;
             if (result.getMeta() == null) {
                 result.setMeta(NodeRunMetaDTO.builder().elapsedMs(elapsed).build());
@@ -231,5 +234,33 @@ public class NodeExecuteDispatcher {
                 .nodeId(nodeId)
                 .retryable(false)
                 .build();
+    }
+
+    /**
+     * 若节点 config 声明了输出字段（outputs），将其注入到执行结果的 dataset.schema，
+     * 使下游节点无需推断即可获取用户定义的字段名与类型。
+     */
+    private void injectDeclaredOutputSchema(BaseNodeConfigDTO config, NodeResultDTO result) {
+        if (config.getOutputs() == null || config.getOutputs().isEmpty()) {
+            return;
+        }
+        if (result.getResult() == null || result.getResult().getDataset() == null) {
+            return;
+        }
+        List<FieldSchemaDTO> fields = config.getOutputs().stream()
+                .filter(o -> o.getName() != null && !o.getName().isBlank())
+                .map(o -> FieldSchemaDTO.builder()
+                        .fieldId(o.getName())
+                        .name(o.getName())
+                        .displayName(o.getLabel() != null && !o.getLabel().isBlank()
+                                ? o.getLabel() : o.getName())
+                        .valueType(o.getValueType())
+                        .nullable(true)
+                        .build())
+                .toList();
+        if (!fields.isEmpty()) {
+            result.getResult().getDataset().setSchema(
+                    DatasetSchemaDTO.builder().fields(fields).build());
+        }
     }
 }

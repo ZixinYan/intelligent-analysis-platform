@@ -3,8 +3,8 @@ import { getNodeDefinition } from '@/api/node-definition'
 import { buildQueryRequest } from '@/composables/useNodeDebug'
 import { inferQuerySchema } from '@/api/query'
 import { useMappingCandidates } from '@/composables/useMappingCandidates'
-import { useWorkflowStore } from '@/stores/workflow'
-import type { NodeConfigSchemaDTO, NodeMetaDTO } from '@/types/contract'
+import { useWorkflowStore, useWorkflowGraphStore } from '@/stores/workflow'
+import type { NodeConfigSchemaDTO, NodeMetaDTO, SchemaFieldDTO, ValueType } from '@/types/contract'
 import type { WorkflowNode } from '@/types/workflow'
 import { debounce } from '@/utils/debounce'
 import { getBusinessNodeType } from '@/adapters/workflow-graph'
@@ -27,6 +27,7 @@ function sanitizeDraftValue(value: Record<string, unknown>) {
 
 export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | undefined>) {
   const workflow = useWorkflowStore()
+  const graphStore = useWorkflowGraphStore()
   const draft = reactive<Record<string, unknown>>({})
   const schema = ref<NodeConfigSchemaDTO>()
   const meta = ref<NodeMetaDTO>()
@@ -115,6 +116,33 @@ export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | unde
     Object.keys(draft).forEach(key => delete draft[key])
     Object.assign(draft, value, { __schema: schema.value })
     syncNode(sanitizeDraftValue({ ...draft }))
+    if (Array.isArray(value.outputs)) {
+      syncOutputsToNodeSchema(value.outputs as Array<Record<string, unknown>>)
+    }
+  }
+
+  function syncOutputsToNodeSchema(outputs: Array<Record<string, unknown>>) {
+    const node = toValue(nodeRef)
+    if (!node) return
+    const fields: SchemaFieldDTO[] = outputs
+      .filter(o => typeof o.name === 'string' && (o.name as string).trim())
+      .map(o => ({
+        fieldId: o.name as string,
+        name: o.name as string,
+        displayName: (typeof o.label === 'string' && o.label.trim()) ? o.label : o.name as string,
+        valueType: (o.valueType as ValueType) ?? 'STRING',
+        nullable: true,
+      }))
+    if (fields.length === 0) return
+    const newSchema = {
+      protocolVersion: '1',
+      schemaId: `declared-${node.id}`,
+      schemaVersion: '1',
+      kind: 'DATASET',
+      fields,
+    }
+    graphStore.updateNodeSchema(node.id, newSchema)
+    graphStore.propagateSchemaFrom(node.id, false)
   }
 
   function handleValid(nextValid: boolean) {
@@ -129,8 +157,9 @@ export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | unde
   watch(() => {
     const node = toValue(nodeRef)
     if (!node) return undefined
-    const upstream = workflow.getUpstreamNode(node.id)
-    return upstream?.data.schema?.schemaId
+    const upstreams = graphStore.getUpstreamNodes(node.id)
+    // 监听所有上游节点的 schemaId，任意一个变化都触发 candidates 刷新
+    return upstreams.map(u => u.data.schema?.schemaId).join(',')
   }, () => {
     loadCandidates().catch(() => undefined)
   })

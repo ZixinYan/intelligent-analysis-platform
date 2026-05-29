@@ -126,8 +126,15 @@ watch(() => activeNode.value?.id, () => {
 
 const upstreamFields = computed(() => {
   if (!activeNode.value) return []
-  const upstream = workflow.getUpstreamNode(activeNode.value.id)
-  return upstream?.data.schema?.fields ?? []
+  const upstreams = graphStore.getUpstreamNodes(activeNode.value.id)
+  // 合并所有上游节点的字段（去重）
+  const seen = new Set<string>()
+  return upstreams.flatMap(u => u.data.schema?.fields ?? []).filter((f) => {
+    const key = f.name ?? f.fieldId ?? ''
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 })
 
 /** 当前节点的所有直接上游节点（可能多个） */
@@ -329,11 +336,15 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
             <div v-if="upstreamNodes.length === 0" class="ncp__mock-hint">当前节点无上游连接</div>
             <div v-else class="ncp__upstream-list">
               <div v-for="up in upstreamNodes" :key="up!.id" class="ncp__upstream-item">
-                <span class="ncp__upstream-name">{{ up!.data.title }}</span>
-                <span class="ncp__upstream-type">{{ up!.data.meta?.displayName ?? up!.data.type }}</span>
-                <span v-if="up!.data.schema?.fields?.length" class="ncp__upstream-fields">
-                  {{ up!.data.schema!.fields.map((f: any) => f.name ?? f.fieldId).join(', ') }}
-                </span>
+                <div class="ncp__upstream-header">
+                  <span class="ncp__upstream-name">{{ up!.data.title }}</span>
+                  <span class="ncp__upstream-type">{{ up!.data.meta?.displayName ?? up!.data.type }}</span>
+                </div>
+                <div v-if="up!.data.schema?.fields?.length" class="ncp__upstream-chips">
+                  <span v-for="f in up!.data.schema!.fields" :key="f.name ?? f.fieldId" class="ncp__field-chip">
+                    {{ f.name ?? f.fieldId }}
+                  </span>
+                </div>
                 <span v-else class="ncp__upstream-no-schema">未运行（字段待推断）</span>
               </div>
             </div>
@@ -416,11 +427,13 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
 .ncp__mock-textarea { width: 100%; min-height: 160px; resize: vertical; background: var(--iap-code-bg); border: 1px solid var(--iap-input-border); border-radius: 8px; padding: 10px 12px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: var(--iap-text-secondary); line-height: 1.6; outline: none; transition: border-color 0.15s, box-shadow 0.15s; box-sizing: border-box; }
 .ncp__mock-textarea:focus { border-color: var(--iap-input-border-focus); box-shadow: 0 0 0 3px var(--iap-accent-ring); }
 .ncp__mock-error { font-size: 11px; color: var(--iap-error-text); }
-.ncp__upstream-list { display: flex; flex-direction: column; gap: 6px; }
-.ncp__upstream-item { padding: 8px 10px; border: 1px solid var(--iap-divider); border-radius: 8px; background: var(--iap-surface-secondary); display: grid; gap: 3px; }
+.ncp__upstream-list { display: flex; flex-direction: column; gap: 8px; }
+.ncp__upstream-item { padding: 10px 12px; border: 1px solid var(--iap-divider); border-radius: 10px; background: var(--iap-surface-secondary); display: flex; flex-direction: column; gap: 6px; }
+.ncp__upstream-header { display: flex; align-items: center; gap: 8px; }
 .ncp__upstream-name { font-size: 12px; font-weight: 600; color: var(--iap-text-primary); }
-.ncp__upstream-type { font-size: 11px; color: var(--iap-text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
-.ncp__upstream-fields { font-size: 11px; color: var(--iap-text-accent); word-break: break-all; line-height: 1.5; }
+.ncp__upstream-type { font-size: 10px; color: var(--iap-text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; background: color-mix(in srgb, var(--cat) 10%, var(--iap-surface-secondary)); border: 1px solid color-mix(in srgb, var(--cat) 20%, transparent); border-radius: 4px; padding: 1px 6px; }
+.ncp__upstream-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ncp__field-chip { display: inline-flex; align-items: center; font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--iap-text-accent); background: color-mix(in srgb, var(--iap-text-accent) 10%, transparent); border: 1px solid color-mix(in srgb, var(--iap-text-accent) 22%, transparent); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
 .ncp__upstream-no-schema { font-size: 11px; color: var(--iap-text-disabled); font-style: italic; }
 .ncp__empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--iap-text-placeholder); font-size: 13px; }
 .ncp__empty-icon { font-size: 28px; color: var(--iap-text-disabled); }

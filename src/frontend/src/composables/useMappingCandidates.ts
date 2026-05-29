@@ -1,7 +1,7 @@
 import { computed, ref, type MaybeRefOrGetter, toValue } from 'vue'
 import { getMappingCandidatesWithFields } from '@/api/node-definition'
 import { getBusinessNodeType } from '@/adapters/workflow-graph'
-import { useWorkflowStore } from '@/stores/workflow'
+import { useWorkflowGraphStore } from '@/stores/workflow'
 import type { FieldCandidateSlotDTO, NodeConfigSchemaDTO, PanelFieldDTO } from '@/types/contract'
 import type { WorkflowNode } from '@/types/workflow'
 
@@ -76,7 +76,7 @@ export function useMappingCandidates(
   nodeRef: MaybeRefOrGetter<WorkflowNode | undefined>,
   schemaRef?: MaybeRefOrGetter<NodeConfigSchemaDTO | undefined>,
 ) {
-  const workflow = useWorkflowStore()
+  const graphStore = useWorkflowGraphStore()
   const candidateSlots = ref<FieldCandidateSlotDTO[]>([])
   const loading = ref(false)
   let requestId = 0
@@ -88,22 +88,35 @@ export function useMappingCandidates(
       candidateSlots.value = []
       return
     }
-    const upstream = workflow.getUpstreamNode(node.id)
-    if (!upstream) {
+    const upstreamNodes = graphStore.getUpstreamNodes(node.id)
+    if (!upstreamNodes.length) {
       candidateSlots.value = []
       return
     }
 
-    const upstreamFieldNames = inferUpstreamFieldNames(upstream)
+    // 合并所有上游节点的字段名（去重）
+    const allFieldNames = Array.from(new Set(
+      upstreamNodes.flatMap(upstream => inferUpstreamFieldNames(upstream)),
+    ))
 
-    // 如果推断不出字段（上游完全没运行也没 SQL），清空候选
-    if (!upstreamFieldNames.length) {
+    if (!allFieldNames.length) {
       candidateSlots.value = []
       return
     }
 
-    // 当上游 schema 存在时，尝试后端 API（chart/table 节点需要智能排序）
-    if (upstream.data.schema?.fields?.length) {
+    // 当有任意上游 schema 存在时，尝试后端 API（chart/table 节点需要智能排序）
+    // 取第一个有 schema 的上游节点用于后端 API 调用
+    const upstreamWithSchema = upstreamNodes.find(u => u.data.schema?.fields?.length)
+    if (upstreamWithSchema?.data.schema?.fields) {
+      // 合并所有上游的 schema fields
+      const mergedFields = Array.from(
+        new Map(
+          upstreamNodes
+            .flatMap(u => u.data.schema?.fields ?? [])
+            .map(f => [f.name ?? f.fieldId ?? '', f]),
+        ).values(),
+      ).filter(f => f.name ?? f.fieldId)
+
       loading.value = true
       const currentRequestId = ++requestId
       try {
@@ -116,7 +129,7 @@ export function useMappingCandidates(
             const result = await getMappingCandidatesWithFields(businessNodeType, {
               nodeType: businessNodeType,
               renderer,
-              upstreamFields: upstream.data.schema.fields,
+              upstreamFields: mergedFields,
             })
             if (currentRequestId === requestId) {
               candidateSlots.value = result
@@ -135,7 +148,7 @@ export function useMappingCandidates(
 
     // 直接在前端从 schema 的 FIELD_PICKER 字段构造候选
     if (schema) {
-      candidateSlots.value = buildSlotsFromUpstreamSchema(schema, upstreamFieldNames)
+      candidateSlots.value = buildSlotsFromUpstreamSchema(schema, allFieldNames)
     }
   }
 
