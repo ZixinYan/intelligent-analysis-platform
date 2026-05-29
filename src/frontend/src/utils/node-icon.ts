@@ -28,6 +28,7 @@ const nodeTypeIcons: Record<string, AppIconName> = {
   chart_output: 'chart',
   table_output: 'table',
   condition: 'branch',
+  iteration: 'loop',
 }
 
 export function resolveNodeIconName(meta?: NodeMetaDTO, explicitType?: string): AppIconName {

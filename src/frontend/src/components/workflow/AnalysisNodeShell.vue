@@ -7,6 +7,7 @@ import type { WorkflowNodeData } from '@/types/workflow'
 import { getBusinessNodeType } from '@/adapters/workflow-graph'
 import { resolveNodeIconName } from '@/utils/node-icon'
 import { useWorkflowStore } from '@/stores/workflow'
+import { useWorkflowDebugStore } from '@/stores/workflowDebug'
 import { resolveRendererModel } from '@/components/output/renderer'
 import type { WorkflowInsertTrigger } from './insert-types'
 
@@ -24,6 +25,7 @@ type InsertTriggerInput =
   | Omit<Extract<WorkflowInsertTrigger, { kind: 'node-input' }>, 'anchor'>
 
 const workflow = useWorkflowStore()
+const debugStore = useWorkflowDebugStore()
 
 function handleRun() {
   workflow.runNodeDebug(props.id)
@@ -55,6 +57,7 @@ const categoryLabel = computed(() => ({
 const businessType = computed(() => getBusinessNodeType(props.data))
 const isConditionNode = computed(() => businessType.value === 'condition')
 const isCodeNode = computed(() => businessType.value === 'python_script' || businessType.value === 'java_code')
+const isIterationNode = computed(() => businessType.value === 'iteration')
 
 const statusConfig = computed(() => ({
   idle: { color: '#64748b', label: '就绪', dot: false },
@@ -130,6 +133,11 @@ const usageHints = computed<UsageHint[]>(() => {
       { label: '根据规则输出 true / false 分支', icon: 'branch' },
       { label: '下游按条件边继续编排', icon: 'play' },
     ],
+    iteration: [
+      { label: '对上游数组逐元素执行子图', icon: 'loop' },
+      { label: '通过 $item 引用当前迭代元素', icon: 'function' },
+      { label: '所有迭代结果合并为单个 Dataset', icon: 'table' },
+    ],
   }
   return hintMap[nodeType] ?? []
 })
@@ -139,6 +147,14 @@ const outputPorts = computed(() => props.data.meta?.outputPorts ?? [])
 const visibleTags = computed(() => (props.data.meta?.tags ?? []).slice(0, 3))
 const showTooltip = ref(false)
 const isOutputNode = computed(() => props.data.meta?.category === 'OUTPUT')
+const iterationProgress = computed(() => {
+  if (!isIterationNode.value || props.data.status !== 'running') return null
+  const state = debugStore.workflowNodeStates.get(props.id)
+  if (!state || state.iterationLength === undefined) return null
+  const done = state.iterationIndex !== undefined ? state.iterationIndex + 1 : 0
+  return { done, total: state.iterationLength }
+})
+
 const resultSummary = computed(() => {
   if (!isOutputNode.value || props.data.status !== 'success') return null
   const debugResult = props.data.debugResult
@@ -234,6 +250,14 @@ const resultSummary = computed(() => {
         </div>
       </div>
       <div class="ans__divider" />
+      <div v-if="iterationProgress" class="ans__iter-progress">
+        <span class="ans__iter-icon"><AppIcon name="loop" :size="13" /></span>
+        <span class="ans__iter-label">迭代进度</span>
+        <span class="ans__iter-count">{{ iterationProgress.done }} / {{ iterationProgress.total }}</span>
+        <div class="ans__iter-bar">
+          <div class="ans__iter-bar-fill" :style="{ width: `${Math.round(iterationProgress.done / iterationProgress.total * 100)}%` }" />
+        </div>
+      </div>
       <div v-if="data.preview?.length" class="ans__preview" :class="{ 'ans__preview--code': isCodeNode }">
         <div class="ans__section-label">当前配置</div>
         <div class="ans__preview-body">
@@ -336,4 +360,11 @@ const resultSummary = computed(() => {
 .ans__tag { border-radius: 999px; border: 1px solid var(--iap-divider); background: var(--iap-surface-secondary); color: var(--iap-text-secondary); font-size: 11px; padding: 3px 8px; }
 .ans__result-badge { display: flex; align-items: center; gap: 6px; margin: 0 14px 14px 18px; border-radius: 10px; border: 1px solid var(--iap-success-border); background: var(--iap-success-bg); color: var(--iap-success-text); padding: 8px 10px; font-size: 12px; font-weight: 600; }
 .ans__result-badge-icon { display: grid; place-items: center; }
+.ans__iter-progress { display: flex; align-items: center; gap: 6px; padding: 8px 14px 0 18px; }
+.ans__iter-icon { display: grid; place-items: center; color: var(--cat); }
+.ans__iter-label { font-size: 11px; color: var(--iap-text-tertiary); white-space: nowrap; }
+.ans__iter-count { font-size: 11px; font-weight: 700; color: var(--cat); margin-left: auto; white-space: nowrap; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.ans__iter-bar { width: 100%; height: 3px; border-radius: 999px; background: color-mix(in srgb, var(--cat) 15%, var(--iap-divider)); margin-top: 4px; grid-column: 1 / -1; flex-basis: 100%; }
+.ans__iter-progress { flex-wrap: wrap; }
+.ans__iter-bar-fill { height: 100%; border-radius: 999px; background: var(--cat); transition: width 0.3s ease; }
 </style>

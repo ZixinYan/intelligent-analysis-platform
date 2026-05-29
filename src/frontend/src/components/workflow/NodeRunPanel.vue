@@ -142,9 +142,9 @@ const streamingMode = computed(() => !!props.streamState)
 
         <!-- DATASET / TABLE / CHART 结果 -->
         <div v-if="(resultKind === 'DATASET' || resultKind === 'TABLE' || resultKind === 'CHART') && standardResult" class="nrp__result-block">
-          <template v-if="nodeType === 'sql_query' && (resultKind === 'DATASET' || resultKind === 'TABLE')">
-            <div class="nrp__section-label">原始输出数据</div>
-            <pre class="nrp__json">{{ JSON.stringify(standardResult, null, 2) }}</pre>
+          <template v-if="resultKind === 'DATASET' && standardResult.dataset?.rows">
+            <div class="nrp__section-label">输出数据（传给下游节点）</div>
+            <pre class="nrp__json">{{ JSON.stringify(standardResult.dataset.rows, null, 2) }}</pre>
           </template>
           <OutputRenderer v-else :result="standardResult" mode="preview" />
         </div>

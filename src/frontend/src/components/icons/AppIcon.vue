@@ -14,6 +14,7 @@ export type AppIconName =
   | 'filter'
   | 'function'
   | 'info'
+  | 'loop'
   | 'package'
   | 'pivot'
   | 'play'
@@ -67,6 +68,12 @@ const iconMap: Record<AppIconName, string[]> = {
   filter: ['M4.5 6.5h15l-6 6.25v4.75l-3-1.65v-3.1z'],
   function: ['M15.5 6h-4a2.5 2.5 0 0 0-2.5 2.5V18', 'M7.5 11.5h7'],
   info: ['M12 10.5v5', 'M12 7.5h.01', 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z'],
+  loop: [
+    'M4.5 9A7.5 7.5 0 0 1 19 9',
+    'M19.5 6v3h-3',
+    'M19.5 15A7.5 7.5 0 0 1 5 15',
+    'M4.5 18v-3h3',
+  ],
   package: [
     'm12 3 7 3.8v9.4L12 21l-7-8.8V6.8z',
     'M5 7.1 12 11l7-3.9',

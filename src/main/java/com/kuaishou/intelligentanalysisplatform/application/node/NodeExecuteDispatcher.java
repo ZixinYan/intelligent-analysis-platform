@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,6 +16,7 @@ import com.kuaishou.intelligentanalysisplatform.contract.schema.BaseNodeConfigDT
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeDebugRequestDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeRunMetaDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.RawNodeConfigDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.StandardResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.WorkflowNodeDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.spi.NodeExecuteContextDTO;
@@ -22,6 +24,7 @@ import com.kuaishou.intelligentanalysisplatform.contract.spi.NodeExecutor;
 import com.kuaishou.intelligentanalysisplatform.contract.spi.ValidationResultDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.ResolvableType;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -30,6 +33,8 @@ public class NodeExecuteDispatcher {
 
     private final NodeExecutorRegistry nodeExecutorRegistry;
     private final ObjectMapper objectMapper;
+    /** 缓存每个 executor 对应的 config 泛型类型，避免重复反射 */
+    private final ConcurrentHashMap<String, Class<?>> configClassCache = new ConcurrentHashMap<>();
 
     public NodeExecuteDispatcher(NodeExecutorRegistry nodeExecutorRegistry, ObjectMapper objectMapper) {
         this.nodeExecutorRegistry = nodeExecutorRegistry;
@@ -44,7 +49,8 @@ public class NodeExecuteDispatcher {
 
         try {
             NodeExecutor<? extends BaseNodeConfigDTO> executor = nodeExecutorRegistry.get(nodeType);
-            ValidationResultDTO validationResult = validate(executor, node.getConfig());
+            BaseNodeConfigDTO config = coerceConfig(executor, node.getConfig());
+            ValidationResultDTO validationResult = validate(executor, config);
             if (validationResult != null && !validationResult.isValid()) {
                 long elapsed = System.currentTimeMillis() - start;
                 logNodeExecution("node_dispatch_validation_failed", nodeId, nodeType,
@@ -52,7 +58,7 @@ public class NodeExecuteDispatcher {
                 return failed(node, context, start, new BaseBusinessException(ErrorCode.VALIDATION_FAILED,
                         validationResult.getErrorMessage()));
             }
-            NodeResultDTO result = execute(executor, context, node.getConfig());
+            NodeResultDTO result = execute(executor, context, config);
             result.setNodeId(nodeId);
             result.setNodeType(nodeType);
             long elapsed = System.currentTimeMillis() - start;
@@ -117,6 +123,27 @@ public class NodeExecuteDispatcher {
                                   NodeExecuteContextDTO context,
                                   BaseNodeConfigDTO config) {
         return ((NodeExecutor<BaseNodeConfigDTO>) executor).execute(context, config);
+    }
+
+    /**
+     * 当 config 是 RawNodeConfigDTO（JSON 反序列化的降级结果）时，
+     * 用 ObjectMapper 将其转换为 executor 期望的具体 config 子类型。
+     */
+    private BaseNodeConfigDTO coerceConfig(NodeExecutor<? extends BaseNodeConfigDTO> executor,
+                                           BaseNodeConfigDTO config) {
+        if (!(config instanceof RawNodeConfigDTO)) {
+            return config;
+        }
+        Class<?> targetClass = configClassCache.computeIfAbsent(executor.supportType(), key -> {
+            ResolvableType resolvableType = ResolvableType.forClass(executor.getClass())
+                    .as(NodeExecutor.class);
+            Class<?> resolved = resolvableType.getGeneric(0).resolve();
+            return resolved != null ? resolved : BaseNodeConfigDTO.class;
+        });
+        if (targetClass == BaseNodeConfigDTO.class || targetClass == RawNodeConfigDTO.class) {
+            return config;
+        }
+        return (BaseNodeConfigDTO) objectMapper.convertValue(config, targetClass);
     }
 
     private void logNodeExecution(String event, String nodeId, String nodeType,

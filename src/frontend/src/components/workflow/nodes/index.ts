@@ -15,6 +15,7 @@ export const NodeComponentMap = {
   chart_output: AnalysisNodeShell,
   table_output: AnalysisNodeShell,
   condition: AnalysisNodeShell,
+  iteration: AnalysisNodeShell,
 } as const
 
 export const PanelComponentMap = {
@@ -29,6 +30,7 @@ export const PanelComponentMap = {
   chart_output: NodeConfigPanel,
   table_output: NodeConfigPanel,
   condition: NodeConfigPanel,
+  iteration: NodeConfigPanel,
 } as const
 
 export function resolveNodeComponent(node: { data: unknown }) {
