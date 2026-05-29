@@ -26,6 +26,7 @@ const componentMap: Record<FieldComponentType, Component> = {
   DATASOURCE_SELECT: DatasourceSelectField,
   OUTPUT_VAR_LIST: OutputVarListField,
   JOIN_CONDITION_LIST: JoinConditionListField,
+  VARIABLE_PICKER: VariableBindingField,
 }
 
 export function resolveFieldComponent(componentType: FieldComponentType) {

@@ -4,7 +4,7 @@ import { buildQueryRequest } from '@/composables/useNodeDebug'
 import { inferQuerySchema } from '@/api/query'
 import { useMappingCandidates } from '@/composables/useMappingCandidates'
 import { useWorkflowStore, useWorkflowGraphStore } from '@/stores/workflow'
-import type { NodeConfigSchemaDTO, NodeMetaDTO, SchemaFieldDTO, ValueType } from '@/types/contract'
+import type { DatasetDTO, NodeConfigSchemaDTO, NodeMetaDTO, SchemaFieldDTO, ValueType } from '@/types/contract'
 import type { WorkflowNode } from '@/types/workflow'
 import { debounce } from '@/utils/debounce'
 import { getBusinessNodeType } from '@/adapters/workflow-graph'
@@ -23,6 +23,32 @@ function applyDefaults(config: Record<string, unknown>, schema?: NodeConfigSchem
 
 function sanitizeDraftValue(value: Record<string, unknown>) {
   return Object.fromEntries(Object.entries(value).filter(([key]) => !key.startsWith('__')))
+}
+
+/**
+ * 从 debug 结果的 dataset 中提取列名，用于自动填充 outputs 字段。
+ * 优先读 schema.fields（含类型信息），其次读 rows[0] 的 key。
+ */
+function extractColumnsFromDataset(dataset: DatasetDTO) {
+  type OutputItem = { source: string; name: string; label: string; valueType: string }
+  if (dataset.schema?.fields?.length) {
+    return dataset.schema.fields.map((f): OutputItem => ({
+      source: f.name ?? f.fieldId ?? '',
+      name: f.name ?? f.fieldId ?? '',
+      label: f.displayName ?? f.name ?? f.fieldId ?? '',
+      valueType: (f.valueType as string) ?? 'STRING',
+    })).filter(o => o.source)
+  }
+  const rows = dataset.rows ?? []
+  if (rows.length > 0) {
+    return Object.keys(rows[0]).filter(Boolean).map((key): OutputItem => ({
+      source: key,
+      name: key,
+      label: key,
+      valueType: 'STRING',
+    }))
+  }
+  return []
 }
 
 export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | undefined>) {
@@ -214,6 +240,19 @@ export function usePanelController(nodeRef: MaybeRefOrGetter<WorkflowNode | unde
       .join(',')
   }, async () => {
     await refresh()
+  })
+
+  // debug 成功后自动填充 outputs：当 outputs 为空时，从实际输出列名生成初始列表，
+  // 用户可在面板中直接重命名，后端会据此重命名 rows 的 key。
+  watch(() => toValue(nodeRef)?.data.debugResult, (debugResult) => {
+    if (debugResult?.status !== 'SUCCEEDED') return
+    const dataset = debugResult.result?.dataset as DatasetDTO | undefined
+    if (!dataset) return
+    // 仅当 outputs 为空时才自动填充，避免覆盖用户已配置的内容
+    if (Array.isArray(draft.outputs) && (draft.outputs as unknown[]).length > 0) return
+    const columns = extractColumnsFromDataset(dataset)
+    if (columns.length === 0) return
+    handleUpdate({ ...draft, outputs: columns })
   })
 
   return {

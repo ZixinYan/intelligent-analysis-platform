@@ -1,7 +1,5 @@
 package com.kuaishou.intelligentanalysisplatform.contract.schema;
 
-import java.util.List;
-
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
@@ -20,7 +18,7 @@ public class ConditionNodeConfigDTO extends BaseNodeConfigDTO {
     /** 引用哪个上游节点的结果（对应 VariableRefDTO.sourceNodeId） */
     private String sourceNodeId;
     /** 字段路径，支持嵌套：dataset.rows.0.amount（与 VariableRefDTO.path 语义一致） */
-    private List<String> fieldPath;
+    private String fieldPath;
     /** 比较运算符，取 ConditionOperator 枚举的 name() */
     private String operator;
     /** 字面量比较值；IS_EMPTY/IS_NOT_EMPTY 时忽略 */

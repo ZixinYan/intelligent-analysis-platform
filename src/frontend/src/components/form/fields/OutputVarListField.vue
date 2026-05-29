@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 
 interface OutputVarItem {
+  /** 原始列名（自动填充，用户不可见），用于后端行重命名映射 */
+  source?: string
   name: string
   label?: string
   valueType?: string

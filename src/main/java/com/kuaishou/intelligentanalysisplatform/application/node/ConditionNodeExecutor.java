@@ -1,6 +1,7 @@
 package com.kuaishou.intelligentanalysisplatform.application.node;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -63,9 +64,12 @@ public class ConditionNodeExecutor implements NodeExecutor<ConditionNodeConfigDT
     @Override
     public NodeResultDTO execute(NodeExecuteContextDTO context, ConditionNodeConfigDTO config) {
         // 1. 解析上游字段值
+        List<String> pathSegments = (config.getFieldPath() != null && !config.getFieldPath().isBlank())
+                ? Arrays.asList(config.getFieldPath().split("\\."))
+                : List.of();
         VariableRefDTO varRef = VariableRefDTO.builder()
                 .sourceNodeId(config.getSourceNodeId())
-                .path(config.getFieldPath())
+                .path(pathSegments)
                 .build();
 
         Object fieldValue = bindingResolver.resolveVariable(varRef, context.getUpstreamResults());
@@ -90,7 +94,7 @@ public class ConditionNodeExecutor implements NodeExecutor<ConditionNodeConfigDT
     }
 
     private boolean evaluate(Object value, String operatorName, Object compareValue,
-                             String nodeId, String sourceNodeId, List<String> fieldPath) {
+                             String nodeId, String sourceNodeId, String fieldPath) {
         ConditionOperator op;
         try {
             op = ConditionOperator.valueOf(operatorName);

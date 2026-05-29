@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,9 +14,11 @@ import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorInfoDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ExecutionStatus;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.BaseNodeConfigDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasetDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasetSchemaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.FieldSchemaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeDebugRequestDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeOutputDefinitionDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeRunMetaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.RawNodeConfigDTO;
@@ -239,6 +242,8 @@ public class NodeExecuteDispatcher {
     /**
      * 若节点 config 声明了输出字段（outputs），将其注入到执行结果的 dataset.schema，
      * 使下游节点无需推断即可获取用户定义的字段名与类型。
+     * 若 output 声明了 source（原始列名），同时对 dataset.rows 做 key 重命名，
+     * 保证 debug 面板展示的列名与用户自定义名一致。
      */
     private void injectDeclaredOutputSchema(BaseNodeConfigDTO config, NodeResultDTO result) {
         if (config.getOutputs() == null || config.getOutputs().isEmpty()) {
@@ -247,8 +252,40 @@ public class NodeExecuteDispatcher {
         if (result.getResult() == null || result.getResult().getDataset() == null) {
             return;
         }
-        List<FieldSchemaDTO> fields = config.getOutputs().stream()
+        DatasetDTO dataset = result.getResult().getDataset();
+        List<NodeOutputDefinitionDTO> outputs = config.getOutputs().stream()
                 .filter(o -> o.getName() != null && !o.getName().isBlank())
+                .toList();
+        if (outputs.isEmpty()) {
+            return;
+        }
+
+        // 构建原始列名 → 自定义列名的重命名映射（仅 source 非空且与 name 不同时生效）
+        Map<String, String> renameMap = outputs.stream()
+                .filter(o -> o.getSource() != null && !o.getSource().isBlank()
+                        && !o.getSource().equals(o.getName()))
+                .collect(Collectors.toMap(
+                        NodeOutputDefinitionDTO::getSource,
+                        NodeOutputDefinitionDTO::getName,
+                        (a, b) -> a,
+                        LinkedHashMap::new));
+
+        // 对 rows 执行 key 重命名，保持列顺序
+        if (!renameMap.isEmpty() && dataset.getRows() != null) {
+            List<Map<String, Object>> renamedRows = dataset.getRows().stream()
+                    .map(row -> {
+                        Map<String, Object> newRow = new LinkedHashMap<>(row.size());
+                        for (Map.Entry<String, Object> entry : row.entrySet()) {
+                            newRow.put(renameMap.getOrDefault(entry.getKey(), entry.getKey()), entry.getValue());
+                        }
+                        return (Map<String, Object>) newRow;
+                    })
+                    .toList();
+            dataset.setRows(renamedRows);
+        }
+
+        // 注入 schema（字段名用自定义名）
+        List<FieldSchemaDTO> fields = outputs.stream()
                 .map(o -> FieldSchemaDTO.builder()
                         .fieldId(o.getName())
                         .name(o.getName())
@@ -258,9 +295,6 @@ public class NodeExecuteDispatcher {
                         .nullable(true)
                         .build())
                 .toList();
-        if (!fields.isEmpty()) {
-            result.getResult().getDataset().setSchema(
-                    DatasetSchemaDTO.builder().fields(fields).build());
-        }
+        dataset.setSchema(DatasetSchemaDTO.builder().fields(fields).build());
     }
 }

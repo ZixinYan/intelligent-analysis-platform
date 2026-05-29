@@ -79,6 +79,18 @@ function toPositionMap(nodes: WorkflowNode[]) {
   return Object.fromEntries(nodes.map(node => [node.id, { x: node.position.x, y: node.position.y } satisfies WorkflowPositionDTO]))
 }
 
+function resolveNodeConfig(node: WorkflowNode, edges: WorkflowEdge[]): Record<string, unknown> {
+  const config = { ...(node.data.config ?? {}) }
+  if (getBusinessNodeType(node) === 'data_join') {
+    const inEdges = edges.filter(e => e.target === node.id)
+    const leftEdge = inEdges.find(e => e.targetHandle === 'leftDataset')
+    const rightEdge = inEdges.find(e => e.targetHandle === 'rightDataset')
+    if (leftEdge) config.leftDatasetRef = leftEdge.source
+    if (rightEdge) config.rightDatasetRef = rightEdge.source
+  }
+  return config
+}
+
 export function graphToSaveRequest(graph: WorkflowGraph, workflowName: string): WorkflowSaveRequestDTO {
   return {
     workflowName: workflowName.trim() || '未命名工作流',
@@ -88,7 +100,7 @@ export function graphToSaveRequest(graph: WorkflowGraph, workflowName: string): 
       category: node.data.meta?.category,
       version: node.data.meta?.nodeVersion,
       metadata: node.data.meta ? { ...node.data.meta } : undefined,
-      config: node.data.config,
+      config: resolveNodeConfig(node, graph.edges),
     })),
     edges: graph.edges.map(edge => ({
       id: edge.id,

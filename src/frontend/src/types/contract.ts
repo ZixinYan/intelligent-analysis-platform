@@ -242,6 +242,7 @@ export type FieldComponentType =
   | 'DATASOURCE_SELECT'
   | 'OUTPUT_VAR_LIST'
   | 'JOIN_CONDITION_LIST'
+  | 'VARIABLE_PICKER'
 
 export type ConditionOperator = 'EQ' | 'NE' | 'IN' | 'NOT_IN' | 'GT' | 'LT' | 'CONTAINS' | 'IS_EMPTY' | 'IS_NOT_EMPTY'
 
