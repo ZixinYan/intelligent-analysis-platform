@@ -21,7 +21,8 @@ public enum NodeType {
     MASKING("masking", NodeCategory.GOVERNANCE),
     CONDITION("condition", NodeCategory.GOVERNANCE),
     ERROR_HANDLER("error_handler", NodeCategory.GOVERNANCE),
-    KNOWLEDGE_RETRIEVAL("knowledge_retrieval", NodeCategory.QUERY);
+    KNOWLEDGE_RETRIEVAL("knowledge_retrieval", NodeCategory.QUERY),
+    ITERATION("iteration", NodeCategory.GOVERNANCE);
 
     private final String code;
     private final NodeCategory category;

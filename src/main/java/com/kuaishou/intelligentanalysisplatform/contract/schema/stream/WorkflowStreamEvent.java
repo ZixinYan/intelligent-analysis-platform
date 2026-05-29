@@ -15,7 +15,10 @@ public sealed interface WorkflowStreamEvent permits
         WorkflowStreamEvent.NodeProgressEvent,
         WorkflowStreamEvent.NodeResultEvent,
         WorkflowStreamEvent.WorkflowDoneEvent,
-        WorkflowStreamEvent.WorkflowErrorEvent {
+        WorkflowStreamEvent.WorkflowErrorEvent,
+        WorkflowStreamEvent.IterationStartedEvent,
+        WorkflowStreamEvent.IterationNextEvent,
+        WorkflowStreamEvent.IterationFinishedEvent {
 
     String eventType();
 
@@ -42,9 +45,11 @@ public sealed interface WorkflowStreamEvent permits
     /**
      * 节点执行完成（含最终结果摘要）。
      * 若数据已通过 NodeProgressEvent 分块推送，则 result.dataset.rows 为 null。
+     * 失败时 error 字段携带错误信息，result 可为 null。
      */
     record NodeResultEvent(String runId, String nodeId, String status,
-                           StandardResultDTO result, NodeRunMetaDTO meta)
+                           StandardResultDTO result, NodeRunMetaDTO meta,
+                           ErrorInfoDTO error)
             implements WorkflowStreamEvent {
         @Override
         public String eventType() { return "node_result"; }
@@ -62,5 +67,28 @@ public sealed interface WorkflowStreamEvent permits
             implements WorkflowStreamEvent {
         @Override
         public String eventType() { return "workflow_error"; }
+    }
+
+    /** 迭代节点开始，携带输入数组总长度 */
+    record IterationStartedEvent(String runId, String nodeId, String nodeType, int iterationLength)
+            implements WorkflowStreamEvent {
+        @Override
+        public String eventType() { return "iteration_started"; }
+    }
+
+    /** 每完成一轮迭代后推送，携带当前轮次索引（0-based） */
+    record IterationNextEvent(String runId, String nodeId, int iterationIndex)
+            implements WorkflowStreamEvent {
+        @Override
+        public String eventType() { return "iteration_next"; }
+    }
+
+    /** 迭代节点全部轮次执行完成，携带聚合结果 */
+    record IterationFinishedEvent(String runId, String nodeId, String status,
+                                  StandardResultDTO result, NodeRunMetaDTO meta,
+                                  ErrorInfoDTO error)
+            implements WorkflowStreamEvent {
+        @Override
+        public String eventType() { return "iteration_finished"; }
     }
 }

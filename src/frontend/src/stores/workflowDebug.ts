@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import type { NodeDebugRequestDTO, NodeResultDTO } from '@/types/contract'
 import type { AnalysisNodeStatus } from '@/types/workflow'
 import { runNodeDebug as runNodeDebugApi } from '@/api/node-debug'
-import { getBusinessNodeType, getRawNodeType } from '@/adapters/workflow-graph'
+import { getBusinessNodeType } from '@/adapters/workflow-graph'
 import { inferSchemaFromDataset, useWorkflowGraphStore } from './workflowGraph'
 import { useWorkflowStream, type StreamNodeState } from '@/composables/useWorkflowStream'
 
@@ -87,7 +87,7 @@ export const useWorkflowDebugStore = defineStore('workflowDebug', () => {
       const request = {
         nodes: graphStore.graph.nodes.map(node => ({
           nodeId: node.id,
-          nodeType: getRawNodeType(node),
+          nodeType: getBusinessNodeType(node),
           category: node.data.meta?.category,
           version: node.data.meta?.nodeVersion,
           metadata: node.data.meta ? { ...node.data.meta } : undefined,

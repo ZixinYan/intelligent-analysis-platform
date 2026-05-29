@@ -413,7 +413,10 @@ export interface WorkflowSaveRequestDTO {
 
 export interface WorkflowStreamEventDTO {
   eventType: 'node_start' | 'node_progress' | 'node_result' | 'workflow_done' | 'workflow_error'
+           | 'iteration_started' | 'iteration_next' | 'iteration_finished'
   nodeId?: string
+  /** nodeType，iteration_started 时携带 */
+  nodeType?: string
   chunkIndex?: number
   rows?: Array<Record<string, unknown>>
   error?: ErrorInfoDTO
@@ -422,6 +425,10 @@ export interface WorkflowStreamEventDTO {
   meta?: {
     elapsedMs?: number
   }
+  /** 迭代节点总迭代次数（iteration_started 携带） */
+  iterationLength?: number
+  /** 当前完成的迭代轮次索引，0-based（iteration_next 携带） */
+  iterationIndex?: number
 }
 
 export interface DatasourceCreateRequestDTO {
@@ -473,6 +480,7 @@ export interface NodeResultEventDTO {
   meta?: {
     elapsedMs?: number
   }
+  error?: ErrorInfoDTO
 }
 
 export interface DatasourceDTO {

@@ -1,12 +1,15 @@
 package com.kuaishou.intelligentanalysisplatform.application.impl;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -18,19 +21,27 @@ import java.util.concurrent.TimeoutException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kuaishou.intelligentanalysisplatform.application.node.NodeExecuteDispatcher;
+import com.kuaishou.intelligentanalysisplatform.application.node.RuntimeBindingResolver;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorCode;
 import com.kuaishou.intelligentanalysisplatform.common.error.ErrorInfoDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ExecutionStatus;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.ResultKind;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasetDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasetSchemaDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.DatasetStatDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.ErrorHandlerNodeConfigDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.IterationNodeConfigDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeDebugRequestDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeResultDTO;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.NodeRunMetaDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.StandardResultDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.WorkflowEdgeDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.WorkflowNodeDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.WorkflowRunRequestDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.stream.WorkflowStreamEvent;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.stream.WorkflowStreamEvent.IterationFinishedEvent;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.stream.WorkflowStreamEvent.IterationNextEvent;
+import com.kuaishou.intelligentanalysisplatform.contract.schema.stream.WorkflowStreamEvent.IterationStartedEvent;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.stream.WorkflowStreamEvent.NodeProgressEvent;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.stream.WorkflowStreamEvent.NodeResultEvent;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.stream.WorkflowStreamEvent.NodeStartEvent;
@@ -52,19 +63,24 @@ public class WorkflowStreamExecutor {
     private static final int WORKFLOW_TIMEOUT_MINUTES = 10;
     private static final String CONDITION_NODE_TYPE = "condition";
     private static final String ERROR_HANDLER_NODE_TYPE = "error_handler";
+    private static final String ITERATION_NODE_TYPE = "iteration";
+    private static final int DEFAULT_MAX_ITERATIONS = 100;
 
     record ConditionalEdge(String source, String target, String condition) {}
 
     private final NodeExecuteDispatcher nodeExecuteDispatcher;
     private final ObjectMapper objectMapper;
     private final MeterRegistry meterRegistry;
+    private final RuntimeBindingResolver bindingResolver;
 
     public WorkflowStreamExecutor(NodeExecuteDispatcher nodeExecuteDispatcher,
                                   ObjectMapper objectMapper,
-                                  MeterRegistry meterRegistry) {
+                                  MeterRegistry meterRegistry,
+                                  RuntimeBindingResolver bindingResolver) {
         this.nodeExecuteDispatcher = nodeExecuteDispatcher;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
+        this.bindingResolver = bindingResolver;
     }
 
     public void executeWorkflow(WorkflowRunRequestDTO request, SseEmitter emitter) {
@@ -226,6 +242,12 @@ public class WorkflowStreamExecutor {
         sendEvent(emitter, new NodeStartEvent(runId, node.getNodeId(),
                 node.getNodeType(), System.currentTimeMillis()));
 
+        if (ITERATION_NODE_TYPE.equals(node.getNodeType())) {
+            executeIterationStreamNode(node, context, futures, completedResults,
+                    nodeResultsMap, runId, emitter);
+            return;
+        }
+
         try {
             NodeResultDTO result = nodeExecuteDispatcher.dispatch(node, context);
             if (CONDITION_NODE_TYPE.equals(node.getNodeType())) {
@@ -245,7 +267,8 @@ public class WorkflowStreamExecutor {
                     node.getNodeId(),
                     result.getStatus() != null ? result.getStatus().name() : "SUCCEEDED",
                     streamResult,
-                    result.getMeta()));
+                    result.getMeta(),
+                    result.getError()));
         } catch (Exception e) {
             completeNodeWithError(node, futures, nodeResultsMap, e.getMessage(), runId, emitter);
         }
@@ -266,7 +289,8 @@ public class WorkflowStreamExecutor {
                     node.getNodeId(),
                     result.getStatus() != null ? result.getStatus().name() : "SUCCEEDED",
                     streamResult,
-                    result.getMeta()));
+                    result.getMeta(),
+                    result.getError()));
             sendEvent(emitter, new WorkflowDoneEvent(runId, request.getWorkflowId(),
                     result.getStatus() != null ? result.getStatus().name() : "SUCCEEDED", 0));
         } catch (Exception e) {
@@ -315,7 +339,8 @@ public class WorkflowStreamExecutor {
                 if (future != null) {
                     future.complete(skipped);
                 }
-                sendEvent(emitter, new NodeResultEvent(runId, edge.target(), "SKIPPED", null, null));
+                sendEvent(emitter, new NodeResultEvent(runId, edge.target(), "SKIPPED", null, null,
+                        skipped.getError()));
             }
         }
     }
@@ -398,7 +423,7 @@ public class WorkflowStreamExecutor {
             future.complete(skipped);
         }
         sendEvent(emitter, new NodeResultEvent(
-                runId, node.getNodeId(), "SKIPPED", null, null));
+                runId, node.getNodeId(), "SKIPPED", null, null, skipped.getError()));
     }
 
     private void completeNodeWithError(WorkflowNodeDTO node,
@@ -420,7 +445,7 @@ public class WorkflowStreamExecutor {
         nodeResultsMap.put(node.getNodeId(), failed);
         futures.get(node.getNodeId()).complete(failed);
         sendEvent(emitter, new NodeResultEvent(
-                runId, node.getNodeId(), "FAILED", null, null));
+                runId, node.getNodeId(), "FAILED", null, null, failed.getError()));
     }
 
     private void sendEvent(SseEmitter emitter, WorkflowStreamEvent event) {
@@ -434,5 +459,227 @@ public class WorkflowStreamExecutor {
             } catch (Exception ignored) {
             }
         }
+    }
+
+    // ── 迭代节点流式执行 ─────────────────────────────────────────────────────
+
+    /**
+     * 迭代节点的流式执行入口：对输入数组的每个元素顺序执行内部子图，
+     * 并实时推送 iteration_started / iteration_next / iteration_finished 事件。
+     */
+    private void executeIterationStreamNode(WorkflowNodeDTO node,
+                                            NodeExecuteContextDTO outerContext,
+                                            ConcurrentHashMap<String, CompletableFuture<NodeResultDTO>> futures,
+                                            ConcurrentHashMap<String, StandardResultDTO> completedResults,
+                                            ConcurrentHashMap<String, NodeResultDTO> nodeResultsMap,
+                                            String runId,
+                                            SseEmitter emitter) {
+        long start = System.currentTimeMillis();
+
+        IterationNodeConfigDTO config;
+        try {
+            config = objectMapper.convertValue(node.getConfig(), IterationNodeConfigDTO.class);
+        } catch (Exception e) {
+            completeNodeWithError(node, futures, nodeResultsMap,
+                    "iteration 节点配置解析失败: " + e.getMessage(), runId, emitter);
+            return;
+        }
+
+        if (config.getInputArrayRef() == null || config.getInputArrayRef().getSourceNodeId() == null) {
+            completeNodeWithError(node, futures, nodeResultsMap,
+                    "iteration 节点未配置 inputArrayRef", runId, emitter);
+            return;
+        }
+
+        // 1. 解析输入数组
+        Object rawValue = bindingResolver.resolveVariable(
+                config.getInputArrayRef(), outerContext.getUpstreamResults());
+        List<?> items = iterToList(rawValue);
+        int maxIter = config.getMaxIterations() != null ? config.getMaxIterations() : DEFAULT_MAX_ITERATIONS;
+        int totalCount = Math.min(items.size(), maxIter);
+
+        // 2. iteration_started
+        sendEvent(emitter, new IterationStartedEvent(runId, node.getNodeId(),
+                node.getNodeType(), totalCount));
+
+        // 3. 拓扑排序内部子图
+        List<WorkflowNodeDTO> sortedInner;
+        try {
+            sortedInner = iterTopologicalSort(config.getInnerNodes(), config.getInnerEdges());
+        } catch (Exception e) {
+            completeNodeWithError(node, futures, nodeResultsMap,
+                    "iteration 内部子图排序失败: " + e.getMessage(), runId, emitter);
+            return;
+        }
+
+        // 4. 逐元素执行
+        List<DatasetDTO> collectedDatasets = new ArrayList<>();
+        List<Object> collectedVars = new ArrayList<>();
+
+        for (int i = 0; i < totalCount; i++) {
+            Object item = items.get(i);
+            Map<String, StandardResultDTO> innerUpstream =
+                    buildIterInnerUpstream(outerContext.getUpstreamResults(), item);
+
+            StandardResultDTO iterResult = runIterInnerGraph(sortedInner, outerContext, innerUpstream);
+            if (iterResult != null) {
+                if (iterResult.getKind() == ResultKind.DATASET && iterResult.getDataset() != null) {
+                    collectedDatasets.add(iterResult.getDataset());
+                }
+                collectedVars.add(iterResult.getVariables());
+            }
+
+            // iteration_next（0-based）
+            sendEvent(emitter, new IterationNextEvent(runId, node.getNodeId(), i));
+        }
+
+        // 5. 聚合
+        StandardResultDTO aggregated = aggregateIterResults(
+                config.getOutputMode(), collectedDatasets, collectedVars);
+        long elapsed = System.currentTimeMillis() - start;
+        NodeRunMetaDTO meta = NodeRunMetaDTO.builder().elapsedMs(elapsed).build();
+
+        NodeResultDTO nodeResult = NodeResultDTO.builder()
+                .nodeId(node.getNodeId())
+                .nodeType(node.getNodeType())
+                .status(ExecutionStatus.SUCCEEDED)
+                .result(aggregated)
+                .meta(meta)
+                .build();
+
+        nodeResultsMap.put(node.getNodeId(), nodeResult);
+        if (aggregated != null) {
+            completedResults.put(node.getNodeId(), aggregated);
+        }
+        futures.get(node.getNodeId()).complete(nodeResult);
+
+        // 6. iteration_finished + node_result
+        sendEvent(emitter, new IterationFinishedEvent(runId, node.getNodeId(),
+                "SUCCEEDED", aggregated, meta, null));
+        sendEvent(emitter, new NodeResultEvent(runId, node.getNodeId(), "SUCCEEDED",
+                aggregated, meta, null));
+    }
+
+    /** 在迭代内部顺序执行子图节点，返回最后一个有效结果 */
+    private StandardResultDTO runIterInnerGraph(List<WorkflowNodeDTO> sortedNodes,
+                                                NodeExecuteContextDTO outerCtx,
+                                                Map<String, StandardResultDTO> initUpstream) {
+        Map<String, StandardResultDTO> results = new LinkedHashMap<>(initUpstream);
+        StandardResultDTO lastResult = null;
+
+        for (WorkflowNodeDTO innerNode : sortedNodes) {
+            NodeExecuteContextDTO ctx = NodeExecuteContextDTO.builder()
+                    .workflowId(outerCtx.getWorkflowId())
+                    .runId(outerCtx.getRunId())
+                    .nodeId(innerNode.getNodeId())
+                    .upstreamResults(new LinkedHashMap<>(results))
+                    .requestContext(outerCtx.getRequestContext())
+                    .allNodes(sortedNodes)
+                    .build();
+
+            NodeResultDTO result = nodeExecuteDispatcher.dispatch(innerNode, ctx);
+            if (result.getResult() != null) {
+                results.put(innerNode.getNodeId(), result.getResult());
+                lastResult = result.getResult();
+            }
+        }
+        return lastResult;
+    }
+
+    private Map<String, StandardResultDTO> buildIterInnerUpstream(
+            Map<String, StandardResultDTO> outerUpstream, Object item) {
+        Map<String, StandardResultDTO> inner = new LinkedHashMap<>(outerUpstream);
+        inner.put("$item", StandardResultDTO.builder()
+                .kind(ResultKind.VARIABLES)
+                .variables(Map.of("value", item))
+                .build());
+        return inner;
+    }
+
+    private StandardResultDTO aggregateIterResults(String outputMode,
+                                                   List<DatasetDTO> datasets,
+                                                   List<Object> vars) {
+        if ("COLLECT".equals(outputMode)) {
+            return StandardResultDTO.builder()
+                    .kind(ResultKind.VARIABLES)
+                    .variables(Map.of("_results", vars))
+                    .build();
+        }
+        // FLATTEN（默认）
+        if (datasets.isEmpty()) {
+            return StandardResultDTO.builder()
+                    .kind(ResultKind.DATASET)
+                    .dataset(DatasetDTO.builder()
+                            .rows(List.of())
+                            .stat(DatasetStatDTO.builder().rowCount(0).build())
+                            .build())
+                    .build();
+        }
+        List<Map<String, Object>> allRows = new ArrayList<>();
+        DatasetSchemaDTO schema = null;
+        for (DatasetDTO ds : datasets) {
+            if (schema == null && ds.getSchema() != null) {
+                schema = ds.getSchema();
+            }
+            if (ds.getRows() != null) {
+                allRows.addAll(ds.getRows());
+            }
+        }
+        return StandardResultDTO.builder()
+                .kind(ResultKind.DATASET)
+                .dataset(DatasetDTO.builder()
+                        .schema(schema)
+                        .rows(allRows)
+                        .stat(DatasetStatDTO.builder().rowCount(allRows.size()).build())
+                        .build())
+                .build();
+    }
+
+    private List<?> iterToList(Object rawValue) {
+        if (rawValue == null) return List.of();
+        if (rawValue instanceof List<?> list) return list;
+        if (rawValue instanceof Collection<?> col) return new ArrayList<>(col);
+        return List.of(rawValue);
+    }
+
+    /** Kahn 拓扑排序：用于内部子图节点排序 */
+    private List<WorkflowNodeDTO> iterTopologicalSort(List<WorkflowNodeDTO> nodes,
+                                                      List<WorkflowEdgeDTO> edges) {
+        if (nodes == null || nodes.isEmpty()) return List.of();
+
+        Map<String, WorkflowNodeDTO> nodeMap = new LinkedHashMap<>();
+        for (WorkflowNodeDTO n : nodes) nodeMap.put(n.getNodeId(), n);
+
+        Map<String, Integer> inDegree = new HashMap<>();
+        Map<String, List<String>> adj = new HashMap<>();
+        for (String id : nodeMap.keySet()) {
+            inDegree.put(id, 0);
+            adj.put(id, new ArrayList<>());
+        }
+        if (edges != null) {
+            for (WorkflowEdgeDTO edge : edges) {
+                String src = edge.getSource(), tgt = edge.getTarget();
+                if (src == null || tgt == null
+                        || !nodeMap.containsKey(src) || !nodeMap.containsKey(tgt)) continue;
+                adj.get(src).add(tgt);
+                inDegree.merge(tgt, 1, Integer::sum);
+            }
+        }
+
+        Queue<String> queue = new LinkedList<>();
+        inDegree.forEach((id, deg) -> { if (deg == 0) queue.add(id); });
+
+        List<WorkflowNodeDTO> sorted = new ArrayList<>();
+        while (!queue.isEmpty()) {
+            String curr = queue.poll();
+            sorted.add(nodeMap.get(curr));
+            for (String next : adj.get(curr)) {
+                if (inDegree.merge(next, -1, Integer::sum) == 0) queue.add(next);
+            }
+        }
+        if (sorted.size() != nodeMap.size()) {
+            throw new IllegalStateException("iteration 内部子图存在循环依赖");
+        }
+        return sorted;
     }
 }

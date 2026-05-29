@@ -12,6 +12,8 @@ import type {
  *
  * chunks 字段用于大数据集场景：后端将结果分批推送（node_progress 事件），
  * 每批对应 chunks[chunkIndex]，全部推送完成后通过 flattenChunks() 合并。
+ *
+ * iterationLength / iterationIndex 用于迭代节点进度展示。
  */
 export interface StreamNodeState {
   /** 节点执行状态 */
@@ -22,6 +24,10 @@ export interface StreamNodeState {
   chunks: Record<string, unknown>[][]
   elapsedMs?: number
   error?: ErrorInfoDTO
+  /** 迭代节点：总迭代次数（iteration_started 写入） */
+  iterationLength?: number
+  /** 迭代节点：当前已完成轮次（0-based，iteration_next 更新） */
+  iterationIndex?: number
 }
 
 /**
@@ -33,9 +39,12 @@ export interface StreamNodeState {
  * await startStream(workflowId, request)
  * ```
  *
- * - `node_start`    → nodeStates[nodeId].status = 'running'
- * - `node_progress` → nodeStates[nodeId].chunks[chunkIndex] = rows
- * - `node_result`   → nodeStates[nodeId].status = 'success' | 'error'
+ * - `node_start`         → nodeStates[nodeId].status = 'running'
+ * - `node_progress`      → nodeStates[nodeId].chunks[chunkIndex] = rows
+ * - `node_result`        → nodeStates[nodeId].status = 'success' | 'error'
+ * - `iteration_started`  → nodeStates[nodeId].iterationLength 写入
+ * - `iteration_next`     → nodeStates[nodeId].iterationIndex 递增
+ * - `iteration_finished` → nodeStates[nodeId].status = 'success' | 'error' + result
  * - `workflow_done` | `workflow_error` → isStreaming = false
  */
 export function useWorkflowStream() {
@@ -83,9 +92,12 @@ export function useWorkflowStream() {
           case 'node_result': {
             const payload = event as NodeResultEventDTO
             const state = getOrCreate(payload.nodeId)
-            state.status = payload.status === 'SUCCEEDED' ? 'success' : 'error'
+            state.status = payload.status === 'SUCCEEDED' ? 'success'
+              : payload.status === 'SKIPPED' ? 'skipped'
+              : 'error'
             state.result = payload.result
             state.elapsedMs = payload.meta?.elapsedMs ?? undefined
+            state.error = payload.error
             break
           }
           case 'workflow_done': {
@@ -95,6 +107,31 @@ export function useWorkflowStream() {
           case 'workflow_error': {
             streamError.value = event.error
             isStreaming.value = false
+            break
+          }
+          case 'iteration_started': {
+            if (!event.nodeId) break
+            const state = getOrCreate(event.nodeId)
+            state.status = 'running'
+            state.iterationLength = event.iterationLength
+            state.iterationIndex = undefined
+            break
+          }
+          case 'iteration_next': {
+            if (!event.nodeId || event.iterationIndex === undefined) break
+            const state = getOrCreate(event.nodeId)
+            state.iterationIndex = event.iterationIndex
+            break
+          }
+          case 'iteration_finished': {
+            if (!event.nodeId) break
+            const state = getOrCreate(event.nodeId)
+            state.status = event.status === 'SUCCEEDED' ? 'success'
+              : event.status === 'SKIPPED' ? 'skipped'
+              : 'error'
+            if (event.result) state.result = event.result
+            state.elapsedMs = event.meta?.elapsedMs
+            state.error = event.error
             break
           }
         }
