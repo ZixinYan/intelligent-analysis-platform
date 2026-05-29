@@ -461,6 +461,8 @@ export interface StandardResultDTO {
 export interface WorkflowRunRequestDTO {
   versionId?: string
   inputs?: Record<string, unknown>
+  nodes?: WorkflowNodeDTO[]
+  edges?: WorkflowEdgeDTO[]
 }
 
 export interface NodeResultEventDTO {
@@ -887,23 +889,3 @@ export interface TriggerExportRequestDTO {
   fileName?: string
 }
 
-export interface SlowQueryDTO {
-  sql: string
-  elapsedMs: number
-  count: number
-}
-
-export interface OpsMetricsSummaryDTO {
-  activeQueryCount: number
-  todayQueryCount: number
-  avgElapsedMs: number
-  errorRate: number
-  slowQueryTop?: SlowQueryDTO[]
-}
-
-export interface ActiveQueryDTO {
-  queryId: string
-  datasourceId: string
-  sql: string
-  startedAt: number
-}

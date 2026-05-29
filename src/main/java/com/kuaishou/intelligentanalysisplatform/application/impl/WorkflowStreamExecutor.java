@@ -79,7 +79,7 @@ public class WorkflowStreamExecutor {
 
     private void doExecuteWorkflow(WorkflowRunRequestDTO request, String runId, SseEmitter emitter) {
         long workflowStart = System.currentTimeMillis();
-        List<WorkflowNodeDTO> nodes = request.getNodes();
+        List<WorkflowNodeDTO> nodes = request.getNodes() != null ? request.getNodes() : List.of();
         List<WorkflowEdgeDTO> edges = request.getEdges() != null ? request.getEdges() : List.of();
 
         Map<String, WorkflowNodeDTO> nodeMap = new LinkedHashMap<>();

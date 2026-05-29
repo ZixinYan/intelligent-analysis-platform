@@ -5,11 +5,10 @@ import { useDatasourceStore } from '@/stores/datasource'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import DatasourceList from '@/components/datasource/DatasourceList.vue'
 import AiChatSidebar from '@/components/ai/AiChatSidebar.vue'
-import OpsView from '@/components/ops/OpsView.vue'
 
 const registry = useNodeRegistryStore()
 const datasourceStore = useDatasourceStore()
-const currentView = ref<'workflow' | 'datasource' | 'ops'>('workflow')
+const currentView = ref<'workflow' | 'datasource'>('workflow')
 
 onMounted(() => {
   registry.load().catch(() => undefined)
@@ -28,15 +27,11 @@ onMounted(() => {
         <button class="app-nav__button" :class="{ 'app-nav__button--active': currentView === 'datasource' }" @click="currentView = 'datasource'">
           数据源管理
         </button>
-        <button class="app-nav__button" :class="{ 'app-nav__button--active': currentView === 'ops' }" @click="currentView = 'ops'">
-          运维监控
-        </button>
       </div>
     </header>
 
     <WorkflowEditor v-if="currentView === 'workflow'" />
     <DatasourceList v-else-if="currentView === 'datasource'" />
-    <OpsView v-else-if="currentView === 'ops'" />
 
     <AiChatSidebar />
   </div>

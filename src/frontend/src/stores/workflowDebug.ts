@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import type { NodeDebugRequestDTO, NodeResultDTO } from '@/types/contract'
 import type { AnalysisNodeStatus } from '@/types/workflow'
 import { runNodeDebug as runNodeDebugApi } from '@/api/node-debug'
-import { getBusinessNodeType } from '@/adapters/workflow-graph'
+import { getBusinessNodeType, getRawNodeType } from '@/adapters/workflow-graph'
 import { inferSchemaFromDataset, useWorkflowGraphStore } from './workflowGraph'
 import { useWorkflowStream, type StreamNodeState } from '@/composables/useWorkflowStream'
 
@@ -84,7 +84,25 @@ export const useWorkflowDebugStore = defineStore('workflowDebug', () => {
     // 使用 startStream 驱动 workflowNodeStates，同时 watch 变化以同步画布状态
     const unwatch = watchNodeStatesToCanvas(graphStore)
     try {
-      await startStream(workflowId, {})
+      const request = {
+        nodes: graphStore.graph.nodes.map(node => ({
+          nodeId: node.id,
+          nodeType: getRawNodeType(node),
+          category: node.data.meta?.category,
+          version: node.data.meta?.nodeVersion,
+          metadata: node.data.meta ? { ...node.data.meta } : undefined,
+          config: node.data.config,
+        })),
+        edges: graphStore.graph.edges.map(edge => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          sourceHandle: edge.sourceHandle ?? undefined,
+          targetHandle: edge.targetHandle ?? undefined,
+          condition: edge.condition ?? undefined,
+        })),
+      }
+      await startStream(workflowId, request)
     } finally {
       unwatch()
     }

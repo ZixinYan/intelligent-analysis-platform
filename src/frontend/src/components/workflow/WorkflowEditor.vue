@@ -19,11 +19,12 @@ import WorkflowNodePanelRenderer from './WorkflowNodePanelRenderer.vue'
 import WorkflowInsertEdge from './WorkflowInsertEdge.vue'
 import AiWorkflowDialog from '@/components/ai/AiWorkflowDialog.vue'
 import { storeToRefs } from 'pinia'
-import { useWorkflowStore, useWorkflowGraphStore, useWorkflowDebugStore } from '@/stores/workflow'
+import { useWorkflowStore, useWorkflowGraphStore, useWorkflowDebugStore, useWorkflowDefinitionStore } from '@/stores/workflow'
 import type { WorkflowNode } from '@/types/workflow'
 import { getBusinessNodeType } from '@/adapters/workflow-graph'
 
 const workflow = useWorkflowStore()
+const defStore = useWorkflowDefinitionStore()
 const graphStore = useWorkflowGraphStore()
 const debugStore = useWorkflowDebugStore()
 const { isStreaming } = storeToRefs(debugStore)
@@ -31,15 +32,15 @@ const nodes = computed(() => graphStore.nodes)
 const edges = computed(() => graphStore.edges)
 const selectedNode = computed(() => graphStore.selectedNode)
 const workflowName = computed({
-  get: () => workflow.workflowName,
+  get: () => defStore.workflowName,
   set: value => {
-    workflow.workflowName = value
+    defStore.workflowName = value
   },
 })
-const workflowId = computed(() => workflow.workflowId)
-const saving = computed(() => workflow.saving)
-const workflowList = computed(() => workflow.workflowList)
-const loading = computed(() => workflow.loading)
+const workflowId = computed(() => defStore.workflowId)
+const saving = computed(() => defStore.saving)
+const workflowList = computed(() => defStore.workflowList)
+const loading = computed(() => defStore.loading)
 const viewport = computed(() => graphStore.viewport)
 
 const LEFT_PANEL_WIDTH = 280
