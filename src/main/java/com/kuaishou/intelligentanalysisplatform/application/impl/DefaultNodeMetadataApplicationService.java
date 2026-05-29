@@ -1,5 +1,6 @@
 package com.kuaishou.intelligentanalysisplatform.application.impl;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -52,7 +53,8 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 buildConditionDefinition(),
                 buildErrorHandlerDefinition(),
                 buildIterationDefinition(),
-                buildDataJoinDefinition());
+                buildDataJoinDefinition())
+                .stream().map(this::withOutputsSection).toList();
     }
 
     @Override
@@ -242,10 +244,10 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                                 List.of(candidate("product_name", 0.88, "scatter grouping"))));
             case "pie":
                 return List.of(
-                        buildSlotOrDynamic("categoryField", true, List.of("STRING", "DATE"),
+                        buildSlotOrDynamic("xField", true, List.of("STRING", "DATE"),
                                 List.of("LABEL_CANDIDATE", "GROUPABLE"), upstreamFields,
                                 List.of(candidate("product_name", 0.96, "pie label field"))),
-                        buildSlotOrDynamic("valueField", true, List.of("DECIMAL", "INTEGER", "LONG"),
+                        buildSlotOrDynamic("yField", true, List.of("DECIMAL", "INTEGER", "LONG"),
                                 List.of("Y_AXIS_CANDIDATE", "AGGREGATABLE"), upstreamFields,
                                 List.of(candidate("sales_amount", 0.98, "pie value field"))));
             default:
@@ -1803,6 +1805,41 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                         .code("COMPUTE_DATA_JOIN")
                         .name("跨源 JOIN")
                         .build()))
+                .build();
+    }
+
+    // ── 输出字段：注入每个节点 schema 末尾 ────────────────────────────────
+
+    private NodeMetaDTO withOutputsSection(NodeMetaDTO meta) {
+        if (meta.getConfigSchema() == null || meta.getConfigSchema().getSections() == null) {
+            return meta;
+        }
+        List<PanelSectionDTO> sections = meta.getConfigSchema().getSections();
+        int maxOrder = sections.stream()
+                .mapToInt(s -> s.getOrder() != null ? s.getOrder() : 0)
+                .max().orElse(0);
+        List<PanelSectionDTO> newSections = new ArrayList<>(sections);
+        newSections.add(buildOutputsSection(maxOrder + 1));
+        meta.getConfigSchema().setSections(newSections);
+        return meta;
+    }
+
+    private PanelSectionDTO buildOutputsSection(int order) {
+        return PanelSectionDTO.builder()
+                .key("outputs")
+                .title("输出字段")
+                .order(order)
+                .fields(List.of(
+                        PanelFieldDTO.builder()
+                                .field("outputs")
+                                .label("输出字段")
+                                .componentType(FieldComponentType.OUTPUT_VAR_LIST)
+                                .required(false)
+                                .visible(true)
+                                .editable(true)
+                                .order(1)
+                                .description("定义本节点向下游节点输出的字段列表（名称、显示名、类型）")
+                                .build()))
                 .build();
     }
 }

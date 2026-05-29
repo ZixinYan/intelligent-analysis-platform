@@ -8,6 +8,7 @@ import CodeEditorField from '@/components/form/fields/CodeEditorField.vue'
 import FieldPickerField from '@/components/form/fields/FieldPickerField.vue'
 import VariableBindingField from '@/components/form/fields/VariableBindingField.vue'
 import DatasourceSelectField from '@/components/form/fields/DatasourceSelectField.vue'
+import OutputVarListField from '@/components/form/fields/OutputVarListField.vue'
 import type { FieldComponentType } from '@/types/contract'
 
 const componentMap: Record<FieldComponentType, Component> = {
@@ -22,6 +23,7 @@ const componentMap: Record<FieldComponentType, Component> = {
   FIELD_PICKER: FieldPickerField,
   FIELD_MULTI_SELECTOR: FieldPickerField,
   DATASOURCE_SELECT: DatasourceSelectField,
+  OUTPUT_VAR_LIST: OutputVarListField,
 }
 
 export function resolveFieldComponent(componentType: FieldComponentType) {

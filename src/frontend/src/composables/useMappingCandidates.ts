@@ -1,6 +1,6 @@
 import { computed, ref, type MaybeRefOrGetter, toValue } from 'vue'
 import { getMappingCandidatesWithFields } from '@/api/node-definition'
-import { getRawNodeType } from '@/adapters/workflow-graph'
+import { getBusinessNodeType } from '@/adapters/workflow-graph'
 import { useWorkflowStore } from '@/stores/workflow'
 import type { FieldCandidateSlotDTO, NodeConfigSchemaDTO, PanelFieldDTO } from '@/types/contract'
 import type { WorkflowNode } from '@/types/workflow'
@@ -107,12 +107,14 @@ export function useMappingCandidates(
       loading.value = true
       const currentRequestId = ++requestId
       try {
-        const nodeType = getRawNodeType(node)
-        if (nodeType) {
-          const renderer = String(node.data.config.chartType ?? nodeType ?? 'default')
+        const businessNodeType = getBusinessNodeType(node)
+        if (businessNodeType) {
+          const renderer = businessNodeType === 'table_output'
+            ? 'table'
+            : String(node.data.config.chartType ?? businessNodeType ?? 'default')
           try {
-            const result = await getMappingCandidatesWithFields(nodeType, {
-              nodeType,
+            const result = await getMappingCandidatesWithFields(businessNodeType, {
+              nodeType: businessNodeType,
               renderer,
               upstreamFields: upstream.data.schema.fields,
             })

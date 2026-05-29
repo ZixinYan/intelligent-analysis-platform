@@ -14,5 +14,6 @@ public enum FieldComponentType {
     VARIABLE_PICKER,
     DATASET_MAPPING,
     CHART_MAPPING,
-    TABLE_MAPPING
+    TABLE_MAPPING,
+    OUTPUT_VAR_LIST
 }
