@@ -17,6 +17,7 @@ import com.kuaishou.intelligentanalysisplatform.application.compute.pushdown.Agg
 import com.kuaishou.intelligentanalysisplatform.application.compute.pushdown.DatasourceDialect;
 import com.kuaishou.intelligentanalysisplatform.application.compute.pushdown.PushdownDecider;
 import com.kuaishou.intelligentanalysisplatform.contract.enums.DatasourceType;
+import com.kuaishou.intelligentanalysisplatform.contract.enums.AggregateFunction;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.AggregateMetricDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.AggregateNodeConfigDTO;
 import com.kuaishou.intelligentanalysisplatform.contract.schema.ComputeAuditDTO;
@@ -74,7 +75,8 @@ public class AggregateNodeExecutor implements NodeExecutor<AggregateNodeConfigDT
     @Override
     public NodeResultDTO execute(NodeExecuteContextDTO context, AggregateNodeConfigDTO config) {
         long start = System.currentTimeMillis();
-        DatasetDTO input = computeDatasetResolver.resolve(config.getDatasetRef(), context.getUpstreamResults());
+        AggregateNodeConfigDTO normalized = normalizeMetrics(config);
+        DatasetDTO input = computeDatasetResolver.resolve(normalized.getDatasetRef(), context.getUpstreamResults());
 
         DatasourceType dsType = resolveDatasourceType(input, context);
         boolean pushdown = pushdownDecider.canPushdown(capabilityRegistry.getByCode("aggregate"), input, dsType);
@@ -82,19 +84,18 @@ public class AggregateNodeExecutor implements NodeExecutor<AggregateNodeConfigDT
         DatasetDTO output;
         if (pushdown) {
             DatasourceDialect dialect = DatasourceDialect.from(dsType);
-            String pushdownSql = aggregateSqlGenerator.generate(input.getSourceSql(), config, dialect);
+            String pushdownSql = aggregateSqlGenerator.generate(input.getSourceSql(), normalized, dialect);
             QueryRequestDTO queryReq = buildPushdownRequest(input.getSourceDatasourceId(), pushdownSql, context);
             ValidateResultDTO validateResult = queryApplicationService.validate(queryReq);
             if (validateResult.isValid()) {
                 QueryResultDTO result = queryApplicationService.preview(queryReq);
                 output = enrichSourceInfo(result.getDataset(), pushdownSql, input.getSourceDatasourceId());
             } else {
-                // SQL Guard 拒绝，回退到内存计算
                 pushdown = false;
-                output = aggregateComputeService.compute(config, input);
+                output = aggregateComputeService.compute(normalized, input);
             }
         } else {
-            output = aggregateComputeService.compute(config, input);
+            output = aggregateComputeService.compute(normalized, input);
         }
 
         return computeResultFactory.success(
@@ -104,18 +105,28 @@ public class AggregateNodeExecutor implements NodeExecutor<AggregateNodeConfigDT
                 pushdown,
                 supportType(),
                 System.currentTimeMillis() - start,
-                buildAudit(config, input, output)
+                buildAudit(normalized, input, output)
         );
     }
 
     @Override
     public ValidationResultDTO validate(AggregateNodeConfigDTO config) {
-        if (config == null || config.getMetrics() == null || config.getMetrics().isEmpty()) {
-            return ValidationResultDTO.builder().valid(false).errorMessage("aggregate metrics are required").build();
+        if (config == null) {
+            return ValidationResultDTO.builder().valid(false).errorMessage("aggregate config is required").build();
         }
-        for (AggregateMetricDTO metric : config.getMetrics()) {
-            if (metric == null || metric.getField() == null || metric.getField().isBlank() || metric.getAgg() == null) {
-                return ValidationResultDTO.builder().valid(false).errorMessage("aggregate metric field and agg are required").build();
+        // 接受 metrics 列表 或 扁平字段 metricField + aggregateFunc
+        boolean hasMetricsList = config.getMetrics() != null && !config.getMetrics().isEmpty();
+        boolean hasFlatField = config.getMetricField() != null && !config.getMetricField().isBlank();
+        if (!hasMetricsList && !hasFlatField) {
+            return ValidationResultDTO.builder().valid(false)
+                    .errorMessage("请选择聚合字段（metricField）").build();
+        }
+        if (hasMetricsList) {
+            for (AggregateMetricDTO metric : config.getMetrics()) {
+                if (metric == null || metric.getField() == null || metric.getField().isBlank() || metric.getAgg() == null) {
+                    return ValidationResultDTO.builder().valid(false)
+                            .errorMessage("aggregate metric field and agg are required").build();
+                }
             }
         }
         return ValidationResultDTO.builder().valid(true).build();
@@ -124,6 +135,43 @@ public class AggregateNodeExecutor implements NodeExecutor<AggregateNodeConfigDT
     @Override
     public NodeMetaDTO metadata() {
         return nodeMetadataApplicationService.getNodeDefinition(supportType());
+    }
+
+    /**
+     * 将扁平字段（metricField / aggregateFunc / metricAlias）转换为 metrics 列表。
+     * 若 metrics 已有值则直接返回原 config，避免重复构建。
+     */
+    private AggregateNodeConfigDTO normalizeMetrics(AggregateNodeConfigDTO config) {
+        if (config.getMetrics() != null && !config.getMetrics().isEmpty()) {
+            return config;
+        }
+        if (config.getMetricField() == null || config.getMetricField().isBlank()) {
+            return config;
+        }
+        AggregateFunction agg = AggregateFunction.SUM;
+        if (config.getAggregateFunc() != null && !config.getAggregateFunc().isBlank()) {
+            try {
+                agg = AggregateFunction.valueOf(config.getAggregateFunc().toUpperCase());
+            } catch (IllegalArgumentException ignored) {
+                // 未知函数降级为 SUM
+            }
+        }
+        AggregateMetricDTO metric = AggregateMetricDTO.builder()
+                .field(config.getMetricField())
+                .agg(agg)
+                .alias(config.getMetricAlias())
+                .build();
+        return AggregateNodeConfigDTO.builder()
+                .datasetRef(config.getDatasetRef())
+                .groupByFields(config.getGroupByFields())
+                .metrics(List.of(metric))
+                .sortFields(config.getSortFields())
+                .topN(config.getTopN())
+                .pushdownEnabled(config.getPushdownEnabled())
+                .metricField(config.getMetricField())
+                .aggregateFunc(config.getAggregateFunc())
+                .metricAlias(config.getMetricAlias())
+                .build();
     }
 
     private DatasourceType resolveDatasourceType(DatasetDTO input, NodeExecuteContextDTO context) {

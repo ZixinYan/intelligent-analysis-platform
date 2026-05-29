@@ -799,13 +799,14 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                                                         .editable(true)
                                                         .order(2)
                                                         .valueType(ValueType.STRING)
-                                                        .defaultValue("SUM")
+                                                        .defaultValue("COUNT")
                                                         .options(List.of(
                                                                 OptionDTO.builder().value("SUM").label("SUM（求和）").build(),
                                                                 OptionDTO.builder().value("COUNT").label("COUNT（计数）").build(),
+                                                                OptionDTO.builder().value("COUNT_DISTINCT").label("COUNT_DISTINCT（去重计数）").build(),
                                                                 OptionDTO.builder().value("AVG").label("AVG（平均值）").build(),
-                                                                OptionDTO.builder().value("MAX").label("MAX（最大值）").build(),
-                                                                OptionDTO.builder().value("MIN").label("MIN（最小值）").build()))
+                                                                OptionDTO.builder().value("MAX").label("MAX（最大值/最新时间）").build(),
+                                                                OptionDTO.builder().value("MIN").label("MIN（最小值/最早时间）").build()))
                                                         .validations(List.of(
                                                                 ValidationRuleDTO.builder().type("required").message("请选择聚合函数").build()))
                                                         .build()))

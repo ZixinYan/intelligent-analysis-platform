@@ -18,4 +18,10 @@ public class AggregateNodeConfigDTO extends BaseNodeConfigDTO {
     private List<SortFieldDTO> sortFields;
     private Integer topN;
     private Boolean pushdownEnabled;
+
+    // ── 表单扁平字段（来自 panel 的 metricField / aggregateFunc / metricAlias） ──
+    // 当 metrics 为空时，executor 会从这三个字段自动构建 metrics 列表
+    private String metricField;
+    private String aggregateFunc;
+    private String metricAlias;
 }
