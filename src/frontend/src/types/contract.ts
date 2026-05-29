@@ -54,7 +54,7 @@ export interface FieldSchemaDTO {
   extensions?: Record<string, unknown>
 }
 
-export type ChartType = 'LINE' | 'BAR' | 'PIE' | 'SCATTER' | 'TABLE'
+export type ChartType = 'LINE' | 'BAR' | 'PIE' | 'SCATTER' | 'AREA' | 'MIXED'
 
 export interface NodePositionDTO {
   x: number
