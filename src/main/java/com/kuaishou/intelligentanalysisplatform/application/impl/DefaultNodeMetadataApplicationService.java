@@ -524,7 +524,7 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 .category(NodeCategory.OUTPUT)
                 .description("统一图表输出节点")
                 .tags(List.of("chart", "output"))
-                .defaults(Map.of("chartType", "line"))
+                .defaults(Map.of("chartType", "LINE"))
                 .configSchema(NodeConfigSchemaDTO.builder()
                         .schemaType("panel")
                         .schemaVersion("1.0")
@@ -545,13 +545,13 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                                                 .order(1)
                                                 .valueType(ValueType.STRING)
                                                 .semanticType(FieldSemanticType.CHART_TYPE)
-                                                .defaultValue("line")
+                                                .defaultValue("LINE")
                                                 .options(List.of(
-                                                        OptionDTO.builder().label("折线图").value("line").build(),
-                                                        OptionDTO.builder().label("柱状图").value("bar").build(),
-                                                        OptionDTO.builder().label("饼图").value("pie").build(),
-                                                        OptionDTO.builder().label("散点图").value("scatter").build(),
-                                                        OptionDTO.builder().label("面积图").value("area").build()))
+                                                        OptionDTO.builder().label("折线图").value("LINE").build(),
+                                                        OptionDTO.builder().label("柱状图").value("BAR").build(),
+                                                        OptionDTO.builder().label("饼图").value("PIE").build(),
+                                                        OptionDTO.builder().label("散点图").value("SCATTER").build(),
+                                                        OptionDTO.builder().label("面积图").value("AREA").build()))
                                                 .build(),
                                         PanelFieldDTO.builder()
                                                 .field("title")
@@ -610,7 +610,7 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                                                 .visibilityRules(List.of(FieldVisibilityRuleDTO.builder()
                                                         .watchField("chartType")
                                                         .operator(ConditionOperator.NOT_IN)
-                                                        .targetValues(List.of("pie"))
+                                                        .targetValues(List.of("PIE"))
                                                         .visible(true)
                                                         .build()))
                                                 .build()))

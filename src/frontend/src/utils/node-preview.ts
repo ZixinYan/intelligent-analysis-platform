@@ -164,7 +164,7 @@ export function buildNodePreview(meta?: NodeMetaDTO, config: Record<string, unkn
       return buildCodeNodePreview(type, config)
     }
     case 'chart_output': {
-      const chartType = String(config.chartType ?? 'line')
+      const chartType = String(config.chartType ?? 'LINE')
       const x = String(config.xField ?? '未选择 X 轴')
       const y = String(config.yField ?? '未选择 Y 轴')
       return [`图表: ${chartType}`, `X: ${x}  Y: ${y}`]
