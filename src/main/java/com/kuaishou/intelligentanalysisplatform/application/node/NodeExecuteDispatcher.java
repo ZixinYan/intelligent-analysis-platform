@@ -98,19 +98,53 @@ public class NodeExecuteDispatcher {
             if (value instanceof StandardResultDTO standardResult) {
                 results.put(key, standardResult);
             } else if (value instanceof Map<?, ?>) {
-                try {
-                    StandardResultDTO converted = objectMapper.convertValue(value, StandardResultDTO.class);
-                    results.put(key, converted);
-                } catch (Exception e) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> map = (Map<String, Object>) value;
-                    results.put(key, StandardResultDTO.builder().variables(map).build());
-                }
+                @SuppressWarnings("unchecked")
+                Map<String, Object> rawMap = (Map<String, Object>) value;
+                results.put(key, normalizeMockInput(rawMap));
             } else {
                 results.put(key, StandardResultDTO.builder().variables(Map.of("value", value)).build());
             }
         });
         return results;
+    }
+
+    /**
+     * 将 Mock 输入 Map 规范化为 StandardResultDTO。
+     *
+     * <p>支持以下简化格式（方便用户在调试面板手写）：
+     * <ul>
+     *   <li>{@code {"rows": [...]}} — 等价于 DATASET 类型，自动包装为 dataset.rows</li>
+     *   <li>{@code {"kind": "DATASET", "dataset": {"rows": [...]}}} — 标准格式，直接转换</li>
+     *   <li>其他 Map — 作为 VARIABLES 变量字典</li>
+     * </ul>
+     */
+    @SuppressWarnings("unchecked")
+    private StandardResultDTO normalizeMockInput(Map<String, Object> raw) {
+        // 简化格式：直接带 rows 字段，自动包装为 DATASET
+        if (raw.containsKey("rows") && !raw.containsKey("kind") && !raw.containsKey("dataset")) {
+            Object rowsVal = raw.get("rows");
+            List<Map<String, Object>> rows = rowsVal instanceof List<?> list
+                    ? (List<Map<String, Object>>) list
+                    : List.of();
+            return StandardResultDTO.builder()
+                    .kind(com.kuaishou.intelligentanalysisplatform.contract.enums.ResultKind.DATASET)
+                    .dataset(com.kuaishou.intelligentanalysisplatform.contract.schema.DatasetDTO.builder()
+                            .rows(rows)
+                            .build())
+                    .build();
+        }
+        // 标准格式：尝试转为 StandardResultDTO
+        try {
+            StandardResultDTO converted = objectMapper.convertValue(raw, StandardResultDTO.class);
+            // 转换成功但 kind 为空时，退化为 variables
+            if (converted.getKind() == null && converted.getDataset() == null
+                    && converted.getTable() == null && converted.getChart() == null) {
+                return StandardResultDTO.builder().variables(raw).build();
+            }
+            return converted;
+        } catch (Exception e) {
+            return StandardResultDTO.builder().variables(raw).build();
+        }
     }
 
     @SuppressWarnings("unchecked")

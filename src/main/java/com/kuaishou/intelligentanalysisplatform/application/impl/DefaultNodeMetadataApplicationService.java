@@ -51,6 +51,7 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                 buildTableOutputDefinition(),
                 buildConditionDefinition(),
                 buildErrorHandlerDefinition(),
+                buildIterationDefinition(),
                 buildDataJoinDefinition());
     }
 
@@ -1604,6 +1605,92 @@ public class DefaultNodeMetadataApplicationService implements NodeMetadataApplic
                         .build()))
                 .capabilities(List.of(
                         NodeCapabilityDTO.builder().code("ERROR_RECOVERY").name("错误恢复").build()))
+                .build();
+    }
+
+    private NodeMetaDTO buildIterationDefinition() {
+        return NodeMetaDTO.builder()
+                .protocolVersion("1.0")
+                .metadataVersion("2026-05-29")
+                .nodeType(NodeType.ITERATION.getCode())
+                .nodeVersion("1.0")
+                .displayName("迭代")
+                .category(NodeCategory.GOVERNANCE)
+                .description("对上游数组变量中的每个元素执行子图，将所有迭代结果合并为单个 Dataset 输出")
+                .tags(List.of("iteration", "loop", "foreach", "governance"))
+                .defaults(Map.of("outputMode", "FLATTEN", "maxIterations", 100))
+                .configSchema(NodeConfigSchemaDTO.builder()
+                        .schemaType("panel")
+                        .schemaVersion("1.0")
+                        .panelId("analysis.iteration")
+                        .layout(Map.of("type", "section-list"))
+                        .sections(List.of(
+                                PanelSectionDTO.builder()
+                                        .key("iteration")
+                                        .title("迭代配置")
+                                        .order(1)
+                                        .fields(List.of(
+                                                PanelFieldDTO.builder()
+                                                        .field("inputArrayRef")
+                                                        .label("输入数组")
+                                                        .componentType(FieldComponentType.VARIABLE_PICKER)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(1)
+                                                        .valueType(ValueType.ANY)
+                                                        .placeholder("选择上游数组变量")
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择输入数组").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("outputMode")
+                                                        .label("输出模式")
+                                                        .componentType(FieldComponentType.SELECT)
+                                                        .required(true)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(2)
+                                                        .valueType(ValueType.STRING)
+                                                        .optionsSource(OptionsSourceDTO.builder()
+                                                                .type("static")
+                                                                .options(List.of(
+                                                                        OptionDTO.builder().value("FLATTEN").label("FLATTEN：合并为单个 Dataset").build(),
+                                                                        OptionDTO.builder().value("COLLECT").label("COLLECT：收集为数组").build()))
+                                                                .build())
+                                                        .validations(List.of(
+                                                                ValidationRuleDTO.builder().type("required").message("请选择输出模式").build()))
+                                                        .build(),
+                                                PanelFieldDTO.builder()
+                                                        .field("maxIterations")
+                                                        .label("最大迭代次数")
+                                                        .componentType(FieldComponentType.INPUT)
+                                                        .required(false)
+                                                        .visible(true)
+                                                        .editable(true)
+                                                        .order(3)
+                                                        .valueType(ValueType.INTEGER)
+                                                        .placeholder("默认 100")
+                                                        .build()))
+                                        .build()))
+                        .rules(List.of())
+                        .build())
+                .inputPorts(List.of(NodePortMetaDTO.builder()
+                        .name("input")
+                        .label("上游输入")
+                        .valueType(ValueType.ANY)
+                        .required(true)
+                        .multiple(false)
+                        .build()))
+                .outputPorts(List.of(NodePortMetaDTO.builder()
+                        .name("output")
+                        .label("迭代结果")
+                        .valueType(ValueType.DATASET)
+                        .required(false)
+                        .multiple(false)
+                        .build()))
+                .capabilities(List.of(
+                        NodeCapabilityDTO.builder().code("ITERATION_LOOP").name("迭代循环").build()))
                 .build();
     }
 

@@ -138,6 +138,67 @@ const upstreamNodes = computed(() => {
   return edges.map(e => graphStore.getNodeById(e.source)).filter(Boolean)
 })
 
+/** 为某个上游节点生成 mock 数据骨架（基于 schema 字段） */
+function buildMockRowFromSchema(fields: { name: string, valueType?: string }[]) {
+  const row: Record<string, unknown> = {}
+  for (const f of fields) {
+    const t = f.valueType ?? 'STRING'
+    if (t === 'LONG' || t === 'DOUBLE') row[f.name] = 0
+    else if (t === 'BOOLEAN') row[f.name] = false
+    else row[f.name] = ''
+  }
+  return row
+}
+
+/** 根据上游节点 schema 自动生成模板填入 textarea */
+function generateMockTemplate() {
+  const graphStore = useWorkflowGraphStore()
+  if (!activeNode.value || upstreamNodes.value.length === 0) return
+  const template: Record<string, unknown> = {}
+  for (const up of upstreamNodes.value) {
+    if (!up) continue
+    const fields = up.data.schema?.fields ?? []
+    const row = buildMockRowFromSchema(fields)
+    template[up.data.title] = { rows: [row, row] }
+  }
+  mockInputRaw.value = JSON.stringify(template, null, 2)
+  // 同步存储（用 nodeId 作 key）
+  const titleToId: Record<string, string> = {}
+  graphStore.nodes.forEach(n => { titleToId[n.data.title] = n.id })
+  const normalized: Record<string, unknown> = {}
+  for (const [key, val] of Object.entries(template)) {
+    normalized[titleToId[key] ?? key] = val
+  }
+  workflow.setNodeMockInputs(activeNode.value.id, normalized)
+  mockInputError.value = undefined
+}
+
+/** 用上游节点上次 debug 运行的实际结果填充 mock */
+function fillFromLastRun() {
+  const graphStore = useWorkflowGraphStore()
+  if (!activeNode.value || upstreamNodes.value.length === 0) return
+  const hasAnyResult = upstreamNodes.value.some(up => up?.data.debugResult?.result)
+  if (!hasAnyResult) return
+  const template: Record<string, unknown> = {}
+  const normalized: Record<string, unknown> = {}
+  for (const up of upstreamNodes.value) {
+    if (!up) continue
+    const result = up.data.debugResult?.result
+    if (!result) continue
+    const rows = result.dataset?.rows ?? []
+    template[up.data.title] = { rows }
+    normalized[up.id] = { rows }
+  }
+  mockInputRaw.value = JSON.stringify(template, null, 2)
+  workflow.setNodeMockInputs(activeNode.value.id, normalized)
+  mockInputError.value = undefined
+}
+
+/** 上游节点中是否有至少一个有上次 debug 结果可填充 */
+const canFillFromLastRun = computed(() =>
+  upstreamNodes.value.some(up => up?.data.debugResult?.result?.dataset?.rows?.length),
+)
+
 /** 用户编辑 mock 时，将节点 title 反查为 nodeId 存储 */
 function onMockInputChange(e: Event) {
   const text = (e.target as HTMLTextAreaElement).value
@@ -276,8 +337,28 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
                 <span v-else class="ncp__upstream-no-schema">未运行（字段待推断）</span>
               </div>
             </div>
-            <div class="ncp__section-label" style="margin-top: 12px">Mock 输入</div>
-            <p class="ncp__mock-hint">填写 JSON 模拟上游输出，可用节点名称作为 key：<code>{ "节点名称": { "rows": [...] } }</code></p>
+
+            <div class="ncp__mock-header">
+              <div class="ncp__section-label">Mock 输入</div>
+              <div v-if="upstreamNodes.length > 0" class="ncp__mock-actions">
+                <button class="ncp__mock-btn" title="根据上游字段 schema 生成模板" @click="generateMockTemplate">
+                  生成模板
+                </button>
+                <button
+                  class="ncp__mock-btn"
+                  :class="{ 'ncp__mock-btn--disabled': !canFillFromLastRun }"
+                  :disabled="!canFillFromLastRun"
+                  title="用上游节点上次运行的实际结果填充"
+                  @click="fillFromLastRun"
+                >
+                  填充上次结果
+                </button>
+              </div>
+            </div>
+
+            <p class="ncp__mock-hint">
+              格式：<code>{ "节点名称": { "rows": [{ "字段名": 值, ... }] } }</code>
+            </p>
             <textarea class="ncp__mock-textarea" :value="mockInputRaw" spellcheck="false" placeholder="{}" @input="onMockInputChange" />
             <div v-if="mockInputError" class="ncp__mock-error">{{ mockInputError }}</div>
           </div>
@@ -325,6 +406,11 @@ function applyChartRecommendation(rec: ChartRecommendationDTO) {
 .ncp__spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--iap-divider-strong); border-top-color: var(--iap-text-accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
 .ncp__mock { display: flex; flex-direction: column; gap: 8px; }
 .ncp__section-label { font-size: 10px; font-weight: 700; color: var(--iap-text-tertiary); letter-spacing: 0.08em; text-transform: uppercase; }
+.ncp__mock-header { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+.ncp__mock-actions { display: flex; gap: 6px; }
+.ncp__mock-btn { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--iap-divider); background: var(--iap-surface-secondary); color: var(--iap-text-secondary); font-size: 11px; cursor: pointer; transition: background 0.12s; white-space: nowrap; }
+.ncp__mock-btn:hover:not(:disabled) { background: var(--iap-hover-bg); color: var(--iap-text-primary); }
+.ncp__mock-btn--disabled { opacity: 0.4; cursor: not-allowed; }
 .ncp__mock-hint { font-size: 11px; color: var(--iap-text-tertiary); line-height: 1.6; margin: 0; }
 .ncp__mock-hint code { font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--iap-text-accent); background: color-mix(in srgb, var(--iap-text-accent) 10%, transparent); border-radius: 3px; padding: 1px 4px; }
 .ncp__mock-textarea { width: 100%; min-height: 160px; resize: vertical; background: var(--iap-code-bg); border: 1px solid var(--iap-input-border); border-radius: 8px; padding: 10px 12px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: var(--iap-text-secondary); line-height: 1.6; outline: none; transition: border-color 0.15s, box-shadow 0.15s; box-sizing: border-box; }
